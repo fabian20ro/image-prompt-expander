@@ -1,0 +1,15 @@
+# Python
+__pycache__/
+*.py[cod]
+venv/
+
+# macOS
+.DS_Store
+
+# Generated outputs (user-specific)
+generated/prompts/
+generated/grammars/
+
+# IDE
+.idea/
+.vscode/

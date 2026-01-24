@@ -1,0 +1,5 @@
+openai>=1.0.0
+click>=8.0.0
+pydantic>=2.0.0
+tracery>=0.1.1
+mflux>=0.15.0
