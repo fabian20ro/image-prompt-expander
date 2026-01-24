@@ -284,7 +284,7 @@ def main(
         grammar = from_grammar.read_text()
 
         # Try to find metadata for original prompt
-        meta_path = from_grammar.with_suffix('.meta.json')
+        meta_path = from_grammar.with_suffix('.metaprompt.json')
         if meta_path.exists():
             meta = json.loads(meta_path.read_text())
             user_prompt = meta.get("user_prompt", "unknown")
@@ -304,7 +304,7 @@ def main(
         grammar_stem = from_grammar.stem.replace('.tracery', '')
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         if output is None:
-            output = GENERATED_DIR / "prompts" / f"{grammar_stem}_{timestamp}"
+            output = GENERATED_DIR / "prompts" / f"{timestamp}_{grammar_stem}"
 
         output.mkdir(parents=True, exist_ok=True)
 
@@ -396,7 +396,7 @@ def main(
         if output is None:
             prompt_hash = hash_prompt(prompt)
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            output = GENERATED_DIR / "prompts" / f"{prompt_hash}_{timestamp}"
+            output = GENERATED_DIR / "prompts" / f"{timestamp}_{prompt_hash}"
 
         output.mkdir(parents=True, exist_ok=True)
 

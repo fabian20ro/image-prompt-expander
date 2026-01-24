@@ -46,13 +46,14 @@ def get_cached_grammar(prompt_hash: str) -> str | None:
     return None
 
 
-def cache_grammar(prompt_hash: str, grammar: str, user_prompt: str) -> Path:
+def cache_grammar(prompt_hash: str, grammar: str, raw_response: str, user_prompt: str) -> Path:
     """
     Save a grammar to the cache.
 
     Args:
         prompt_hash: The hash of the user prompt
-        grammar: The grammar content
+        grammar: The cleaned grammar content
+        raw_response: The raw LLM response (including thinking blocks)
         user_prompt: The original user prompt (for metadata)
 
     Returns:
@@ -60,12 +61,16 @@ def cache_grammar(prompt_hash: str, grammar: str, user_prompt: str) -> Path:
     """
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
-    # Save the grammar
+    # Save the cleaned grammar
     cache_file = CACHE_DIR / f"{prompt_hash}.tracery.json"
     cache_file.write_text(grammar)
 
+    # Save the raw LLM response (with thinking blocks etc.)
+    raw_file = CACHE_DIR / f"{prompt_hash}.raw.txt"
+    raw_file.write_text(raw_response)
+
     # Save metadata
-    metadata_file = CACHE_DIR / f"{prompt_hash}.meta.json"
+    metadata_file = CACHE_DIR / f"{prompt_hash}.metaprompt.json"
     metadata = {
         "user_prompt": user_prompt,
         "created_at": datetime.now().isoformat(),
@@ -121,14 +126,14 @@ def generate_grammar(
         temperature=temperature
     )
 
-    grammar = response.choices[0].message.content
+    raw_response = response.choices[0].message.content
 
     # Clean up the grammar (remove any markdown code blocks if present)
-    grammar = clean_grammar_output(grammar)
+    grammar = clean_grammar_output(raw_response)
 
     # Cache the result
     if use_cache:
-        cache_grammar(prompt_hash, grammar, user_prompt)
+        cache_grammar(prompt_hash, grammar, raw_response, user_prompt)
 
     return grammar, False
 
