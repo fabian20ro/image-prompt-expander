@@ -87,6 +87,18 @@ python src/cli.py -p "abstract pattern" -n 3 -i \
     --prefix pattern
 ```
 
+### Resume from Intermediate Steps
+
+```bash
+# Resume from cached grammar (skip LLM generation)
+python src/cli.py --from-grammar generated/grammars/abc123.tracery.json \
+    -n 100 --prefix dragon2
+
+# Resume from existing prompts (generate images only)
+python src/cli.py --from-prompts generated/prompts/abc123_20260124_122208 \
+    --generate-images --images-per-prompt 2
+```
+
 ### Cleanup
 
 ```bash
@@ -106,6 +118,8 @@ python src/cli.py --clean
 | `--clean` | Remove all generated files |
 | `--base-url TEXT` | LM Studio URL (default: http://localhost:1234/v1) |
 | `--temperature FLOAT` | LLM temperature (default: 0.7) |
+| `--from-grammar PATH` | Resume from existing grammar file (skip LLM generation) |
+| `--from-prompts PATH` | Resume from existing prompts directory (images only) |
 | `-i, --generate-images` | Enable mflux image generation |
 | `--images-per-prompt INT` | Images per prompt (default: 1) |
 | `--max-prompts INT` | Limit prompts to render |

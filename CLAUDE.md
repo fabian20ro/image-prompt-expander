@@ -6,7 +6,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **image-prompt-expander** - A procedural image prompt generator that creates varied prompts for FLUX.2 image models, with optional local image generation using mflux.
 
-**Pipeline:** User prompt → LLM generates Tracery grammar → Tracery produces N prompts → (optional) mflux generates images
+**Pipeline:**
+```
+Full pipeline:     User prompt → LLM → Grammar → Tracery → Prompts → Images
+--from-grammar:                        Grammar → Tracery → Prompts → Images
+--from-prompts:                                            Prompts → Images
+```
 
 ## Commands
 
@@ -24,6 +29,14 @@ python src/cli.py -p "a dragon flying over mountains" -n 5 \
 
 # Preview grammar without generating files
 python src/cli.py -p "description" --dry-run
+
+# Resume from cached grammar (skip LLM generation)
+python src/cli.py --from-grammar generated/grammars/abc123.tracery.json \
+    -n 100 --prefix dragon2
+
+# Resume from existing prompts (generate images only)
+python src/cli.py --from-prompts generated/prompts/abc123_20260124_122208 \
+    --generate-images --images-per-prompt 2
 
 # Clean all generated files
 python src/cli.py --clean
