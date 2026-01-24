@@ -1,0 +1,182 @@
+# image-prompt-expander
+
+A procedural image prompt generator that creates varied, high-quality prompts for FLUX.2 image models, with optional local image generation using mflux.
+
+```
+User prompt → LLM generates Tracery grammar → Tracery produces N prompts → (optional) mflux generates images
+```
+
+## Requirements
+
+**System:**
+- Python 3.10+
+- macOS with Apple Silicon (M1/M2/M3/M4) for image generation
+- [LM Studio](https://lmstudio.ai/) running locally
+
+**Python Dependencies:**
+- `openai` - LM Studio API client
+- `click` - CLI framework
+- `tracery` - Grammar expansion
+- `mflux` - Image generation (optional, Apple Silicon only)
+
+## Installation
+
+```bash
+git clone https://github.com/YOUR_USERNAME/image-prompt-expander.git
+cd image-prompt-expander
+
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+```
+
+Then install [LM Studio](https://lmstudio.ai/), download a model (e.g., Qwen 2.5 7B, Llama 3.1 8B), and start the local server.
+
+## Usage
+
+### Basic (Text Prompts Only)
+
+```bash
+# Generate 500 prompt variations
+python src/cli.py -p "a dragon flying over mountains"
+
+# Generate fewer variations
+python src/cli.py -p "a cat sleeping on a bookshelf" -n 50
+
+# Preview grammar without creating files
+python src/cli.py -p "a cyberpunk city at night" --dry-run
+```
+
+### With Image Generation
+
+```bash
+# Generate prompts AND images (Apple Silicon only)
+python src/cli.py -p "a dragon flying over mountains" -n 5 \
+    --generate-images \
+    --prefix dragon
+
+# Multiple images per prompt
+python src/cli.py -p "a mystical forest" -n 10 \
+    --generate-images \
+    --images-per-prompt 3 \
+    --prefix forest
+
+# Limit how many prompts get rendered
+python src/cli.py -p "abstract art" -n 100 \
+    --generate-images \
+    --max-prompts 10 \
+    --prefix abstract
+```
+
+### Custom Image Settings
+
+```bash
+# Different model
+python src/cli.py -p "portrait of a wizard" -n 5 -i \
+    --model flux2-klein-4b \
+    --prefix wizard
+
+# Custom resolution and steps
+python src/cli.py -p "landscape painting" -n 5 -i \
+    --width 1024 --height 768 --steps 8 \
+    --prefix landscape
+
+# Reproducible with seed
+python src/cli.py -p "abstract pattern" -n 3 -i \
+    --seed 42 \
+    --prefix pattern
+```
+
+### Cleanup
+
+```bash
+python src/cli.py --clean
+```
+
+## CLI Options
+
+| Option | Description |
+|--------|-------------|
+| `-p, --prompt TEXT` | Image description to generate variations for |
+| `-n, --count INT` | Number of variations (default: 500) |
+| `-o, --output PATH` | Custom output directory |
+| `--prefix TEXT` | Output file prefix (default: "image") |
+| `--dry-run` | Preview grammar only |
+| `--no-cache` | Force regenerate grammar |
+| `--clean` | Remove all generated files |
+| `--base-url TEXT` | LM Studio URL (default: http://localhost:1234/v1) |
+| `--temperature FLOAT` | LLM temperature (default: 0.7) |
+| `-i, --generate-images` | Enable mflux image generation |
+| `--images-per-prompt INT` | Images per prompt (default: 1) |
+| `--max-prompts INT` | Limit prompts to render |
+| `-m, --model` | `z-image-turbo`, `flux2-klein-4b`, `flux2-klein-9b` |
+| `--steps INT` | Inference steps |
+| `--width INT` | Image width (default: 864) |
+| `--height INT` | Image height (default: 1152) |
+| `-q, --quantize` | Quantization: 3, 4, 5, 6, or 8 |
+| `--seed INT` | Random seed |
+
+## Output Structure
+
+```
+generated/prompts/{hash}_{timestamp}/
+├── dragon_0.txt              # First prompt
+├── dragon_0_0.png            # First image from first prompt
+├── dragon_0_1.png            # Second image (if --images-per-prompt 2)
+├── dragon_1.txt              # Second prompt
+├── dragon_1_0.png
+├── ...
+├── dragon_grammar.json       # Tracery grammar used
+└── dragon_metadata.json      # Generation settings
+```
+
+Grammars are cached in `generated/grammars/` and reused for identical prompts.
+
+## How It Works
+
+1. **Grammar Generation** - Your prompt is sent to a local LLM with instructions to create a Tracery grammar. The grammar locks elements you specified and varies everything else.
+
+2. **Prompt Expansion** - The grammar is expanded N times, randomly selecting from options to create diverse but coherent prompts.
+
+3. **Image Generation** (optional) - Each prompt is rendered using mflux on Apple Silicon.
+
+## Supported Models
+
+| Model | Parameters | Default Steps | Notes |
+|-------|------------|---------------|-------|
+| z-image-turbo | 6B | 9 | Fast, good quality (default) |
+| flux2-klein-4b | 4B | 4 | Very fast, lighter |
+| flux2-klein-9b | 9B | 4 | Best quality |
+
+Pre-quantized 4-bit versions are used automatically when available.
+
+## Prompt Tips
+
+- **Be specific** about constants: "a RED dragon with GOLDEN eyes"
+- **Describe scene structure**: "a warrior standing on a cliff overlooking a battlefield"
+- **Suggest variation dimensions**: "a cat in various cozy indoor settings"
+- **Use FLUX-friendly language**: lighting ("golden hour"), atmosphere ("epic", "serene")
+- **Front-load important elements** (FLUX prioritizes earlier content)
+
+## Troubleshooting
+
+**"Connection refused"** - Start LM Studio and ensure the server is running.
+
+**"mflux is required"** - Run `pip install mflux` (requires Apple Silicon).
+
+**"Invalid JSON grammar"** - Try `--no-cache` or use a different LLM model.
+
+**Slow generation** - First run downloads model weights. Use `--steps 4` or `flux2-klein-4b` for speed.
+
+**Out of memory** - Reduce resolution or use `flux2-klein-4b`.
+
+## Credits
+
+- [Fifty Shades Generator](https://github.com/lisawray/fiftyshades) by Lisa Wray - original inspiration
+- [Tracery](https://github.com/galaxykate/tracery) by Kate Compton
+- [mflux](https://github.com/filipstrand/mflux) by Filip Strand
+- FLUX models by Black Forest Labs
+
+## License
+
+See [LICENSE](LICENSE) file.
