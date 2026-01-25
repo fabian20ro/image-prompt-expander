@@ -15,7 +15,7 @@ def _get_enhancer(quantize: int):
         return _enhancer_cache[cache_key]
 
     try:
-        from mflux.models.seed_vr import SeedVR2
+        from mflux.models.seedvr2.variants.upscale.seedvr2 import SeedVR2
     except ImportError as e:
         raise ImportError(
             "mflux is required for image enhancement. "
@@ -57,7 +57,7 @@ def enhance_image(
 
     # Import ScaleFactor for 2x upscaling
     try:
-        from mflux.models.seed_vr.config.scale_factor import ScaleFactor
+        from mflux.utils.scale_factor import ScaleFactor
     except ImportError as e:
         raise ImportError(
             "mflux is required for image enhancement. "
