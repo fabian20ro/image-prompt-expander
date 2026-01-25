@@ -360,8 +360,19 @@ def main(
         # Generate images in same directory
         output = prompts_dir
         was_cached = None
-        grammar = None
         user_prompt = existing_metadata.get("user_prompt", "unknown")
+
+        # Load grammar if available
+        grammar = None
+        grammar_file = prompts_dir / f"{detected_prefix}_grammar.json"
+        if grammar_file.exists():
+            grammar = grammar_file.read_text()
+
+        # Check for raw response file
+        raw_response_file = None
+        raw_file = prompts_dir / f"{detected_prefix}_raw_response.txt"
+        if raw_file.exists():
+            raw_response_file = f"{detected_prefix}_raw_response.txt"
 
         # Prepare metadata update
         metadata = existing_metadata.copy()
@@ -400,6 +411,11 @@ def main(
             user_prompt = meta.get("user_prompt", "unknown")
         else:
             user_prompt = "unknown"
+
+        # Try to find raw response in same directory (e.g., abc123.raw.txt)
+        grammar_hash = from_grammar.stem.replace('.tracery', '')
+        raw_path = from_grammar.parent / f"{grammar_hash}.raw.txt"
+        raw_response = raw_path.read_text() if raw_path.exists() else None
 
         was_cached = True  # Treat as cached since we loaded from file
 
@@ -467,6 +483,13 @@ def main(
         grammar_file = output / f"{prefix}_grammar.json"
         grammar_file.write_text(grammar)
 
+        # Save raw LLM response if available
+        raw_response_file = None
+        if raw_response:
+            raw_file = output / f"{prefix}_raw_response.txt"
+            raw_file.write_text(raw_response)
+            raw_response_file = f"{prefix}_raw_response.txt"
+
         click.echo(f"Generated {len(outputs)} prompts in: {output}")
 
         # Show a sample
@@ -481,7 +504,7 @@ def main(
 
         # Generate grammar via LM Studio
         try:
-            grammar, was_cached = generate_grammar(
+            grammar, was_cached, raw_response = generate_grammar(
                 user_prompt=prompt,
                 base_url=base_url,
                 use_cache=not no_cache,
@@ -560,6 +583,13 @@ def main(
         grammar_file = output / f"{prefix}_grammar.json"
         grammar_file.write_text(grammar)
 
+        # Save raw LLM response if available
+        raw_response_file = None
+        if raw_response:
+            raw_file = output / f"{prefix}_raw_response.txt"
+            raw_file.write_text(raw_response)
+            raw_response_file = f"{prefix}_raw_response.txt"
+
         click.echo(f"Generated {len(outputs)} prompts in: {output}")
 
         # Show a sample
@@ -574,7 +604,10 @@ def main(
         total_images = len(prompts_to_render) * images_per_prompt
 
         # Create gallery before starting image generation
-        gallery_path = create_gallery(output, prefix, prompts_to_render, images_per_prompt)
+        gallery_path = create_gallery(
+            output, prefix, prompts_to_render, images_per_prompt,
+            grammar=grammar, raw_response_file=raw_response_file
+        )
         gallery_url = f"file://{gallery_path.resolve()}"
         click.echo(f"Gallery: {gallery_url}")
 

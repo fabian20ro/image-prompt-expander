@@ -99,7 +99,9 @@ python src/cli.py --clean
 
 5. **Gallery Generation** (`src/gallery.py`)
    - Creates live-updating HTML gallery with image grid
-   - Shows prompts below each image
+   - Shows prompts below each image (scrollable for long prompts)
+   - Displays Tracery grammar in collapsible section at top
+   - Links to raw LLM response file
    - Placeholders for pending images, updated as each completes
    - Supports standalone mode via `--gallery` flag
 
@@ -120,6 +122,27 @@ Files use prefix naming:
 - `{prefix}_{prompt_index}.txt` for prompts
 - `{prefix}_{prompt_index}_{image_index}.png` for images (enhanced in-place if `--enhance` used)
 - `{prefix}_gallery.html` for the live-updating image gallery
+- `{prefix}_grammar.json` for the Tracery grammar
+- `{prefix}_raw_response.txt` for the raw LLM response (with thinking blocks)
+- `{prefix}_metadata.json` for generation settings
+
+## Testing
+
+Run tests after making changes to verify functionality:
+
+```bash
+# Run all tests
+pytest
+
+# Run tests with verbose output
+pytest -v
+
+# Run specific test file
+pytest tests/test_grammar_generator.py
+
+# Run tests with coverage (if pytest-cov installed)
+pytest --cov=src
+```
 
 ## Dependencies
 

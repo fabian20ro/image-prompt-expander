@@ -106,6 +106,22 @@ def cache_grammar(prompt_hash: str, grammar: str, raw_response: str, user_prompt
     return cache_file
 
 
+def get_cached_raw_response(prompt_hash: str) -> str | None:
+    """
+    Get the raw LLM response from cache for the given prompt hash.
+
+    Args:
+        prompt_hash: The hash of the user prompt
+
+    Returns:
+        The cached raw response content, or None if not cached
+    """
+    raw_file = CACHE_DIR / f"{prompt_hash}.raw.txt"
+    if raw_file.exists():
+        return raw_file.read_text()
+    return None
+
+
 def generate_grammar(
     user_prompt: str,
     base_url: str = LM_STUDIO_BASE_URL,
@@ -113,7 +129,7 @@ def generate_grammar(
     use_cache: bool = True,
     temperature: float = 0.7,
     model: str | None = None,
-) -> tuple[str, bool]:
+) -> tuple[str, bool, str | None]:
     """
     Generate a Dada Engine grammar for the given prompt using LM Studio.
 
@@ -126,7 +142,7 @@ def generate_grammar(
         model: Image model name to select appropriate system prompt
 
     Returns:
-        Tuple of (grammar content, was_cached)
+        Tuple of (grammar content, was_cached, raw_response)
     """
     prompt_hash = hash_prompt(user_prompt)
 
@@ -134,7 +150,8 @@ def generate_grammar(
     if use_cache:
         cached = get_cached_grammar(prompt_hash)
         if cached:
-            return cached, True
+            raw_response = get_cached_raw_response(prompt_hash)
+            return cached, True, raw_response
 
     # Generate new grammar via LM Studio
     client = OpenAI(
@@ -162,7 +179,7 @@ def generate_grammar(
     if use_cache:
         cache_grammar(prompt_hash, grammar, raw_response, user_prompt)
 
-    return grammar, False
+    return grammar, False, raw_response
 
 
 def clean_grammar_output(grammar: str) -> str:
@@ -179,8 +196,8 @@ def clean_grammar_output(grammar: str) -> str:
     grammar = re.sub(r'<think>.*?</think>', '', grammar, flags=re.DOTALL)
 
     # Remove markdown code block markers and extract content
-    # Handle ```json, ```tracery, or plain ``` markers
-    code_block_match = re.search(r'```(?:json|tracery)?\s*\n(.*?)```', grammar, flags=re.DOTALL)
+    # Handle ```json, ```tracery, or plain ``` markers (with or without newline)
+    code_block_match = re.search(r'```(?:json|tracery)?\s*(.*?)```', grammar, flags=re.DOTALL)
     if code_block_match:
         grammar = code_block_match.group(1)
 
