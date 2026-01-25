@@ -11,8 +11,9 @@ Given a user's image description, generate a Tracery grammar that produces meani
 ## FLUX.2 Klein Prompting Guidelines
 
 - Write descriptive prose, NOT comma-separated keyword lists
-- Front-load important elements (the model prioritizes earlier content)
-- Lighting is critical - describe source, quality, direction, temperature
+- Front-load important elements—the model prioritizes the first 1-2 sentences most heavily
+- For any creature or person, describe anatomy with explicit counts early in the prompt (e.g., "A dragon with two enormous wings, four clawed legs, and a single serpentine tail"). This prevents generation errors
+- Lighting is critical—describe source, quality, direction, temperature
 - Every phrase should add visual information; avoid filler text
 - Aim for 7-9 sentences of rich, evocative description
 
@@ -65,10 +66,10 @@ To ensure non-contradictory scenes (matching time-of-day with lighting), create 
 {
   "origin": ["#scene#"],
   "scene": [
-    "A dragon soars at dawn. Pink light breaks over the peaks. The air feels crisp and full of possibility.",
-    "A dragon soars at midday. Harsh sunlight creates sharp contrasts. The scene feels vibrant and alive.",
-    "A dragon soars at dusk. Golden light paints the clouds. A sense of calm descends.",
-    "A dragon soars at night. Pale moonlight silvers the landscape. Mystery hangs in the air."
+    "A dragon with two vast wings soars at dawn. Pink light breaks over the peaks. The air feels crisp and full of possibility.",
+    "A dragon with two vast wings soars at midday. Harsh sunlight creates sharp contrasts. The scene feels vibrant and alive.",
+    "A dragon with two vast wings soars at dusk. Golden light paints the clouds. A sense of calm descends.",
+    "A dragon with two vast wings soars at night. Pale moonlight silvers the landscape. Mystery hangs in the air."
   ]
 }
 ```
@@ -79,12 +80,13 @@ Mix constants with variables for controlled variation:
 ```json
 {
   "origin": ["#subject#. #setting#. #details#. #lighting#. #atmosphere#"],
-  "subject": ["A #dragonType# dragon #action#"],
+  "subject": ["A #dragonType# dragon with two #wingStyle# wings, four powerful legs tucked beneath its body, and a single #tailStyle# tail #action#"],
   "dragonType": ["crimson", "obsidian", "golden", "emerald"],
+  "wingStyle": ["enormous bat-like", "feathered", "membrane", "iridescent"],
+  "tailStyle": ["serpentine", "spiked", "whip-like", "armored"],
   "action": ["soars majestically", "glides effortlessly", "circles slowly"],
   "setting": ["Jagged peaks stretch to the horizon below"],
-  "details": ["Its #feature# catches the light as it banks through the air"],
-  "feature": ["scales", "wings", "eyes", "horns"],
+  "details": ["Its scales catch the light as it banks through the air"],
   "lighting": ["#lightType# illuminates the scene"],
   "lightType": ["Warm golden sunlight", "Cool silvery moonlight", "Soft diffused light", "Dramatic stormy light"],
   "atmosphere": ["The atmosphere is #mood#, evoking #feeling#"],
@@ -96,7 +98,7 @@ Mix constants with variables for controlled variation:
 ## Output Format
 
 Output ONLY valid JSON. Do not include any explanation, markdown code blocks, or other text.
-The JSON must be parseable - use double quotes for strings, escape special characters properly.
+The JSON must be parseable—use double quotes for strings, escape special characters properly.
 ALL values must be arrays of strings.
 
 ## Example
@@ -106,15 +108,16 @@ User: "a cat in a cozy scene"
 Output:
 {
   "origin": ["#subject#. #location#. #details#. #lighting#. #atmosphere#"],
-  "subject": ["A #catType# cat #catPose#"],
-  "catType": ["ginger tabby", "fluffy white", "sleek black", "calico", "gray striped"],
-  "catPose": ["curls contentedly", "stretches lazily", "nestles comfortably", "dozes peacefully"],
+  "subject": ["A #catType# cat with four soft paws, two pointed ears, and a single #tailStyle# tail #catPose#"],
+  "catType": ["ginger tabby", "fluffy white Persian", "sleek black", "calico", "gray striped"],
+  "tailStyle": ["curled", "long fluffy", "elegant", "bushy"],
+  "catPose": ["curls contentedly into a ball", "stretches lazily across the cushions", "nestles comfortably among the blankets", "dozes peacefully with eyes half-closed"],
   "location": ["#settingType#"],
   "settingType": ["It rests on a worn velvet armchair in a quiet study", "It lounges in a sun-drenched window seat overlooking a garden", "It lies atop a plush duvet covered in soft blankets", "It sleeps on a soft rug before a stone fireplace"],
   "details": ["#detailType#"],
-  "detailType": ["The cat's eyes are half-closed in peaceful slumber, one paw tucked beneath its chin", "Soft curtains frame the view as the cat watches birds flutter past", "Pillows surround the drowsy feline as it kneads the soft blanket", "The cat's fur gleams warmly, whiskers catching the ambient glow"],
+  "detailType": ["Its whiskers twitch gently as it dreams, one paw tucked beneath its chin", "Soft curtains frame the view as the cat watches birds flutter past the window", "Pillows surround the drowsy feline as it kneads the soft blanket beneath it", "Its fur gleams warmly in the ambient glow, chest rising and falling steadily"],
   "lighting": ["#lightStyle#"],
-  "lightStyle": ["Gentle morning light streams through the window, casting soft shadows across the room", "Warm afternoon sunlight fills the space with a golden, honeyed glow", "Soft lamplight creates intimate pools of amber warmth", "A crackling fire casts dancing shadows and warm orange light"],
+  "lightStyle": ["Gentle morning light streams through sheer curtains, casting soft shadows across the room", "Warm afternoon sunlight fills the space with a golden, honeyed glow", "Soft lamplight creates intimate pools of amber warmth in the corners", "A crackling fire casts dancing shadows and bathes everything in warm orange light"],
   "atmosphere": ["The atmosphere is #mood#, evoking #feeling#"],
   "mood": ["intimate and tranquil", "warm and peaceful", "serene and restful", "cozy and inviting"],
   "feeling": ["a sense of quiet domestic comfort", "the simple joy of home", "peaceful contentment", "gentle relaxation"]

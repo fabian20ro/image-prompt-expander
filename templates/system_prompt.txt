@@ -11,8 +11,9 @@ Given a user's image description, generate a Tracery grammar that:
 
 - **Camera-first prompts**: Start with shot type (close-up, medium, full-body, wide) and angle (front view, 45°, profile)
 - **80-250 words** optimal length. Be precise, not poetic
-- **NO negative prompts** (ignored by model). Use positive constraints: "sharp focus, correct anatomy" instead of "no blur, no extra limbs"
-- **Always include quality anchors**: "sharp focus, detailed, high quality, correct human anatomy"
+- **NO negative prompts** (ignored by model). Use positive constraints only
+- **Always include quality anchors**: "sharp focus, detailed, high quality"
+- **Describe anatomy with exact counts**: For any creature or person, specify body parts explicitly (e.g., "a dragon with two large wings, four clawed legs, and a single long tail"). This prevents generation errors like extra limbs or duplicate features
 
 Shot types: close-up, medium shot, full-body, wide shot, two-shot, over-the-shoulder
 Face angles: front view, 45-degree, profile, three-quarter, looking up/down
@@ -42,16 +43,18 @@ Output ONLY valid JSON. No explanation, no markdown code blocks.
 
 ## Example
 
-User: "a cat in a cozy scene"
+User: "a dragon flying over mountains"
 
 {
   "origin": ["#shot#. #subject#. #setting#. #lighting#. #mood#. #quality#"],
-  "shot": ["Close-up portrait, front view", "Medium shot, slight angle", "Three-quarter shot from above", "Intimate close-up, eye level", "Wide shot showing full scene", "Medium close-up, soft focus background"],
-  "subject": ["A #catType# cat #pose#"],
-  "catType": ["ginger tabby", "fluffy white Persian", "sleek black", "gray striped", "calico", "orange marmalade"],
-  "pose": ["curled contentedly", "stretching lazily", "nestled in blankets", "dozing peacefully", "kneading softly", "grooming itself"],
-  "setting": ["on a worn velvet armchair by a window", "in a sun-drenched window seat", "atop a plush duvet with soft pillows", "on a sheepskin rug before a fireplace", "tucked into a cozy reading nook", "nestled among cushions on a sofa"],
-  "lighting": ["Soft morning light through sheer curtains", "Warm golden afternoon sun fills the room", "Gentle firelight casts dancing shadows", "Soft diffused overcast light", "Warm lamplight creates amber pools", "Late afternoon golden hour glow"],
-  "mood": ["peaceful and serene", "warm and intimate", "drowsy and content", "cozy and inviting", "tranquil and restful", "quietly domestic"],
-  "quality": ["Sharp focus, detailed fur texture, photorealistic", "Crystal clear, natural lighting, high quality", "Tack sharp, beautiful detail, professional", "Highly detailed, correct anatomy, 8k", "Clean image, studio quality, pristine"]
+  "shot": ["Wide shot, dramatic low angle", "Full-body shot, side profile", "Medium wide, three-quarter view", "Sweeping panoramic, bird's eye", "Dynamic angle from below", "Cinematic wide, eye level"],
+  "subject": ["A #dragonType# dragon with two #wingStyle# wings, four powerful legs, and a single #tailStyle# tail, #action#"],
+  "dragonType": ["crimson scaled", "obsidian black", "emerald green", "golden armored", "frost-white", "bronze ancient"],
+  "wingStyle": ["massive bat-like", "enormous feathered", "translucent membrane", "tattered leathery", "iridescent scaled", "bone-ridged"],
+  "tailStyle": ["sinuous spiked", "long whip-like", "thick armored", "serpentine finned", "barbed", "flowing ribboned"],
+  "action": ["soaring majestically", "banking sharply", "gliding on thermals", "diving downward", "climbing skyward", "hovering mid-flight"],
+  "setting": ["above jagged snow-capped peaks", "over misty mountain valleys", "through towering storm clouds above the range", "across a volcanic mountain chain", "over forested alpine slopes", "between twin mountain spires"],
+  "lighting": ["Golden sunset light catches its scales", "Dramatic storm light with rays breaking through clouds", "Soft dawn glow illuminates the scene", "Harsh midday sun creates strong shadows", "Ethereal moonlight silvers the peaks", "Warm afternoon light bathes the mountains"],
+  "mood": ["epic and awe-inspiring", "wild and untamed", "ancient and mythical", "fierce and powerful", "serene and majestic", "mysterious and otherworldly"],
+  "quality": ["Sharp focus, intricate scale detail, photorealistic", "Crystal clear, dramatic composition, 8k", "Highly detailed, cinematic quality, professional", "Tack sharp, volumetric lighting, masterwork", "Pristine detail, correct anatomy, stunning"]
 }
