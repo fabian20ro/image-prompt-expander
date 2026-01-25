@@ -203,6 +203,16 @@ def clean_grammar_output(grammar: str) -> str:
 
     grammar = grammar.strip()
 
+    # Normalize smart/curly quotes to straight ASCII quotes
+    quote_replacements = {
+        '\u201c': '"',  # U+201C left double quotation mark
+        '\u201d': '"',  # U+201D right double quotation mark
+        '\u2018': "'",  # U+2018 left single quotation mark
+        '\u2019': "'",  # U+2019 right single quotation mark
+    }
+    for smart, straight in quote_replacements.items():
+        grammar = grammar.replace(smart, straight)
+
     # Validate it's valid JSON
     try:
         json.loads(grammar)

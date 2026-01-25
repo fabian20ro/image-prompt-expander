@@ -14,6 +14,7 @@ from tracery_runner import run_tracery, TraceryError
 from image_generator import generate_image, clear_model_cache, SUPPORTED_MODELS, MODEL_DEFAULTS
 from image_enhancer import enhance_image, collect_images
 from gallery import create_gallery, update_gallery, generate_gallery_for_directory
+from gallery_index import generate_master_index
 
 
 GENERATED_DIR = Path(__file__).parent.parent / "generated"
@@ -296,6 +297,11 @@ def main(
             gallery_path = generate_gallery_for_directory(gallery)
             gallery_url = f"file://{gallery_path.resolve()}"
             click.echo(f"Gallery created: {gallery_url}")
+
+            # Update master index
+            index_path = generate_master_index(GENERATED_DIR)
+            index_url = f"file://{index_path.resolve()}"
+            click.echo(f"Master index: {index_url}")
         except ValueError as e:
             click.echo(f"Error: {e}", err=True)
             sys.exit(1)
@@ -610,6 +616,11 @@ def main(
         )
         gallery_url = f"file://{gallery_path.resolve()}"
         click.echo(f"Gallery: {gallery_url}")
+
+        # Update master index
+        index_path = generate_master_index(GENERATED_DIR)
+        index_url = f"file://{index_path.resolve()}"
+        click.echo(f"Master index: {index_url}")
 
         click.echo(f"\nGenerating {total_images} images ({len(prompts_to_render)} prompts x {images_per_prompt} images each)...")
         click.echo(f"Model: {model}, Steps: {steps or MODEL_DEFAULTS[model]['steps']}, Size: {width}x{height}")

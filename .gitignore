@@ -7,8 +7,7 @@ venv/
 .DS_Store
 
 # Generated outputs (user-specific)
-generated/prompts/
-generated/grammars/
+generated/
 
 # IDE
 .idea/

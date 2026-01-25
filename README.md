@@ -182,18 +182,22 @@ python src/cli.py --clean
 ## Output Structure
 
 ```
-generated/prompts/{hash}_{timestamp}/
-├── dragon_0.txt              # First prompt
-├── dragon_0_0.png            # First image (enhanced in-place if --enhance)
-├── dragon_0_1.png            # Second image (if --images-per-prompt 2)
-├── dragon_1.txt              # Second prompt
-├── dragon_1_0.png
-├── ...
-├── dragon_grammar.json       # Tracery grammar used
-└── dragon_metadata.json      # Generation settings
+generated/
+├── index.html                # Master index linking all galleries
+├── grammars/                 # Cached grammars (by prompt hash)
+└── prompts/{timestamp}_{hash}/
+    ├── dragon_0.txt          # First prompt
+    ├── dragon_0_0.png        # First image (enhanced in-place if --enhance)
+    ├── dragon_0_1.png        # Second image (if --images-per-prompt 2)
+    ├── dragon_1.txt          # Second prompt
+    ├── dragon_1_0.png
+    ├── ...
+    ├── dragon_gallery.html   # Live-updating gallery for this run
+    ├── dragon_grammar.json   # Tracery grammar used
+    └── dragon_metadata.json  # Generation settings
 ```
 
-Grammars are cached in `generated/grammars/` and reused for identical prompts.
+The master index at `generated/index.html` provides a unified entry point to browse all generation runs with thumbnails and metadata. Grammars are cached and reused for identical prompts.
 
 ## How It Works
 

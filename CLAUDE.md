@@ -97,22 +97,25 @@ python src/cli.py --clean
    - Model instances are cached to avoid reloading between images
    - Tiled VAE decoding enabled by default (reduces memory, disable with `--no-tiled-vae`)
 
-5. **Gallery Generation** (`src/gallery.py`)
+5. **Gallery Generation** (`src/gallery.py`, `src/gallery_index.py`)
    - Creates live-updating HTML gallery with image grid
    - Shows prompts below each image (scrollable for long prompts)
    - Displays Tracery grammar in collapsible section at top
    - Links to raw LLM response file
    - Placeholders for pending images, updated as each completes
    - Supports standalone mode via `--gallery` flag
+   - Auto-generates master index at `generated/index.html` linking all galleries
 
 ### Key Files
 
 - `src/cli.py` - Click-based CLI, orchestrates the pipeline
 - `src/image_enhancer.py` - SeedVR2 image enhancement module
 - `src/gallery.py` - HTML gallery generation with live updates
+- `src/gallery_index.py` - Master index generation linking all galleries
 - `templates/system_prompt.txt` - Default instructions for LLM to generate Tracery grammars
 - `templates/system_prompt_z-image-turbo.txt` - Camera-first prompt structure for z-image-turbo
 - `templates/system_prompt_flux2-klein.txt` - Prose-based prompt structure for flux2-klein models
+- `generated/index.html` - Master index linking all run galleries
 - `generated/grammars/` - Cached grammars (by prompt hash)
 - `generated/prompts/` - Output directories with prompts, images, and metadata
 
