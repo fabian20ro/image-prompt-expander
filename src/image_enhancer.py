@@ -82,8 +82,8 @@ def enhance_image(
         softness=softness,
     )
 
-    # Save the enhanced image
-    result.save(path=str(output_path))
+    # Save the enhanced image (overwrite if replacing original)
+    result.save(path=str(output_path), overwrite=True)
 
     return output_path
 
