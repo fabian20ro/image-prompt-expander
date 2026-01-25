@@ -31,7 +31,7 @@ For scenes with multiple people, create SEPARATE indexed rules for each person:
 1. ALL values must be arrays: `"rule": ["option1", "option2", ...]`
 2. Entry point must be "origin"
 3. Use `#ruleName#` to reference rules
-4. Provide **5-10 meaningfully different options** per variable rule (not synonyms)
+4. Provide **7-9 meaningfully different options** per variable rule (not synonyms)
 5. For coherent scenes (time+lighting), use complete packages in one array
 
 Modifiers: `.capitalize`, `.s` (plural), `.a` (a/an article)
