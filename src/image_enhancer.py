@@ -75,10 +75,10 @@ def enhance_image(
     enhancer = _get_enhancer(quantize)
 
     # Enhance the image with 2x upscaling
-    result = enhancer.enhance_image(
+    result = enhancer.generate_image(
         seed=seed,
         image_path=str(image_path),
-        scale_factor=ScaleFactor(2),
+        resolution=ScaleFactor(2),
         softness=softness,
     )
 
