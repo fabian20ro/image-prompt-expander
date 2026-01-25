@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Image Prompt Expander</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background: #0d1117;
+            color: #c9d1d9;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif;
+            line-height: 1.6;
+            padding: 24px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 48px;
+        }
+
+        h1 {
+            font-size: 2.5rem;
+            font-weight: 600;
+            margin-bottom: 12px;
+            color: #f0f6fc;
+        }
+
+        .tagline {
+            font-size: 1.25rem;
+            color: #8b949e;
+            margin-bottom: 24px;
+        }
+
+        .github-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            background: #21262d;
+            color: #c9d1d9;
+            text-decoration: none;
+            padding: 10px 20px;
+            border-radius: 6px;
+            border: 1px solid #30363d;
+            font-weight: 500;
+            transition: background 0.2s;
+        }
+
+        .github-btn:hover {
+            background: #30363d;
+        }
+
+        .github-btn svg {
+            fill: currentColor;
+        }
+
+        section {
+            margin-bottom: 48px;
+        }
+
+        h2 {
+            font-size: 1.5rem;
+            font-weight: 600;
+            margin-bottom: 16px;
+            color: #f0f6fc;
+        }
+
+        .code-block {
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 6px;
+            overflow-x: auto;
+        }
+
+        .code-block pre {
+            padding: 16px;
+            font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+            font-size: 14px;
+            line-height: 1.5;
+            color: #c9d1d9;
+        }
+
+        .grammar-section details {
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 6px;
+        }
+
+        .grammar-section summary {
+            padding: 16px;
+            cursor: pointer;
+            font-weight: 500;
+            color: #58a6ff;
+        }
+
+        .grammar-section summary:hover {
+            color: #79c0ff;
+        }
+
+        .grammar-section pre {
+            padding: 0 16px 16px 16px;
+            font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+            font-size: 13px;
+            line-height: 1.5;
+            overflow-x: auto;
+        }
+
+        .grammar-explanation {
+            margin-top: 16px;
+            padding: 16px;
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 6px;
+            color: #8b949e;
+            font-size: 14px;
+        }
+
+        .grammar-explanation strong {
+            color: #c9d1d9;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 20px;
+        }
+
+        .card {
+            background: #21262d;
+            border-radius: 8px;
+            overflow: hidden;
+            border: 1px solid #30363d;
+        }
+
+        .card img {
+            width: 100%;
+            aspect-ratio: 3/4;
+            object-fit: cover;
+            display: block;
+        }
+
+        .prompt {
+            padding: 12px;
+            font-size: 12px;
+            color: #8b949e;
+            line-height: 1.5;
+        }
+
+        footer {
+            text-align: center;
+            padding: 48px 0 24px;
+            border-top: 1px solid #21262d;
+            margin-top: 48px;
+        }
+
+        footer a {
+            color: #58a6ff;
+            text-decoration: none;
+        }
+
+        footer a:hover {
+            text-decoration: underline;
+        }
+
+        .arrow {
+            text-align: center;
+            font-size: 2rem;
+            color: #30363d;
+            margin: 24px 0;
+        }
+
+        @media (max-width: 600px) {
+            body {
+                padding: 16px;
+            }
+
+            h1 {
+                font-size: 1.75rem;
+            }
+
+            .tagline {
+                font-size: 1rem;
+            }
+
+            .grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>Image Prompt Expander</h1>
+        <p class="tagline">Turn one prompt into endless AI image variations</p>
+        <a href="https://github.com/fabian20ro/image-prompt-expander" class="github-btn">
+            <svg height="20" width="20" viewBox="0 0 16 16">
+                <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/>
+            </svg>
+            View on GitHub
+        </a>
+    </header>
+
+    <section>
+        <h2>Command</h2>
+        <div class="code-block">
+            <pre>python src/cli.py -p "majestic dragon flying over various locations" \
+    -n 12 --generate-images --width 576 --height 768 --prefix dragon</pre>
+        </div>
+    </section>
+
+    <div class="arrow">&#8595;</div>
+
+    <section class="grammar-section">
+        <h2>Generated Tracery Grammar</h2>
+        <details>
+            <summary>Click to expand grammar JSON</summary>
+            <pre>{
+  "origin": ["#shot#. #subject#. #environment#. #lighting#. #mood#. #quality#"],
+  "shot": [
+    "Wide shot, dramatic low angle",
+    "Full-body shot, side profile",
+    "Cinematic wide, three-quarter view",
+    "Sweeping panoramic, bird's eye",
+    "Dynamic angle from below",
+    "Cinematic wide, eye level"
+  ],
+  "subject": [
+    "A majestic #dragonType# dragon with two #wingStyle# wings, four powerful legs, and a long tail, #flyingAction#"
+  ],
+  "dragonType": [
+    "crimson scaled", "obsidian black", "emerald green",
+    "golden armored", "frost-white", "bronze ancient"
+  ],
+  "wingStyle": [
+    "massive bat-like wings", "enormous feathered wings",
+    "translucent membrane wings", "iridescent scaled wings",
+    "tattered leathery wings", "broad spanning wings"
+  ],
+  "flyingAction": [
+    "soaring majestically", "gliding effortlessly",
+    "soaring through the clouds", "banking in the sky",
+    "soaring high above", "diving through the air"
+  ],
+  "environment": [
+    "over a range of jagged snow-capped mountains",
+    "over a dense ancient forest",
+    "over a sprawling desert dunes",
+    "over misty coastal cliffs",
+    "over a misty mountain valley",
+    "over a stormy ocean"
+  ],
+  "lighting": [
+    "Golden hour sunlight illuminates the scene",
+    "Soft diffused daylight fills the air",
+    "Dramatic storm light with rays breaking through",
+    "Warm sunset light bathes the landscape",
+    "Ethereal moonlight silvers the peaks",
+    "Harsh midday sun creates strong shadows"
+  ],
+  "mood": [
+    "epic and awe-inspiring", "serene and majestic",
+    "wild and untamed", "ancient and mythical",
+    "mysterious and powerful", "grand and sweeping"
+  ],
+  "quality": [
+    "Sharp focus, intricate texture detail, photorealistic",
+    "Crystal clear, dramatic composition, 8k",
+    "Highly detailed, cinematic quality, professional",
+    "Tack sharp, volumetric lighting, masterwork",
+    "Pristine detail, correct anatomy, stunning"
+  ]
+}</pre>
+        </details>
+        <div class="grammar-explanation">
+            <strong>How it works:</strong> The LLM analyzes your input prompt and generates a Tracery grammar that preserves specified elements (dragon, flying) while creating variations for unspecified elements (dragon type, environment, lighting, etc.). Tracery then expands this grammar into unique prompt combinations.
+        </div>
+    </section>
+
+    <div class="arrow">&#8595;</div>
+
+    <section>
+        <h2>Generated Images</h2>
+        <div class="grid">
+            <div class="card">
+                <img src="images/dragon_0.png" alt="Dragon image 0" loading="lazy">
+                <div class="prompt">Cinematic wide, three-quarter view. A majestic golden armored dragon with two tattered leathery wings, four powerful legs, and a long tail, soaring majestically over sprawling desert dunes. Warm sunset light bathes the landscape. Epic and awe-inspiring.</div>
+            </div>
+            <div class="card">
+                <img src="images/dragon_1.png" alt="Dragon image 1" loading="lazy">
+                <div class="prompt">Cinematic wide, eye level. A majestic crimson scaled dragon with two massive bat-like wings, four powerful legs, and a long tail, diving through the air over a stormy ocean. Soft diffused daylight fills the air. Epic and awe-inspiring.</div>
+            </div>
+            <div class="card">
+                <img src="images/dragon_2.png" alt="Dragon image 2" loading="lazy">
+                <div class="prompt">Cinematic wide, eye level. A majestic crimson scaled dragon with two iridescent scaled wings, four powerful legs, and a long tail, gliding effortlessly over a stormy ocean. Dramatic storm light with rays breaking through. Mysterious and powerful.</div>
+            </div>
+            <div class="card">
+                <img src="images/dragon_3.png" alt="Dragon image 3" loading="lazy">
+                <div class="prompt">Wide shot, dramatic low angle. A majestic emerald green dragon with two iridescent scaled wings, four powerful legs, and a long tail, soaring through the clouds over snow-capped mountains. Golden hour sunlight. Ancient and mythical.</div>
+            </div>
+            <div class="card">
+                <img src="images/dragon_4.png" alt="Dragon image 4" loading="lazy">
+                <div class="prompt">Sweeping panoramic, bird's eye. A majestic emerald green dragon with two iridescent scaled wings, four powerful legs, and a long tail, soaring high above sprawling desert dunes. Soft diffused daylight. Wild and untamed.</div>
+            </div>
+            <div class="card">
+                <img src="images/dragon_5.png" alt="Dragon image 5" loading="lazy">
+                <div class="prompt">Dynamic angle from below. A majestic frost-white dragon with two broad spanning wings, four powerful legs, and a long tail, soaring through the clouds over misty coastal cliffs. Dramatic storm light. Ancient and mythical.</div>
+            </div>
+            <div class="card">
+                <img src="images/dragon_6.png" alt="Dragon image 6" loading="lazy">
+                <div class="prompt">Cinematic wide, eye level. A majestic crimson scaled dragon with two broad spanning wings, four powerful legs, and a long tail, diving through the air over jagged snow-capped mountains. Dramatic storm light. Wild and untamed.</div>
+            </div>
+            <div class="card">
+                <img src="images/dragon_7.png" alt="Dragon image 7" loading="lazy">
+                <div class="prompt">Wide shot, dramatic low angle. A majestic bronze ancient dragon with two translucent membrane wings, four powerful legs, and a long tail, diving through the air over sprawling desert dunes. Warm sunset light. Serene and majestic.</div>
+            </div>
+            <div class="card">
+                <img src="images/dragon_8.png" alt="Dragon image 8" loading="lazy">
+                <div class="prompt">Cinematic wide, three-quarter view. A majestic crimson scaled dragon with two translucent membrane wings, four powerful legs, and a long tail, diving through the air over snow-capped mountains. Warm sunset light. Grand and sweeping.</div>
+            </div>
+            <div class="card">
+                <img src="images/dragon_9.png" alt="Dragon image 9" loading="lazy">
+                <div class="prompt">Wide shot, dramatic low angle. A majestic crimson scaled dragon with two massive bat-like wings, four powerful legs, and a long tail, soaring high above sprawling desert dunes. Soft diffused daylight. Serene and majestic.</div>
+            </div>
+            <div class="card">
+                <img src="images/dragon_10.png" alt="Dragon image 10" loading="lazy">
+                <div class="prompt">Sweeping panoramic, bird's eye. A majestic crimson scaled dragon with two iridescent scaled wings, four powerful legs, and a long tail, gliding effortlessly over a stormy ocean. Golden hour sunlight. Wild and untamed.</div>
+            </div>
+            <div class="card">
+                <img src="images/dragon_11.png" alt="Dragon image 11" loading="lazy">
+                <div class="prompt">Sweeping panoramic, bird's eye. A majestic obsidian black dragon with two enormous feathered wings, four powerful legs, and a long tail, soaring high above a stormy ocean. Harsh midday sun. Serene and majestic.</div>
+            </div>
+        </div>
+    </section>
+
+    <footer>
+        <p>
+            <a href="https://github.com/fabian20ro/image-prompt-expander">View the full README on GitHub</a>
+        </p>
+    </footer>
+</body>
+</html>
