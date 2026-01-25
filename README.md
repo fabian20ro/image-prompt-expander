@@ -103,6 +103,12 @@ python src/cli.py -p "a cat sleeping" -n 3 -i \
 python src/cli.py -p "portrait" -n 1 -i \
     --enhance --enhance-softness 0.3 \
     --prefix portrait
+
+# Memory-efficient batch enhancement (for large batches)
+# Defers enhancement until after all images are generated
+python src/cli.py -p "a cat sleeping" -n 50 -i \
+    --enhance --enhance-after \
+    --prefix cat
 ```
 
 ### Standalone Enhancement
@@ -167,7 +173,11 @@ python src/cli.py --clean
 | `--seed INT` | Random seed |
 | `--enhance` | Enable SeedVR2 2x enhancement (replaces original) |
 | `--enhance-softness FLOAT` | Enhancement softness (0.0-1.0, default: 0.5) |
+| `--enhance-after` | Defer enhancement to after all images generated (saves memory) |
 | `--enhance-images PATH` | Enhance existing images in-place (file, folder, or glob) |
+| `--resume` | Skip already-generated images when resuming interrupted runs |
+| `--gallery PATH` | Generate gallery for existing prompts directory |
+| `--no-tiled-vae` | Disable tiled VAE decoding (more memory, faster) |
 
 ## Output Structure
 
@@ -223,7 +233,7 @@ Pre-quantized 4-bit versions are used automatically when available.
 
 **Slow generation** - First run downloads model weights. Use `--steps 4` or `flux2-klein-4b` for speed.
 
-**Out of memory** - Reduce resolution or use `flux2-klein-4b`.
+**Out of memory** - Use `--enhance-after` for batch enhancement (single model at a time). Reduce resolution, use `flux2-klein-4b`, or use `--no-tiled-vae` to trade memory for speed.
 
 ## Credits
 

@@ -11,7 +11,7 @@ import click
 
 from grammar_generator import generate_grammar, hash_prompt
 from tracery_runner import run_tracery, TraceryError
-from image_generator import generate_image, SUPPORTED_MODELS, MODEL_DEFAULTS
+from image_generator import generate_image, clear_model_cache, SUPPORTED_MODELS, MODEL_DEFAULTS
 from image_enhancer import enhance_image, collect_images
 from gallery import create_gallery, update_gallery, generate_gallery_for_directory
 
@@ -160,6 +160,11 @@ def clean_generated():
     help='Enhancement softness (0.0-1.0, default: 0.5)'
 )
 @click.option(
+    '--enhance-after',
+    is_flag=True,
+    help='Defer enhancement to after all images are generated (saves memory)'
+)
+@click.option(
     '--enhance-images',
     type=str,
     help='Standalone: enhance existing images from file, folder, or glob pattern'
@@ -173,6 +178,11 @@ def clean_generated():
     '--gallery',
     type=click.Path(exists=True, path_type=Path),
     help='Standalone: generate gallery.html for existing prompts directory'
+)
+@click.option(
+    '--no-tiled-vae',
+    is_flag=True,
+    help='Disable tiled VAE decoding (uses more memory but may be faster)'
 )
 def main(
     prompt: str | None,
@@ -197,9 +207,11 @@ def main(
     from_prompts: Path | None,
     enhance: bool,
     enhance_softness: float,
+    enhance_after: bool,
     enhance_images: str | None,
     resume: bool,
     gallery: Path | None,
+    no_tiled_vae: bool,
 ):
     """
     Generate FLUX.2 Klein image prompt variations using LLM-powered Tracery grammars.
@@ -261,6 +273,7 @@ def main(
                     softness=enhance_softness,
                     seed=seed,
                     quantize=quantize,
+                    tiled_vae=not no_tiled_vae,
                 )
             except ImportError as e:
                 click.echo(f"Error: {e}", err=True)
@@ -571,6 +584,7 @@ def main(
         current_seed = seed
         generated_count = 0
         skipped_count = 0
+        images_to_enhance = []  # Track images for batch enhancement
 
         for prompt_idx, prompt_text in enumerate(prompts_to_render):
             for image_idx in range(images_per_prompt):
@@ -599,6 +613,7 @@ def main(
                         width=width,
                         height=height,
                         quantize=quantize,
+                        tiled_vae=not no_tiled_vae,
                     )
                 except ImportError as e:
                     click.echo(f"Error: {e}", err=True)
@@ -611,7 +626,8 @@ def main(
                 update_gallery(gallery_path, output_path, prompt_text, generated_count - skipped_count, total_images - skipped_count)
 
                 # Enhance the image if requested (replaces original)
-                if enhance:
+                if enhance and not enhance_after:
+                    # Interleaved mode: enhance immediately after generation
                     click.echo(f"    Enhancing {output_path.name}...")
                     try:
                         enhance_image(
@@ -620,6 +636,7 @@ def main(
                             softness=enhance_softness,
                             seed=current_seed,
                             quantize=quantize,
+                            tiled_vae=not no_tiled_vae,
                         )
                     except ImportError as e:
                         click.echo(f"Error: {e}", err=True)
@@ -627,6 +644,9 @@ def main(
                     except Exception as e:
                         click.echo(f"Error enhancing image: {e}", err=True)
                         sys.exit(1)
+                elif enhance and enhance_after:
+                    # Batch mode: track for later enhancement
+                    images_to_enhance.append((output_path, current_seed))
 
                 # Increment seed for next image (if seed was specified)
                 if current_seed is not None:
@@ -637,6 +657,31 @@ def main(
             click.echo(f"\nGenerated {actual_generated} images, skipped {skipped_count} existing images in: {output}")
         else:
             click.echo(f"\nGenerated {actual_generated} images in: {output}")
+
+        # Batch enhancement phase (when --enhance-after is used)
+        if enhance and enhance_after and images_to_enhance:
+            click.echo(f"\nClearing image generator from memory...")
+            clear_model_cache()
+
+            click.echo(f"Enhancing {len(images_to_enhance)} images with SeedVR2...")
+            for idx, (image_path, image_seed) in enumerate(images_to_enhance, 1):
+                click.echo(f"  [{idx}/{len(images_to_enhance)}] Enhancing {image_path.name}...")
+                try:
+                    enhance_image(
+                        image_path=image_path,
+                        output_path=image_path,
+                        softness=enhance_softness,
+                        seed=image_seed,
+                        quantize=quantize,
+                        tiled_vae=not no_tiled_vae,
+                    )
+                except ImportError as e:
+                    click.echo(f"Error: {e}", err=True)
+                    sys.exit(1)
+                except Exception as e:
+                    click.echo(f"Error enhancing image: {e}", err=True)
+                    sys.exit(1)
+            click.echo(f"Enhanced {len(images_to_enhance)} images")
 
 
 if __name__ == '__main__':

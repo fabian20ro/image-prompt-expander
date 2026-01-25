@@ -24,9 +24,17 @@ SUPPORTED_MODELS = list(MODEL_DEFAULTS.keys())
 _model_cache: dict = {}
 
 
-def _get_model(model: str, quantize: int):
+def clear_model_cache():
+    """Clear the model cache and free memory."""
+    global _model_cache
+    _model_cache.clear()
+    import gc
+    gc.collect()
+
+
+def _get_model(model: str, quantize: int, tiled_vae: bool = True):
     """Get or create a cached model instance."""
-    cache_key = (model, quantize)
+    cache_key = (model, quantize, tiled_vae)
     if cache_key in _model_cache:
         return _model_cache[cache_key]
 
@@ -66,6 +74,11 @@ def _get_model(model: str, quantize: int):
     else:
         raise ValueError(f"Unsupported model: {model}. Choose from: {SUPPORTED_MODELS}")
 
+    # Enable tiled VAE decoding for reduced memory usage
+    if tiled_vae:
+        from mflux.models.common.vae.tiling_config import TilingConfig
+        instance.tiling_config = TilingConfig()
+
     _model_cache[cache_key] = instance
     return instance
 
@@ -79,6 +92,7 @@ def generate_image(
     width: int = 864,
     height: int = 1152,
     quantize: int = 8,
+    tiled_vae: bool = True,
 ) -> Path:
     """
     Generate a single image from a prompt using mflux.
@@ -92,6 +106,7 @@ def generate_image(
         width: Image width in pixels (default 1024)
         height: Image height in pixels (default 1024)
         quantize: Quantization level (3, 4, 5, 6, or 8)
+        tiled_vae: Enable tiled VAE decoding to reduce memory (default: True)
 
     Returns:
         Path to the generated image file
@@ -115,7 +130,7 @@ def generate_image(
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
     # Get or create the model
-    flux = _get_model(model, quantize)
+    flux = _get_model(model, quantize, tiled_vae)
 
     # Generate the image
     if model == "z-image-turbo":

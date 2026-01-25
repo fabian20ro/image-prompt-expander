@@ -32,6 +32,11 @@ python src/cli.py -p "a dragon flying over mountains" -n 5 \
 # Generate images with SeedVR2 2x enhancement
 python src/cli.py -p "a cat" -n 1 --generate-images --enhance --prefix test
 
+# Generate images with enhancement (memory-efficient batch mode)
+# Use --enhance-after to defer enhancement until after all images are generated
+# This loads only one model at a time, reducing peak memory usage by ~50%
+python src/cli.py -p "a cat" -n 10 --generate-images --enhance --enhance-after --prefix test
+
 # Preview grammar without generating files
 python src/cli.py -p "description" --dry-run
 
@@ -83,12 +88,14 @@ python src/cli.py --clean
    - Supports z-image-turbo, flux2-klein-4b, flux2-klein-9b models
    - Uses pre-quantized 4-bit models from HuggingFace when available
    - Model instances are cached to avoid reloading between images
+   - Tiled VAE decoding enabled by default (reduces memory, disable with `--no-tiled-vae`)
 
 4. **Image Enhancement** (`src/image_enhancer.py`)
    - Optional: enhances images in-place using SeedVR2 with 2x upscaling (replaces originals)
    - Configurable softness parameter (0.0-1.0)
    - Supports standalone mode for enhancing existing images
    - Model instances are cached to avoid reloading between images
+   - Tiled VAE decoding enabled by default (reduces memory, disable with `--no-tiled-vae`)
 
 5. **Gallery Generation** (`src/gallery.py`)
    - Creates live-updating HTML gallery with image grid

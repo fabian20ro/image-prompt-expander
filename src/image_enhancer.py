@@ -8,9 +8,17 @@ from pathlib import Path
 _enhancer_cache: dict = {}
 
 
-def _get_enhancer(quantize: int):
+def clear_enhancer_cache():
+    """Clear the enhancer cache and free memory."""
+    global _enhancer_cache
+    _enhancer_cache.clear()
+    import gc
+    gc.collect()
+
+
+def _get_enhancer(quantize: int, tiled_vae: bool = True):
     """Get or create a cached SeedVR2 enhancer instance."""
-    cache_key = quantize
+    cache_key = (quantize, tiled_vae)
     if cache_key in _enhancer_cache:
         return _enhancer_cache[cache_key]
 
@@ -24,6 +32,11 @@ def _get_enhancer(quantize: int):
         ) from e
 
     instance = SeedVR2(quantize=quantize)
+
+    # SeedVR2 has tiling enabled by default; disable if requested
+    if not tiled_vae:
+        instance.tiling_config = None
+
     _enhancer_cache[cache_key] = instance
     return instance
 
@@ -34,6 +47,7 @@ def enhance_image(
     softness: float = 0.5,
     seed: int | None = None,
     quantize: int = 8,
+    tiled_vae: bool = True,
 ) -> Path:
     """
     Enhance a single image using SeedVR2 2x upscaling.
@@ -44,6 +58,7 @@ def enhance_image(
         softness: Enhancement softness (0.0-1.0, default 0.5)
         seed: Random seed for reproducibility (None for random)
         quantize: Quantization level (3, 4, 5, 6, or 8)
+        tiled_vae: Enable tiled VAE decoding to reduce memory (default: True)
 
     Returns:
         Path to the enhanced image file
@@ -72,7 +87,7 @@ def enhance_image(
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
     # Get or create the enhancer
-    enhancer = _get_enhancer(quantize)
+    enhancer = _get_enhancer(quantize, tiled_vae)
 
     # Enhance the image with 2x upscaling
     result = enhancer.generate_image(
