@@ -14,7 +14,7 @@ MODEL_DEFAULTS = {
 # Pre-quantized model paths on HuggingFace
 MODEL_PATHS = {
     "z-image-turbo": "filipstrand/Z-Image-Turbo-mflux-4bit",
-    "flux2-klein-4b": "filipstrand/flux2-klein-4b-mflux-4bit",
+    "flux2-klein-4b": None,  # No pre-quantized version available
     "flux2-klein-9b": None,  # No pre-quantized version available
 }
 
@@ -52,14 +52,14 @@ def _get_model(model: str, quantize: int):
     elif model == "flux2-klein-4b":
         from mflux.models.flux2 import Flux2Klein
         instance = Flux2Klein(
-            quantize=quantize if model_path is None else None,
+            quantize=None,  # Use full model without quantization
             model_path=model_path,
             model_config=ModelConfig.flux2_klein_4b(),
         )
     elif model == "flux2-klein-9b":
         from mflux.models.flux2 import Flux2Klein
         instance = Flux2Klein(
-            quantize=quantize,
+            quantize=None,  # Use full model without quantization
             model_path=model_path,
             model_config=ModelConfig.flux2_klein_9b(),
         )
