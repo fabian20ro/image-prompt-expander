@@ -1,5 +1,7 @@
 # image-prompt-expander
 
+**[View Live Demo](https://fabian20ro.github.io/image-prompt-expander/)** — See example outputs from the generator
+
 A procedural image prompt generator that creates varied, high-quality prompts for FLUX.2 image models, with optional local image generation using mflux.
 
 ```
@@ -185,7 +187,7 @@ Grammars are cached in `generated/grammars/` and reused for identical prompts.
 
 ## How It Works
 
-1. **Grammar Generation** - Your prompt is sent to a local LLM with model-specific instructions to create a Tracery grammar. The grammar locks elements you specified and varies everything else. Different models use different prompt structures (camera-first for z-image-turbo, prose-based for flux2-klein).
+1. **Grammar Generation** - Your prompt is sent to a local LLM (recommended: GLM-4.7-Flash via LM Studio) with model-specific instructions to create a Tracery grammar. The grammar locks elements you specified and varies everything else. Different models use different prompt structures (camera-first for z-image-turbo, prose-based for flux2-klein).
 
 2. **Prompt Expansion** - The grammar is expanded N times, randomly selecting from options to create diverse but coherent prompts.
 
@@ -226,10 +228,15 @@ Pre-quantized 4-bit versions are used automatically when available.
 ## Credits
 
 - [Fifty Shades Generator](https://github.com/lisawray/fiftyshades) by Lisa Wray - original inspiration
-- [Tracery](https://github.com/galaxykate/tracery) by Kate Compton
-- [mflux](https://github.com/filipstrand/mflux) by Filip Strand
-- FLUX models by Black Forest Labs
+- [Tracery](https://github.com/galaxykate/tracery) by Kate Compton - grammar expansion library
+- [mflux](https://github.com/filipstrand/mflux) by Filip Strand - MLX-based image generation for Apple Silicon, including pre-quantized model weights
+- [Z-Image-Turbo](https://huggingface.co/Tongyi-MAI/Z-Image-Turbo) by Tongyi-MAI - default image model (6B parameters)
+- [FLUX models](https://blackforestlabs.ai/) by Black Forest Labs - flux2-klein image models
 
 ## License
 
 See [LICENSE](LICENSE) file.
+
+## Roadmap
+
+- [ ] LoRA support for custom styles (if requested)
