@@ -22,7 +22,7 @@ User prompt → LLM generates Tracery grammar → Tracery produces N prompts →
 ## Installation
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/image-prompt-expander.git
+git clone https://github.com/fabian20ro/image-prompt-expander.git
 cd image-prompt-expander
 
 python3 -m venv venv
@@ -71,7 +71,7 @@ python src/cli.py -p "abstract art" -n 100 \
 ### Custom Image Settings
 
 ```bash
-# Different model
+# Different model (auto-selects optimized prompt structure)
 python src/cli.py -p "portrait of a wizard" -n 5 -i \
     --model flux2-klein-4b \
     --prefix wizard
@@ -85,6 +85,40 @@ python src/cli.py -p "landscape painting" -n 5 -i \
 python src/cli.py -p "abstract pattern" -n 3 -i \
     --seed 42 \
     --prefix pattern
+```
+
+### Image Enhancement (SeedVR2)
+
+Enhance generated images with 2x upscaling using SeedVR2. Enhanced images replace the originals:
+
+```bash
+# Generate images with automatic 2x enhancement
+python src/cli.py -p "a cat sleeping" -n 3 -i \
+    --enhance \
+    --prefix cat
+
+# Adjust enhancement softness (0.0-1.0, default: 0.5)
+python src/cli.py -p "portrait" -n 1 -i \
+    --enhance --enhance-softness 0.3 \
+    --prefix portrait
+```
+
+### Standalone Enhancement
+
+Enhance existing images in-place (replaces originals):
+
+```bash
+# Enhance a single image
+python src/cli.py --enhance-images path/to/image.png
+
+# Enhance all images in a folder
+python src/cli.py --enhance-images generated/prompts/myrun/
+
+# Enhance using glob pattern
+python src/cli.py --enhance-images "generated/prompts/*/cat_*.png"
+
+# With custom softness
+python src/cli.py --enhance-images folder/ --enhance-softness 0.7
 ```
 
 ### Resume from Intermediate Steps
@@ -129,13 +163,16 @@ python src/cli.py --clean
 | `--height INT` | Image height (default: 1152) |
 | `-q, --quantize` | Quantization: 3, 4, 5, 6, or 8 |
 | `--seed INT` | Random seed |
+| `--enhance` | Enable SeedVR2 2x enhancement (replaces original) |
+| `--enhance-softness FLOAT` | Enhancement softness (0.0-1.0, default: 0.5) |
+| `--enhance-images PATH` | Enhance existing images in-place (file, folder, or glob) |
 
 ## Output Structure
 
 ```
 generated/prompts/{hash}_{timestamp}/
 ├── dragon_0.txt              # First prompt
-├── dragon_0_0.png            # First image from first prompt
+├── dragon_0_0.png            # First image (enhanced in-place if --enhance)
 ├── dragon_0_1.png            # Second image (if --images-per-prompt 2)
 ├── dragon_1.txt              # Second prompt
 ├── dragon_1_0.png
@@ -148,11 +185,13 @@ Grammars are cached in `generated/grammars/` and reused for identical prompts.
 
 ## How It Works
 
-1. **Grammar Generation** - Your prompt is sent to a local LLM with instructions to create a Tracery grammar. The grammar locks elements you specified and varies everything else.
+1. **Grammar Generation** - Your prompt is sent to a local LLM with model-specific instructions to create a Tracery grammar. The grammar locks elements you specified and varies everything else. Different models use different prompt structures (camera-first for z-image-turbo, prose-based for flux2-klein).
 
 2. **Prompt Expansion** - The grammar is expanded N times, randomly selecting from options to create diverse but coherent prompts.
 
 3. **Image Generation** (optional) - Each prompt is rendered using mflux on Apple Silicon.
+
+4. **Image Enhancement** (optional) - Images are enhanced in-place with SeedVR2 2x upscaling, replacing the originals with higher quality versions.
 
 ## Supported Models
 

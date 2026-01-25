@@ -12,6 +12,7 @@ import click
 from grammar_generator import generate_grammar, hash_prompt
 from tracery_runner import run_tracery, TraceryError
 from image_generator import generate_image, SUPPORTED_MODELS, MODEL_DEFAULTS
+from image_enhancer import enhance_image, collect_images
 
 
 GENERATED_DIR = Path(__file__).parent.parent / "generated"
@@ -146,6 +147,22 @@ def clean_generated():
     type=click.Path(exists=True, path_type=Path),
     help='Resume from existing prompts directory (images only)'
 )
+@click.option(
+    '--enhance',
+    is_flag=True,
+    help='Enable SeedVR2 2x enhancement after image generation'
+)
+@click.option(
+    '--enhance-softness',
+    default=0.5,
+    type=float,
+    help='Enhancement softness (0.0-1.0, default: 0.5)'
+)
+@click.option(
+    '--enhance-images',
+    type=str,
+    help='Standalone: enhance existing images from file, folder, or glob pattern'
+)
 def main(
     prompt: str | None,
     clean: bool,
@@ -167,6 +184,9 @@ def main(
     seed: int | None,
     from_grammar: Path | None,
     from_prompts: Path | None,
+    enhance: bool,
+    enhance_softness: float,
+    enhance_images: str | None,
 ):
     """
     Generate FLUX.2 Klein image prompt variations using LLM-powered Tracery grammars.
@@ -179,19 +199,69 @@ def main(
         python cli.py -p "a dragon flying over mountains" -n 5 \\
             --generate-images --images-per-prompt 3 --prefix dragon
 
+    With image generation + SeedVR2 2x enhancement:
+        python cli.py -p "a cat" -n 1 --generate-images --enhance --prefix test
+
     Resume from existing grammar:
         python cli.py --from-grammar generated/grammars/abc123.tracery.json -n 100
 
     Resume from existing prompts (images only):
         python cli.py --from-prompts generated/prompts/abc123_20260124_122208 \\
             --generate-images --images-per-prompt 2
+
+    Standalone enhancement (no image generation):
+        python cli.py --enhance-images path/to/image.png
+        python cli.py --enhance-images path/to/folder/
+        python cli.py --enhance-images "generated/prompts/*/test_*.png"
     """
     # Handle --clean
     if clean:
         removed = clean_generated()
         click.echo(f"Cleaned {removed} items from generated/")
-        if not prompt and not from_grammar and not from_prompts:
+        if not prompt and not from_grammar and not from_prompts and not enhance_images:
             return
+
+    # STANDALONE MODE: Enhance existing images
+    if enhance_images:
+        click.echo(f"Collecting images from: {enhance_images}")
+        try:
+            images = collect_images(enhance_images)
+        except ValueError as e:
+            click.echo(f"Error: {e}", err=True)
+            sys.exit(1)
+
+        click.echo(f"Enhancing {len(images)} images with SeedVR2 (2x upscale, softness={enhance_softness})...")
+
+        # Set defaults for quantize if not specified
+        if quantize is None:
+            quantize = 8
+
+        enhanced_count = 0
+        for idx, img_path in enumerate(images):
+            enhanced_count += 1
+            click.echo(f"  [{enhanced_count}/{len(images)}] Enhancing {img_path.name} (replacing original)...")
+
+            try:
+                enhance_image(
+                    image_path=img_path,
+                    output_path=img_path,
+                    softness=enhance_softness,
+                    seed=seed,
+                    quantize=quantize,
+                )
+            except ImportError as e:
+                click.echo(f"Error: {e}", err=True)
+                sys.exit(1)
+            except Exception as e:
+                click.echo(f"Error enhancing image: {e}", err=True)
+                sys.exit(1)
+
+            # Increment seed for next image (if seed was specified)
+            if seed is not None:
+                seed += 1
+
+        click.echo(f"\nEnhanced {enhanced_count} images")
+        return
 
     # Validation: mutual exclusivity
     if from_grammar and from_prompts:
@@ -202,8 +272,8 @@ def main(
         click.echo("Error: --from-prompts requires --generate-images", err=True)
         sys.exit(1)
 
-    if not prompt and not from_grammar and not from_prompts and not clean:
-        click.echo("Error: --prompt is required (or use --from-grammar/--from-prompts)", err=True)
+    if not prompt and not from_grammar and not from_prompts and not clean and not enhance_images:
+        click.echo("Error: --prompt is required (or use --from-grammar/--from-prompts/--enhance-images)", err=True)
         sys.exit(1)
 
     # Warn if --prompt is provided with --from-grammar or --from-prompts
@@ -269,6 +339,8 @@ def main(
             "seed": seed,
             "resumed_from": str(prompts_dir),
             "original_settings": existing_image_settings if existing_image_settings else None,
+            "enhance": enhance,
+            "enhance_softness": enhance_softness if enhance else None,
         }
 
         # Update metadata file
@@ -346,6 +418,8 @@ def main(
                 "images_per_prompt": images_per_prompt,
                 "max_prompts": max_prompts,
                 "seed": seed,
+                "enhance": enhance,
+                "enhance_softness": enhance_softness if enhance else None,
             }
 
         # Save metadata and grammar with prefix
@@ -373,7 +447,8 @@ def main(
                 user_prompt=prompt,
                 base_url=base_url,
                 use_cache=not no_cache,
-                temperature=temperature
+                temperature=temperature,
+                model=model,
             )
         except Exception as e:
             click.echo(f"Error generating grammar: {e}", err=True)
@@ -436,6 +511,8 @@ def main(
                 "images_per_prompt": images_per_prompt,
                 "max_prompts": max_prompts,
                 "seed": seed,
+                "enhance": enhance,
+                "enhance_softness": enhance_softness if enhance else None,
             }
 
         # Save metadata and grammar with prefix
@@ -488,6 +565,24 @@ def main(
                 except Exception as e:
                     click.echo(f"Error generating image: {e}", err=True)
                     sys.exit(1)
+
+                # Enhance the image if requested (replaces original)
+                if enhance:
+                    click.echo(f"    Enhancing {output_path.name}...")
+                    try:
+                        enhance_image(
+                            image_path=output_path,
+                            output_path=output_path,
+                            softness=enhance_softness,
+                            seed=current_seed,
+                            quantize=quantize,
+                        )
+                    except ImportError as e:
+                        click.echo(f"Error: {e}", err=True)
+                        sys.exit(1)
+                    except Exception as e:
+                        click.echo(f"Error enhancing image: {e}", err=True)
+                        sys.exit(1)
 
                 # Increment seed for next image (if seed was specified)
                 if current_seed is not None:

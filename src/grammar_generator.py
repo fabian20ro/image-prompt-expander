@@ -17,10 +17,35 @@ LM_STUDIO_API_KEY = "lm-studio"
 CACHE_DIR = Path(__file__).parent.parent / "generated" / "grammars"
 
 
-def get_system_prompt() -> str:
-    """Load the system prompt from the templates directory."""
-    template_path = Path(__file__).parent.parent / "templates" / "system_prompt.txt"
-    return template_path.read_text()
+def get_system_prompt(model: str | None = None) -> str:
+    """
+    Load the system prompt from the templates directory.
+
+    Args:
+        model: Model name to select appropriate system prompt.
+               Supports z-image-turbo (camera-first) and flux2-klein (prose-based).
+               Falls back to generic system_prompt.txt if model-specific not found.
+
+    Returns:
+        The system prompt content
+    """
+    templates_dir = Path(__file__).parent.parent / "templates"
+
+    # Determine the model-specific prompt filename
+    if model:
+        # Normalize model name for file lookup (e.g., flux2-klein-4b -> flux2-klein)
+        if model.startswith("flux2-klein"):
+            prompt_name = "flux2-klein"
+        else:
+            prompt_name = model
+
+        model_specific_path = templates_dir / f"system_prompt_{prompt_name}.txt"
+        if model_specific_path.exists():
+            return model_specific_path.read_text()
+
+    # Fallback to generic system prompt
+    generic_path = templates_dir / "system_prompt.txt"
+    return generic_path.read_text()
 
 
 def hash_prompt(user_prompt: str) -> str:
@@ -86,7 +111,8 @@ def generate_grammar(
     base_url: str = LM_STUDIO_BASE_URL,
     api_key: str = LM_STUDIO_API_KEY,
     use_cache: bool = True,
-    temperature: float = 0.7
+    temperature: float = 0.7,
+    model: str | None = None,
 ) -> tuple[str, bool]:
     """
     Generate a Dada Engine grammar for the given prompt using LM Studio.
@@ -97,6 +123,7 @@ def generate_grammar(
         api_key: API key (LM Studio doesn't require a real key)
         use_cache: Whether to check/use cached grammars
         temperature: LLM temperature for generation
+        model: Image model name to select appropriate system prompt
 
     Returns:
         Tuple of (grammar content, was_cached)
@@ -115,7 +142,7 @@ def generate_grammar(
         api_key=api_key
     )
 
-    system_prompt = get_system_prompt()
+    system_prompt = get_system_prompt(model)
 
     response = client.chat.completions.create(
         model="local-model",  # LM Studio uses whatever model is loaded

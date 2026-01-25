@@ -8,9 +8,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **Pipeline:**
 ```
-Full pipeline:     User prompt → LLM → Grammar → Tracery → Prompts → Images
---from-grammar:                        Grammar → Tracery → Prompts → Images
---from-prompts:                                            Prompts → Images
+Full pipeline:     User prompt → LLM → Grammar → Tracery → Prompts → Images → (Enhancement)
+--from-grammar:                        Grammar → Tracery → Prompts → Images → (Enhancement)
+--from-prompts:                                            Prompts → Images → (Enhancement)
+--enhance-images:                                                              Enhancement
 ```
 
 ## Commands
@@ -27,6 +28,9 @@ python src/cli.py -p "a dragon flying over mountains" -n 50
 python src/cli.py -p "a dragon flying over mountains" -n 5 \
     --generate-images --prefix dragon
 
+# Generate images with SeedVR2 2x enhancement
+python src/cli.py -p "a cat" -n 1 --generate-images --enhance --prefix test
+
 # Preview grammar without generating files
 python src/cli.py -p "description" --dry-run
 
@@ -38,16 +42,22 @@ python src/cli.py --from-grammar generated/grammars/abc123.tracery.json \
 python src/cli.py --from-prompts generated/prompts/abc123_20260124_122208 \
     --generate-images --images-per-prompt 2
 
+# Standalone enhancement (enhance existing images)
+python src/cli.py --enhance-images path/to/image.png
+python src/cli.py --enhance-images path/to/folder/
+python src/cli.py --enhance-images "generated/prompts/*/test_*.png"
+
 # Clean all generated files
 python src/cli.py --clean
 ```
 
 ## Architecture
 
-### Three-Stage Pipeline
+### Four-Stage Pipeline
 
 1. **Grammar Generation** (`src/grammar_generator.py`)
-   - Sends user prompt to LM Studio with system prompt from `templates/system_prompt.txt`
+   - Sends user prompt to LM Studio with model-specific system prompt
+   - Uses `templates/system_prompt_z-image-turbo.txt` (camera-first) or `templates/system_prompt_flux2-klein.txt` (prose-based)
    - LLM returns a Tracery grammar (JSON) that locks specified elements and varies unspecified ones
    - Grammars are cached by prompt hash in `generated/grammars/`
 
@@ -61,16 +71,27 @@ python src/cli.py --clean
    - Uses pre-quantized 4-bit models from HuggingFace when available
    - Model instances are cached to avoid reloading between images
 
+4. **Image Enhancement** (`src/image_enhancer.py`)
+   - Optional: enhances images in-place using SeedVR2 with 2x upscaling (replaces originals)
+   - Configurable softness parameter (0.0-1.0)
+   - Supports standalone mode for enhancing existing images
+   - Model instances are cached to avoid reloading between images
+
 ### Key Files
 
 - `src/cli.py` - Click-based CLI, orchestrates the pipeline
-- `templates/system_prompt.txt` - Instructions for LLM to generate Tracery grammars
+- `src/image_enhancer.py` - SeedVR2 image enhancement module
+- `templates/system_prompt.txt` - Default instructions for LLM to generate Tracery grammars
+- `templates/system_prompt_z-image-turbo.txt` - Camera-first prompt structure for z-image-turbo
+- `templates/system_prompt_flux2-klein.txt` - Prose-based prompt structure for flux2-klein models
 - `generated/grammars/` - Cached grammars (by prompt hash)
 - `generated/prompts/` - Output directories with prompts, images, and metadata
 
 ### Output Naming Convention
 
-Files use prefix naming: `{prefix}_{prompt_index}.txt` for prompts, `{prefix}_{prompt_index}_{image_index}.png` for images.
+Files use prefix naming:
+- `{prefix}_{prompt_index}.txt` for prompts
+- `{prefix}_{prompt_index}_{image_index}.png` for images (enhanced in-place if `--enhance` used)
 
 ## Dependencies
 
