@@ -8,10 +8,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **Pipeline:**
 ```
-Full pipeline:     User prompt → LLM → Grammar → Tracery → Prompts → Images → (Enhancement)
---from-grammar:                        Grammar → Tracery → Prompts → Images → (Enhancement)
---from-prompts:                                            Prompts → Images → (Enhancement)
---enhance-images:                                                              Enhancement
+Full pipeline:     User prompt → LLM → Grammar → Tracery → Prompts → Gallery → Images → (Enhancement)
+--from-grammar:                        Grammar → Tracery → Prompts → Gallery → Images → (Enhancement)
+--from-prompts:                                            Prompts → Gallery → Images → (Enhancement)
+--enhance-images:                                                                        Enhancement
+--gallery:                                                           Gallery
 ```
 
 ## Commands
@@ -40,12 +41,24 @@ python src/cli.py --from-grammar generated/grammars/abc123.tracery.json \
 
 # Resume from existing prompts (generate images only)
 python src/cli.py --from-prompts generated/prompts/abc123_20260124_122208 \
-    --generate-images --images-per-prompt 2
+    --generate-images --images-per-prompt 2 --resume
 
 # Standalone enhancement (enhance existing images)
 python src/cli.py --enhance-images path/to/image.png
 python src/cli.py --enhance-images path/to/folder/
 python src/cli.py --enhance-images "generated/prompts/*/test_*.png"
+
+# Generate with live gallery (auto-created before images)
+python src/cli.py -p "a cat" -n 5 --generate-images --prefix test
+# Gallery URL printed to terminal - open in browser, refresh to see progress
+
+# Resume interrupted generation (skip existing images)
+python src/cli.py --from-prompts generated/prompts/... --generate-images --resume
+# Also works with full pipeline:
+python src/cli.py -p "a cat" -n 10 --generate-images --prefix test --resume
+
+# Generate gallery for existing output directory
+python src/cli.py --gallery generated/prompts/20260125_143022_abc123
 
 # Clean all generated files
 python src/cli.py --clean
@@ -53,7 +66,7 @@ python src/cli.py --clean
 
 ## Architecture
 
-### Four-Stage Pipeline
+### Five-Stage Pipeline
 
 1. **Grammar Generation** (`src/grammar_generator.py`)
    - Sends user prompt to LM Studio with model-specific system prompt
@@ -77,10 +90,17 @@ python src/cli.py --clean
    - Supports standalone mode for enhancing existing images
    - Model instances are cached to avoid reloading between images
 
+5. **Gallery Generation** (`src/gallery.py`)
+   - Creates live-updating HTML gallery with image grid
+   - Shows prompts below each image
+   - Placeholders for pending images, updated as each completes
+   - Supports standalone mode via `--gallery` flag
+
 ### Key Files
 
 - `src/cli.py` - Click-based CLI, orchestrates the pipeline
 - `src/image_enhancer.py` - SeedVR2 image enhancement module
+- `src/gallery.py` - HTML gallery generation with live updates
 - `templates/system_prompt.txt` - Default instructions for LLM to generate Tracery grammars
 - `templates/system_prompt_z-image-turbo.txt` - Camera-first prompt structure for z-image-turbo
 - `templates/system_prompt_flux2-klein.txt` - Prose-based prompt structure for flux2-klein models
@@ -92,6 +112,7 @@ python src/cli.py --clean
 Files use prefix naming:
 - `{prefix}_{prompt_index}.txt` for prompts
 - `{prefix}_{prompt_index}_{image_index}.png` for images (enhanced in-place if `--enhance` used)
+- `{prefix}_gallery.html` for the live-updating image gallery
 
 ## Dependencies
 

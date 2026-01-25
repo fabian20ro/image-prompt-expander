@@ -13,6 +13,7 @@ from grammar_generator import generate_grammar, hash_prompt
 from tracery_runner import run_tracery, TraceryError
 from image_generator import generate_image, SUPPORTED_MODELS, MODEL_DEFAULTS
 from image_enhancer import enhance_image, collect_images
+from gallery import create_gallery, update_gallery, generate_gallery_for_directory
 
 
 GENERATED_DIR = Path(__file__).parent.parent / "generated"
@@ -163,6 +164,16 @@ def clean_generated():
     type=str,
     help='Standalone: enhance existing images from file, folder, or glob pattern'
 )
+@click.option(
+    '--resume',
+    is_flag=True,
+    help='Skip already-generated images when resuming interrupted runs'
+)
+@click.option(
+    '--gallery',
+    type=click.Path(exists=True, path_type=Path),
+    help='Standalone: generate gallery.html for existing prompts directory'
+)
 def main(
     prompt: str | None,
     clean: bool,
@@ -187,6 +198,8 @@ def main(
     enhance: bool,
     enhance_softness: float,
     enhance_images: str | None,
+    resume: bool,
+    gallery: Path | None,
 ):
     """
     Generate FLUX.2 Klein image prompt variations using LLM-powered Tracery grammars.
@@ -218,7 +231,7 @@ def main(
     if clean:
         removed = clean_generated()
         click.echo(f"Cleaned {removed} items from generated/")
-        if not prompt and not from_grammar and not from_prompts and not enhance_images:
+        if not prompt and not from_grammar and not from_prompts and not enhance_images and not gallery:
             return
 
     # STANDALONE MODE: Enhance existing images
@@ -263,6 +276,18 @@ def main(
         click.echo(f"\nEnhanced {enhanced_count} images")
         return
 
+    # STANDALONE MODE: Generate gallery for existing prompts directory
+    if gallery:
+        click.echo(f"Generating gallery for: {gallery}")
+        try:
+            gallery_path = generate_gallery_for_directory(gallery)
+            gallery_url = f"file://{gallery_path.resolve()}"
+            click.echo(f"Gallery created: {gallery_url}")
+        except ValueError as e:
+            click.echo(f"Error: {e}", err=True)
+            sys.exit(1)
+        return
+
     # Validation: mutual exclusivity
     if from_grammar and from_prompts:
         click.echo("Error: Cannot use both --from-grammar and --from-prompts", err=True)
@@ -272,8 +297,8 @@ def main(
         click.echo("Error: --from-prompts requires --generate-images", err=True)
         sys.exit(1)
 
-    if not prompt and not from_grammar and not from_prompts and not clean and not enhance_images:
-        click.echo("Error: --prompt is required (or use --from-grammar/--from-prompts/--enhance-images)", err=True)
+    if not prompt and not from_grammar and not from_prompts and not clean and not enhance_images and not gallery:
+        click.echo("Error: --prompt is required (or use --from-grammar/--from-prompts/--enhance-images/--gallery)", err=True)
         sys.exit(1)
 
     # Warn if --prompt is provided with --from-grammar or --from-prompts
@@ -535,17 +560,33 @@ def main(
         prompts_to_render = outputs[:max_prompts] if max_prompts else outputs
         total_images = len(prompts_to_render) * images_per_prompt
 
+        # Create gallery before starting image generation
+        gallery_path = create_gallery(output, prefix, prompts_to_render, images_per_prompt)
+        gallery_url = f"file://{gallery_path.resolve()}"
+        click.echo(f"Gallery: {gallery_url}")
+
         click.echo(f"\nGenerating {total_images} images ({len(prompts_to_render)} prompts x {images_per_prompt} images each)...")
         click.echo(f"Model: {model}, Steps: {steps or MODEL_DEFAULTS[model]['steps']}, Size: {width}x{height}")
 
         current_seed = seed
         generated_count = 0
+        skipped_count = 0
 
         for prompt_idx, prompt_text in enumerate(prompts_to_render):
             for image_idx in range(images_per_prompt):
                 output_path = output / f"{prefix}_{prompt_idx}_{image_idx}.png"
-                generated_count += 1
 
+                # Resume logic: skip existing images
+                if resume and output_path.exists():
+                    skipped_count += 1
+                    generated_count += 1  # Still count for progress display
+                    click.echo(f"  [{generated_count}/{total_images}] Skipping {output_path.name} (exists)")
+                    # Increment seed even for skipped images to maintain reproducibility
+                    if current_seed is not None:
+                        current_seed += 1
+                    continue
+
+                generated_count += 1
                 click.echo(f"  [{generated_count}/{total_images}] Generating {output_path.name}...")
 
                 try:
@@ -565,6 +606,9 @@ def main(
                 except Exception as e:
                     click.echo(f"Error generating image: {e}", err=True)
                     sys.exit(1)
+
+                # Update gallery after each image
+                update_gallery(gallery_path, output_path, prompt_text, generated_count - skipped_count, total_images - skipped_count)
 
                 # Enhance the image if requested (replaces original)
                 if enhance:
@@ -588,7 +632,11 @@ def main(
                 if current_seed is not None:
                     current_seed += 1
 
-        click.echo(f"\nGenerated {generated_count} images in: {output}")
+        actual_generated = generated_count - skipped_count
+        if skipped_count > 0:
+            click.echo(f"\nGenerated {actual_generated} images, skipped {skipped_count} existing images in: {output}")
+        else:
+            click.echo(f"\nGenerated {actual_generated} images in: {output}")
 
 
 if __name__ == '__main__':
