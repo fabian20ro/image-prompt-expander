@@ -14,7 +14,7 @@ Given a user's image description, generate a Tracery grammar that produces meani
 - Front-load important elements (the model prioritizes earlier content)
 - Lighting is critical - describe source, quality, direction, temperature
 - Every phrase should add visual information; avoid filler text
-- Aim for 2-4 sentences of rich, evocative description
+- Aim for 7-9 sentences of rich, evocative description
 
 ## Tracery Syntax Reference
 
