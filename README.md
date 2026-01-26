@@ -69,7 +69,7 @@ Gallery pages include:
 - **Kill/Clear**: Stop current task or clear pending queue
 - **Back to Index**: Navigate back to the master index
 
-**Auto-Backup**: The system automatically creates backups before destructive operations (regenerating prompts when images exist, enhancing all images). Backups contain only PNG images and metadata (not prompts, logs, or HTML), and are stored in `generated/saved/`. Archives appear in a separate "Saved Archives" section on the index.
+**Auto-Backup**: The system automatically creates backups before destructive operations (regenerating prompts when images exist, enhancing all images). Archives are saved as flat PNG files in `generated/saved/` with metadata embedded in PNG text chunks (prompt, model, settings). Archives appear as image grids in the "Archived Images" section on the index.
 
 ### CLI: Basic (Text Prompts Only)
 
@@ -232,13 +232,13 @@ generated/
 │   ├── dragon_gallery.html   # Gallery generated dynamically via --serve
 │   ├── dragon_grammar.json   # Tracery grammar used
 │   └── dragon_metadata.json  # Generation settings
-└── saved/                    # Archived/backed-up runs
-    └── {original_run}_{backup_timestamp}/
-        ├── *.png                # PNG images only
-        └── *_metadata.json      # Metadata with backup info
+└── saved/                    # Flat archived images
+    ├── dragon_20260126_143052_0_0.png  # {prefix}_{timestamp}_{promptIdx}_{imgIdx}.png
+    ├── dragon_20260126_143052_1_0.png  # Metadata embedded in PNG text chunks
+    └── ...
 ```
 
-The master index at `generated/index.html` provides a unified entry point to browse all generation runs with thumbnails and metadata. Archives appear in a separate "Saved Archives" section. Grammars are cached and reused for identical prompts.
+The master index at `generated/index.html` provides a unified entry point to browse all generation runs with thumbnails and metadata. Archives appear as image grids in the "Archived Images" section, grouped by prefix and timestamp. Archive metadata (prompt, model, settings) is embedded directly in PNG text chunks for self-contained files. Grammars are cached and reused for identical prompts.
 
 ## How It Works
 

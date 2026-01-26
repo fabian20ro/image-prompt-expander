@@ -675,8 +675,10 @@ class TestUtils:
             assert prompts[2] == "Third prompt"
 
     def test_backup_run(self):
-        """Test backing up a run directory."""
-        from utils import backup_run, is_backup_run
+        """Test backing up a run directory to flat files with EXIF metadata."""
+        from utils import backup_run, is_backup_run, get_flat_archive_metadata
+        from PIL import Image
+        import io
 
         with tempfile.TemporaryDirectory() as tmpdir:
             tmpdir = Path(tmpdir)
@@ -688,26 +690,34 @@ class TestUtils:
             (run_dir / "test_metadata.json").write_text(json.dumps({
                 "prefix": "test",
                 "user_prompt": "a dragon",
+                "model": "test-model",
             }))
             (run_dir / "test_0.txt").write_text("Prompt 0")
-            (run_dir / "test_0_0.png").write_bytes(b"fake image")
+
+            # Create a real PNG file for Pillow to process
+            img = Image.new('RGB', (10, 10), color='red')
+            img.save(run_dir / "test_0_0.png")
 
             # Create backup
-            backup_path = backup_run(run_dir, saved_dir, reason="pre_regenerate")
+            saved_files = backup_run(run_dir, saved_dir, reason="pre_regenerate")
 
-            assert backup_path.exists()
-            # Only PNG images and metadata are backed up (not prompt .txt files)
-            assert not (backup_path / "test_0.txt").exists()
-            assert (backup_path / "test_0_0.png").exists()
+            # Check that files were saved
+            assert len(saved_files) == 1
+            assert saved_files[0].exists()
 
-            # Check backup metadata
-            meta = json.loads((backup_path / "test_metadata.json").read_text())
-            assert meta["backup_info"]["is_backup"] is True
-            assert meta["backup_info"]["backup_reason"] == "pre_regenerate"
-            assert meta["backup_info"]["source_run_id"] == "20240101_120000_abc123"
+            # Check flat file naming pattern: prefix_timestamp_promptIdx_imgIdx.png
+            filename = saved_files[0].name
+            assert filename.startswith("test_")
+            assert filename.endswith("_0_0.png")
 
-            # Check is_backup_run
-            assert is_backup_run(backup_path) is True
+            # Check that metadata is embedded in PNG
+            metadata = get_flat_archive_metadata(saved_files[0])
+            assert metadata.get("user_prompt") == "a dragon"
+            assert metadata.get("model") == "test-model"
+            assert metadata.get("backup_reason") == "pre_regenerate"
+            assert metadata.get("prompt") == "Prompt 0"
+
+            # Check is_backup_run still works for original run_dir
             assert is_backup_run(run_dir) is False
 
     def test_backup_run_not_found(self):

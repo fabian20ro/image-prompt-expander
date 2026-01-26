@@ -6,6 +6,15 @@ from pathlib import Path
 
 from filelock import FileLock
 
+from html_components import (
+    LogPanel,
+    ProgressBar,
+    Buttons,
+    NavHeader,
+    GalleryStyles,
+    SSEClient,
+)
+
 
 def create_gallery(
     output_dir: Path,
@@ -223,10 +232,7 @@ def generate_gallery_for_directory(prompts_dir: Path, interactive: bool = False)
 
 def _build_nav_header() -> str:
     """Build navigation header with back link."""
-    return '''
-  <nav class="nav-header">
-    <a href="/index" class="nav-link">&larr; Back to Index</a>
-  </nav>'''
+    return NavHeader.html()
 
 
 def _build_interactive_grammar_section(grammar: str, run_id: str) -> str:
@@ -262,37 +268,19 @@ def _build_interactive_action_bar(run_id: str) -> str:
 
 def _build_interactive_progress_bar() -> str:
     """Build the fixed progress bar at bottom."""
-    return '''
-  <div id="progress-bar" class="progress-bar-fixed hidden">
-    <div class="progress-info">
-      <span id="progress-message">Idle</span>
-    </div>
-    <div class="progress-container">
-      <div class="progress-track">
-        <div id="progress-fill" class="progress-fill" style="width: 0%"></div>
-      </div>
-      <span id="progress-text">0/0</span>
-    </div>
-  </div>
-'''
+    return ProgressBar.html()
 
 
 def _build_log_panel() -> str:
     """Build the collapsible log panel HTML."""
-    return '''
-  <details id="log-panel" class="log-panel">
-    <summary>
-      <span class="log-title">Generation Logs</span>
-      <span id="log-count" class="log-count">0</span>
-      <button id="btn-clear-logs" class="btn-small btn-secondary" onclick="event.preventDefault(); clearLogs();">Clear</button>
-    </summary>
-    <div id="log-content" class="log-content"></div>
-  </details>
-'''
+    return LogPanel.html()
 
 
 def _build_interactive_js(run_id: str) -> str:
     """Build JavaScript for interactive gallery features."""
+    log_js = LogPanel.js()
+    sse_js = SSEClient.js()
+
     return f'''
 <script>
 (function() {{
@@ -309,93 +297,18 @@ def _build_interactive_js(run_id: str) -> str:
   const progressFill = document.getElementById('progress-fill');
   const progressText = document.getElementById('progress-text');
   const logPanel = document.getElementById('log-panel');
-  const logContent = document.getElementById('log-content');
-  const logCount = document.getElementById('log-count');
 
-  let eventSource = null;
-  let logLineCount = 0;
-  const MAX_LOG_LINES = 500;
+  // Shared log panel functions
+{log_js}
 
-  // Log panel functions
-  function appendLog(timestamp, message) {{
-    if (!logContent) return;
+  // Shared SSE connection logic
+{sse_js}
 
-    const line = document.createElement('div');
-    line.className = 'log-line';
-    if (message.toLowerCase().includes('error')) line.className += ' error';
-    else if (message.toLowerCase().includes('warning')) line.className += ' warning';
+  function initSSE() {{
+    const es = connectSSE();
+    if (!es) return;
 
-    const time = timestamp ? new Date(timestamp).toLocaleTimeString() : '';
-    line.innerHTML = `<span class="timestamp">${{time}}</span>${{escapeHtml(message)}}`;
-
-    logContent.appendChild(line);
-    logLineCount++;
-    logCount.textContent = logLineCount;
-
-    // Auto-scroll to bottom
-    logContent.scrollTop = logContent.scrollHeight;
-
-    // Trim old lines if too many
-    while (logContent.children.length > MAX_LOG_LINES) {{
-      logContent.removeChild(logContent.firstChild);
-      logLineCount--;
-    }}
-  }}
-
-  function escapeHtml(text) {{
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
-  }}
-
-  window.clearLogs = function() {{
-    if (logContent) {{
-      logContent.innerHTML = '';
-      logLineCount = 0;
-      logCount.textContent = '0';
-    }}
-  }};
-
-  // Connect to SSE with backoff
-  let sseRetryCount = 0;
-  const MAX_SSE_RETRIES = 10;
-
-  function connectSSE() {{
-    if (eventSource) {{
-      eventSource.close();
-      eventSource = null;
-    }}
-
-    if (sseRetryCount >= MAX_SSE_RETRIES) {{
-      console.warn('SSE: Max retries reached, giving up');
-      return;
-    }}
-
-    try {{
-      eventSource = new EventSource('/api/events');
-    }} catch (e) {{
-      console.error('SSE: Failed to create EventSource', e);
-      return;
-    }}
-
-    eventSource.onopen = () => {{
-      console.log('SSE connected');
-      sseRetryCount = 0;
-    }};
-
-    eventSource.onerror = (e) => {{
-      console.error('SSE error', e);
-      if (eventSource) {{
-        eventSource.close();
-        eventSource = null;
-      }}
-      sseRetryCount++;
-      const delay = Math.min(3000 * Math.pow(2, sseRetryCount - 1), 30000);
-      console.log(`SSE: Retry ${{sseRetryCount}}/${{MAX_SSE_RETRIES}} in ${{delay}}ms`);
-      setTimeout(connectSSE, delay);
-    }};
-
-    eventSource.addEventListener('status', (e) => {{
+    es.addEventListener('status', (e) => {{
       const data = JSON.parse(e.data);
       if (data.current) {{
         progressBar.classList.remove('hidden');
@@ -410,13 +323,13 @@ def _build_interactive_js(run_id: str) -> str:
       }}
     }});
 
-    eventSource.addEventListener('task_started', (e) => {{
+    es.addEventListener('task_started', (e) => {{
       progressBar.classList.remove('hidden');
       const task = JSON.parse(e.data);
       progressMessage.textContent = `Running: ${{task.type}}`;
     }});
 
-    eventSource.addEventListener('task_progress', (e) => {{
+    es.addEventListener('task_progress', (e) => {{
       const data = JSON.parse(e.data);
       const pct = data.total > 0 ? Math.round((data.current / data.total) * 100) : 0;
       progressFill.style.width = pct + '%';
@@ -424,7 +337,7 @@ def _build_interactive_js(run_id: str) -> str:
       if (data.message) progressMessage.textContent = data.message;
     }});
 
-    eventSource.addEventListener('task_completed', (e) => {{
+    es.addEventListener('task_completed', (e) => {{
       const data = JSON.parse(e.data);
       progressMessage.textContent = 'Completed';
       // Reload page if this was a regenerate_prompts task for this gallery
@@ -433,16 +346,16 @@ def _build_interactive_js(run_id: str) -> str:
       }}
     }});
 
-    eventSource.addEventListener('task_failed', (e) => {{
+    es.addEventListener('task_failed', (e) => {{
       const data = JSON.parse(e.data);
       progressMessage.textContent = 'Failed: ' + data.error;
     }});
 
-    eventSource.addEventListener('task_cancelled', (e) => {{
+    es.addEventListener('task_cancelled', (e) => {{
       progressMessage.textContent = 'Cancelled';
     }});
 
-    eventSource.addEventListener('queue_updated', (e) => {{
+    es.addEventListener('queue_updated', (e) => {{
       const data = JSON.parse(e.data);
       if (data.current) {{
         progressBar.classList.remove('hidden');
@@ -468,14 +381,14 @@ def _build_interactive_js(run_id: str) -> str:
       }}
     }});
 
-    eventSource.addEventListener('image_ready', (e) => {{
+    es.addEventListener('image_ready', (e) => {{
       const data = JSON.parse(e.data);
       if (data.run_id === RUN_ID) {{
         updateImage(data.path);
       }}
     }});
 
-    eventSource.addEventListener('task_log', (e) => {{
+    es.addEventListener('task_log', (e) => {{
       const data = JSON.parse(e.data);
       appendLog(data.timestamp, data.message);
       // Auto-open log panel when logs arrive
@@ -483,8 +396,6 @@ def _build_interactive_js(run_id: str) -> str:
         logPanel.open = true;
       }}
     }});
-
-    eventSource.addEventListener('ping', () => {{}});
   }}
 
   function updateImage(filename) {{
@@ -625,7 +536,7 @@ def _build_interactive_js(run_id: str) -> str:
   }};
 
   // Start SSE
-  connectSSE();
+  initSSE();
 }})();
 </script>
 '''
@@ -633,59 +544,20 @@ def _build_interactive_js(run_id: str) -> str:
 
 def _build_interactive_styles() -> str:
     """Build additional CSS for interactive gallery."""
-    return '''
-    /* Navigation header */
-    .nav-header { margin-bottom: 16px; }
-    .nav-link { color: #6af; text-decoration: none; font-size: 14px; }
-    .nav-link:hover { text-decoration: underline; }
-
-    /* Interactive grammar section */
-    .grammar-section-interactive { background: #2a2a2a; border-radius: 8px; margin-bottom: 20px; padding: 16px; }
-    .grammar-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
-    .grammar-title { font-size: 14px; color: #888; }
-    .grammar-actions { display: flex; gap: 8px; }
-    .grammar-editor { width: 100%; height: 200px; background: #1a1a1a; border: 1px solid #444; border-radius: 6px; padding: 12px; color: #8f8; font-family: monospace; font-size: 12px; resize: vertical; }
-    .grammar-editor:focus { outline: none; border-color: #6af; }
-
-    /* Action bar */
-    .action-bar { display: flex; gap: 12px; margin-bottom: 20px; flex-wrap: wrap; align-items: center; }
-    .action-spacer { flex: 1; }
-
-    /* Buttons */
-    .btn-primary { background: #4a9eff; color: #fff; border: none; border-radius: 6px; padding: 10px 20px; font-size: 14px; cursor: pointer; font-weight: 500; }
-    .btn-primary:hover { background: #3d8be0; }
-    .btn-secondary { background: #444; color: #fff; border: none; border-radius: 6px; padding: 10px 20px; font-size: 14px; cursor: pointer; }
-    .btn-secondary:hover { background: #555; }
-    .btn-danger { background: #d44; color: #fff; border: none; border-radius: 6px; padding: 10px 20px; font-size: 14px; cursor: pointer; }
-    .btn-danger:hover { background: #c33; }
-    .btn-small { padding: 6px 12px; font-size: 12px; }
-
-    /* Card actions */
-    .card-actions { padding: 8px 12px; display: flex; gap: 8px; border-top: 1px solid #333; }
-
-    /* Progress bar */
-    .progress-bar-fixed { position: fixed; bottom: 0; left: 0; right: 0; background: #2a2a2a; border-top: 1px solid #444; padding: 12px 20px; display: flex; align-items: center; gap: 16px; z-index: 1000; }
-    .progress-bar-fixed.hidden { display: none; }
-    .progress-info { flex: 1; font-size: 14px; color: #ddd; }
+    return (
+        NavHeader.css() +
+        GalleryStyles.css() +
+        Buttons.css() +
+        ProgressBar.css() +
+        '''
     .progress-container { display: flex; align-items: center; gap: 12px; }
-    .progress-track { width: 200px; height: 8px; background: #444; border-radius: 4px; overflow: hidden; }
     .progress-fill { height: 100%; background: #4a9eff; transition: width 0.3s; }
 
     /* Adjust body padding */
     body { padding-bottom: 80px; }
-
-    /* Log panel */
-    .log-panel { background: #2a2a2a; border-radius: 8px; margin-bottom: 20px; }
-    .log-panel summary { padding: 12px 16px; cursor: pointer; display: flex; align-items: center; gap: 12px; list-style: none; }
-    .log-panel summary::-webkit-details-marker { display: none; }
-    .log-title { color: #888; font-size: 14px; }
-    .log-count { background: #444; color: #ddd; font-size: 11px; padding: 2px 8px; border-radius: 10px; }
-    .log-content { max-height: 300px; overflow-y: auto; padding: 0 16px 16px; font-family: monospace; font-size: 12px; line-height: 1.6; }
-    .log-line { color: #aaa; white-space: pre-wrap; word-break: break-all; }
-    .log-line .timestamp { color: #6af; margin-right: 8px; }
-    .log-line.error { color: #f88; }
-    .log-line.warning { color: #fa0; }
-'''
+''' +
+        LogPanel.css()
+    )
 
 
 def _build_gallery_html(

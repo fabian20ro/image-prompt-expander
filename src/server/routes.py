@@ -33,6 +33,19 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from config import paths
 from gallery_index import generate_master_index, _extract_run_info
 from utils import backup_run, is_backup_run
+from services.gallery_service import GalleryService, GalleryNotFoundError, MetadataNotFoundError
+
+
+# Global gallery service instance
+_gallery_service = None
+
+
+def get_gallery_service() -> GalleryService:
+    """Get the global GalleryService instance."""
+    global _gallery_service
+    if _gallery_service is None:
+        _gallery_service = GalleryService(paths.prompts_dir, paths.saved_dir)
+    return _gallery_service
 
 
 router = APIRouter()
@@ -200,6 +213,28 @@ async def get_gallery(run_id: str):
         raise HTTPException(status_code=404, detail=str(e))
 
 
+@router.get("/saved/{filename}")
+async def get_saved_file(filename: str):
+    """Serve a flat archived image from saved/ directory."""
+    saved_dir = paths.saved_dir
+    file_path = saved_dir / filename
+
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="File not found")
+
+    # Security: ensure file is within the saved directory
+    try:
+        file_path.resolve().relative_to(saved_dir.resolve())
+    except ValueError:
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    # Only serve PNG files from saved/
+    if not filename.endswith('.png'):
+        raise HTTPException(status_code=400, detail="Only PNG files are served")
+
+    return FileResponse(file_path, media_type="image/png")
+
+
 @router.get("/archive/{run_id}", response_class=HTMLResponse)
 async def get_archive_gallery(run_id: str):
     """Serve an archived gallery page (read-only)."""
@@ -276,10 +311,11 @@ async def get_gallery_file(run_id: str, filename: str):
 @router.get("/api/gallery/{run_id}")
 async def get_gallery_info(run_id: str) -> GalleryDetailResponse:
     """Get gallery details including grammar and prompts."""
-    prompts_dir = paths.prompts_dir
-    run_dir = prompts_dir / run_id
+    service = get_gallery_service()
 
-    if not run_dir.exists():
+    try:
+        run_dir = service.get_run_directory(run_id)
+    except GalleryNotFoundError:
         raise HTTPException(status_code=404, detail="Gallery not found")
 
     info = _extract_run_info(run_dir)
@@ -288,20 +324,13 @@ async def get_gallery_info(run_id: str) -> GalleryDetailResponse:
 
     prefix = info["prefix"]
 
-    # Load grammar
-    grammar = None
-    grammar_file = run_dir / f"{prefix}_grammar.json"
-    if grammar_file.exists():
-        grammar = grammar_file.read_text()
+    # Load grammar and prompts using service
+    grammar = service.load_grammar(run_dir, prefix)
+    prompts = service.load_prompts(run_dir, prefix)
 
-    # Load prompts
-    prompt_files = sorted(run_dir.glob(f"{prefix}_*.txt"))
-    prompt_files = [f for f in prompt_files if f.stem.count('_') == 1]
-    prompts = [f.read_text() for f in prompt_files]
-
-    # List images using glob (more efficient than loop-based checking)
+    # List images using service
     images = []
-    image_files = sorted(run_dir.glob(f"{prefix}_*_*.png"))
+    image_files = service.list_images(run_dir, prefix)
     for img_path in image_files:
         # Parse prompt_idx and image_idx from filename: prefix_promptIdx_imageIdx.png
         parts = img_path.stem.split('_')
@@ -340,33 +369,28 @@ async def get_gallery_info(run_id: str) -> GalleryDetailResponse:
 @router.get("/api/gallery/{run_id}/grammar")
 async def get_grammar(run_id: str):
     """Get the grammar JSON for a gallery."""
-    prompts_dir = paths.prompts_dir
-    run_dir = prompts_dir / run_id
+    service = get_gallery_service()
 
-    if not run_dir.exists():
+    try:
+        run_dir = service.get_run_directory(run_id)
+    except GalleryNotFoundError:
         raise HTTPException(status_code=404, detail="Gallery not found")
 
-    meta_files = list(run_dir.glob("*_metadata.json"))
-    if not meta_files:
-        raise HTTPException(status_code=404, detail="No metadata found")
-
-    metadata = json.loads(meta_files[0].read_text())
-    prefix = metadata.get("prefix", "image")
-
-    grammar_file = run_dir / f"{prefix}_grammar.json"
-    if not grammar_file.exists():
+    grammar = service.load_grammar(run_dir)
+    if grammar is None:
         raise HTTPException(status_code=404, detail="Grammar not found")
 
-    return {"grammar": grammar_file.read_text()}
+    return {"grammar": grammar}
 
 
 @router.put("/api/gallery/{run_id}/grammar", response_model=TaskResponse)
 async def update_grammar(run_id: str, req: GrammarUpdateRequest):
     """Update the grammar for a gallery."""
-    prompts_dir = paths.prompts_dir
-    run_dir = prompts_dir / run_id
+    service = get_gallery_service()
 
-    if not run_dir.exists():
+    try:
+        run_dir = service.get_run_directory(run_id)
+    except GalleryNotFoundError:
         raise HTTPException(status_code=404, detail="Gallery not found")
 
     # Validate JSON
@@ -375,14 +399,8 @@ async def update_grammar(run_id: str, req: GrammarUpdateRequest):
     except json.JSONDecodeError:
         raise HTTPException(status_code=400, detail="Invalid JSON grammar")
 
-    meta_files = list(run_dir.glob("*_metadata.json"))
-    if not meta_files:
-        raise HTTPException(status_code=404, detail="No metadata found")
-
-    metadata = json.loads(meta_files[0].read_text())
-    prefix = metadata.get("prefix", "image")
-
-    grammar_file = run_dir / f"{prefix}_grammar.json"
+    prefix = service.get_prefix(run_dir)
+    grammar_file = service.get_grammar_file(run_dir, prefix)
     grammar_file.write_text(req.grammar)
 
     return TaskResponse(task_id="", message="Grammar updated")
@@ -391,24 +409,20 @@ async def update_grammar(run_id: str, req: GrammarUpdateRequest):
 @router.post("/api/gallery/{run_id}/regenerate", response_model=TaskResponse)
 async def regenerate_prompts(run_id: str, req: RegeneratePromptsApiRequest | None = None):
     """Regenerate prompts from the current grammar."""
-    prompts_dir = paths.prompts_dir
-    run_dir = prompts_dir / run_id
+    service = get_gallery_service()
 
-    if not run_dir.exists():
+    try:
+        run_dir = service.get_run_directory(run_id)
+        metadata = service.load_metadata(run_dir)
+    except GalleryNotFoundError:
         raise HTTPException(status_code=404, detail="Gallery not found")
-
-    meta_files = list(run_dir.glob("*_metadata.json"))
-    if not meta_files:
+    except MetadataNotFoundError:
         raise HTTPException(status_code=404, detail="No metadata found")
 
-    metadata = json.loads(meta_files[0].read_text())
-    prefix = metadata.get("prefix", "image")
-
-    grammar_file = run_dir / f"{prefix}_grammar.json"
-    if not grammar_file.exists():
+    grammar = service.load_grammar(run_dir)
+    if grammar is None:
         raise HTTPException(status_code=404, detail="Grammar not found")
 
-    grammar = grammar_file.read_text()
     count = req.count if req and req.count else metadata.get("count", 50)
 
     qm = get_queue_manager()
@@ -430,10 +444,11 @@ async def regenerate_prompts(run_id: str, req: RegeneratePromptsApiRequest | Non
 @router.post("/api/gallery/{run_id}/generate-all", response_model=TaskResponse)
 async def generate_all_images(run_id: str, req: GenerateAllImagesRequest | None = None):
     """Queue generation of all images for a gallery."""
-    prompts_dir = paths.prompts_dir
-    run_dir = prompts_dir / run_id
+    service = get_gallery_service()
 
-    if not run_dir.exists():
+    try:
+        service.get_run_directory(run_id)
+    except GalleryNotFoundError:
         raise HTTPException(status_code=404, detail="Gallery not found")
 
     qm = get_queue_manager()
@@ -455,10 +470,11 @@ async def generate_all_images(run_id: str, req: GenerateAllImagesRequest | None 
 @router.post("/api/gallery/{run_id}/enhance-all", response_model=TaskResponse)
 async def enhance_all_images(run_id: str, req: EnhanceAllImagesRequest | None = None):
     """Queue enhancement of all images for a gallery."""
-    prompts_dir = paths.prompts_dir
-    run_dir = prompts_dir / run_id
+    service = get_gallery_service()
 
-    if not run_dir.exists():
+    try:
+        service.get_run_directory(run_id)
+    except GalleryNotFoundError:
         raise HTTPException(status_code=404, detail="Gallery not found")
 
     qm = get_queue_manager()
@@ -483,10 +499,11 @@ async def generate_single_image(
     req: GenerateImageRequest | None = None,
 ):
     """Queue generation of a single image."""
-    prompts_dir = paths.prompts_dir
-    run_dir = prompts_dir / run_id
+    service = get_gallery_service()
 
-    if not run_dir.exists():
+    try:
+        service.get_run_directory(run_id)
+    except GalleryNotFoundError:
         raise HTTPException(status_code=404, detail="Gallery not found")
 
     qm = get_queue_manager()
@@ -512,10 +529,11 @@ async def enhance_single_image(
     req: EnhanceImageRequest | None = None,
 ):
     """Queue enhancement of a single image."""
-    prompts_dir = paths.prompts_dir
-    run_dir = prompts_dir / run_id
+    service = get_gallery_service()
 
-    if not run_dir.exists():
+    try:
+        service.get_run_directory(run_id)
+    except GalleryNotFoundError:
         raise HTTPException(status_code=404, detail="Gallery not found")
 
     qm = get_queue_manager()
@@ -546,10 +564,11 @@ async def get_gallery_logs(run_id: str, tail: int = 100):
     Returns:
         Log file contents
     """
-    prompts_dir = paths.prompts_dir
-    run_dir = prompts_dir / run_id
+    service = get_gallery_service()
 
-    if not run_dir.exists():
+    try:
+        run_dir = service.get_run_directory(run_id)
+    except GalleryNotFoundError:
         raise HTTPException(status_code=404, detail="Gallery not found")
 
     # Find the log file
@@ -569,21 +588,25 @@ async def get_gallery_logs(run_id: str, tail: int = 100):
 
 @router.post("/api/gallery/{run_id}/archive", response_model=TaskResponse)
 async def archive_gallery(run_id: str):
-    """Archive a gallery to the saved folder."""
-    prompts_dir = paths.prompts_dir
-    run_dir = prompts_dir / run_id
+    """Archive a gallery to the saved folder as flat files with embedded metadata."""
+    service = get_gallery_service()
 
-    if not run_dir.exists():
+    try:
+        run_dir = service.get_run_directory(run_id)
+    except GalleryNotFoundError:
         raise HTTPException(status_code=404, detail="Gallery not found")
 
-    if is_backup_run(run_dir):
+    if service.is_backup_run(run_dir):
         raise HTTPException(status_code=400, detail="Cannot archive a backup")
 
     try:
         saved_dir = paths.saved_dir
-        backup_path = backup_run(run_dir, saved_dir, reason="manual_archive")
+        saved_files = backup_run(run_dir, saved_dir, reason="manual_archive")
         generate_master_index(paths.generated_dir, interactive=True)
-        return TaskResponse(task_id="", message=f"Archived to: {backup_path.name}")
+        return TaskResponse(
+            task_id="",
+            message=f"Archived {len(saved_files)} images to saved/"
+        )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -595,15 +618,15 @@ async def delete_gallery(run_id: str):
     Only active galleries in prompts/ can be deleted.
     Archives in saved/ are protected and cannot be deleted.
     """
-    prompts_dir = paths.prompts_dir
-    run_dir = prompts_dir / run_id
+    service = get_gallery_service()
 
-    # Validate gallery exists
-    if not run_dir.exists():
+    try:
+        run_dir = service.get_run_directory(run_id)
+    except GalleryNotFoundError:
         raise HTTPException(status_code=404, detail="Gallery not found")
 
     # Validate it's not an archive (extra safety check)
-    if is_backup_run(run_dir):
+    if service.is_backup_run(run_dir):
         raise HTTPException(status_code=400, detail="Cannot delete archived galleries")
 
     # Queue the delete task

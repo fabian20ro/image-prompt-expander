@@ -5,6 +5,16 @@ import json
 import re
 from pathlib import Path
 
+from utils import scan_flat_archives, get_flat_archive_metadata
+from html_components import (
+    LogPanel,
+    QueueStatusBar,
+    Buttons,
+    FormStyles,
+    IndexStyles,
+    SSEClient,
+)
+
 
 def generate_master_index(generated_dir: Path, interactive: bool = False) -> Path:
     """
@@ -37,7 +47,7 @@ def generate_master_index(generated_dir: Path, interactive: bool = False) -> Pat
             if run_info:
                 active_runs.append(run_info)
 
-    # Scan archived runs
+    # Scan archived runs (directory-based - legacy)
     archived_runs = []
     if saved_dir.exists():
         for archive_dir in saved_dir.iterdir():
@@ -48,12 +58,20 @@ def generate_master_index(generated_dir: Path, interactive: bool = False) -> Pat
             if run_info:
                 archived_runs.append(run_info)
 
+    # Scan flat archives (new format)
+    flat_archives = []
+    if saved_dir.exists():
+        flat_archives = _extract_flat_archive_infos(saved_dir, interactive=interactive)
+
     # Sort by timestamp (newest first)
     active_runs.sort(key=lambda x: x["timestamp"], reverse=True)
     archived_runs.sort(key=lambda x: x["timestamp"], reverse=True)
+    flat_archives.sort(key=lambda x: x["timestamp"], reverse=True)
 
     # Generate index HTML
-    index_html = _build_index_html(active_runs, archived_runs, interactive=interactive)
+    index_html = _build_index_html(
+        active_runs, archived_runs, flat_archives, interactive=interactive
+    )
     index_path.write_text(index_html)
 
     return index_path
@@ -141,6 +159,55 @@ def _extract_run_info(run_dir: Path, is_archive: bool = False) -> dict | None:
         "is_archive": is_archive,
         "backup_reason": backup_reason,
     }
+
+
+def _extract_flat_archive_infos(saved_dir: Path, interactive: bool = False) -> list[dict]:
+    """Extract information about flat archived images.
+
+    Args:
+        saved_dir: Path to saved/ directory
+        interactive: Whether running in interactive mode
+
+    Returns:
+        List of dictionaries with archive info for display
+    """
+    archives = scan_flat_archives(saved_dir)
+    result = []
+
+    for archive in archives:
+        prefix = archive["prefix"]
+        timestamp = archive["timestamp"]
+        first_image = archive["first_image"]
+
+        # Format timestamp for display (YYYYMMDD_HHMMSS -> YYYY-MM-DD HH:MM:SS)
+        display_time = timestamp
+        if len(timestamp) == 15 and timestamp[8] == "_":
+            display_time = (
+                f"{timestamp[0:4]}-{timestamp[4:6]}-{timestamp[6:8]} "
+                f"{timestamp[9:11]}:{timestamp[11:13]}:{timestamp[13:15]}"
+            )
+
+        # Get metadata from first image
+        metadata = {}
+        if first_image:
+            metadata = get_flat_archive_metadata(first_image)
+
+        # Get backup reason from embedded metadata
+        backup_reason = metadata.get("backup_reason", "archived")
+
+        result.append({
+            "prefix": prefix,
+            "timestamp": timestamp,
+            "display_time": display_time,
+            "user_prompt": metadata.get("user_prompt", "Archived images"),
+            "image_count": archive["image_count"],
+            "model": metadata.get("model", "N/A"),
+            "first_image": first_image,
+            "backup_reason": backup_reason,
+            "is_flat_archive": True,
+        })
+
+    return result
 
 
 def _build_generation_form() -> str:
@@ -282,44 +349,22 @@ def _build_generation_form() -> str:
 
 def _build_queue_status_bar() -> str:
     """Build the queue status bar HTML."""
-    return '''
-  <div id="queue-status" class="queue-status hidden">
-    <div class="queue-info">
-      <span id="queue-text">Idle</span>
-    </div>
-    <div id="progress-container" class="progress-container hidden">
-      <div class="progress-bar">
-        <div id="progress-fill" class="progress-fill" style="width: 0%"></div>
-      </div>
-      <span id="progress-text">0%</span>
-    </div>
-    <div class="queue-actions">
-      <button id="btn-kill" class="btn-danger btn-small hidden">Kill</button>
-      <button id="btn-clear" class="btn-secondary btn-small hidden">Clear Queue</button>
-    </div>
-  </div>
-'''
+    return QueueStatusBar.html()
 
 
 def _build_log_panel() -> str:
     """Build the collapsible log panel HTML."""
-    return '''
-  <details id="log-panel" class="log-panel">
-    <summary>
-      <span class="log-title">Generation Logs</span>
-      <span id="log-count" class="log-count">0</span>
-      <button id="btn-clear-logs" class="btn-small btn-secondary" onclick="event.preventDefault(); clearLogs();">Clear</button>
-    </summary>
-    <div id="log-content" class="log-content"></div>
-  </details>
-'''
+    return LogPanel.html()
 
 
 def _build_interactive_js() -> str:
     """Build the JavaScript for form submission and SSE."""
-    return '''
+    log_js = LogPanel.js()
+    sse_js = SSEClient.js()
+
+    return f'''
 <script>
-document.addEventListener('DOMContentLoaded', function() {
+document.addEventListener('DOMContentLoaded', function() {{
   console.log('DOM loaded, initializing...');
 
   const form = document.getElementById('generate-form');
@@ -331,202 +376,125 @@ document.addEventListener('DOMContentLoaded', function() {
   const btnKill = document.getElementById('btn-kill');
   const btnClear = document.getElementById('btn-clear');
   const logPanel = document.getElementById('log-panel');
-  const logContent = document.getElementById('log-content');
-  const logCount = document.getElementById('log-count');
 
-  if (!form) {
+  if (!form) {{
     console.error('Form not found!');
     return;
-  }
+  }}
   console.log('Form found:', form);
 
-  let eventSource = null;
-  let logLineCount = 0;
-  const MAX_LOG_LINES = 500;
+  // Shared log panel functions
+{log_js}
 
-  // Log panel functions
-  function appendLog(timestamp, message) {
-    if (!logContent) return;
+  // Shared SSE connection logic
+{sse_js}
 
-    const line = document.createElement('div');
-    line.className = 'log-line';
-    if (message.toLowerCase().includes('error')) line.className += ' error';
-    else if (message.toLowerCase().includes('warning')) line.className += ' warning';
+  function initSSE() {{
+    const es = connectSSE();
+    if (!es) return;
 
-    const time = timestamp ? new Date(timestamp).toLocaleTimeString() : '';
-    line.innerHTML = `<span class="timestamp">${time}</span>${escapeHtml(message)}`;
-
-    logContent.appendChild(line);
-    logLineCount++;
-    logCount.textContent = logLineCount;
-
-    // Auto-scroll to bottom
-    logContent.scrollTop = logContent.scrollHeight;
-
-    // Trim old lines if too many
-    while (logContent.children.length > MAX_LOG_LINES) {
-      logContent.removeChild(logContent.firstChild);
-      logLineCount--;
-    }
-  }
-
-  function escapeHtml(text) {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
-  }
-
-  window.clearLogs = function() {
-    if (logContent) {
-      logContent.innerHTML = '';
-      logLineCount = 0;
-      logCount.textContent = '0';
-    }
-  };
-
-  // Connect to SSE with backoff
-  let sseRetryCount = 0;
-  const MAX_SSE_RETRIES = 10;
-
-  function connectSSE() {
-    if (eventSource) {
-      eventSource.close();
-      eventSource = null;
-    }
-
-    if (sseRetryCount >= MAX_SSE_RETRIES) {
-      console.warn('SSE: Max retries reached, giving up');
-      return;
-    }
-
-    try {
-      eventSource = new EventSource('/api/events');
-    } catch (e) {
-      console.error('SSE: Failed to create EventSource', e);
-      return;
-    }
-
-    eventSource.onopen = () => {
-      console.log('SSE connected');
-      sseRetryCount = 0; // Reset on successful connection
-    };
-
-    eventSource.onerror = (e) => {
-      console.error('SSE error', e);
-      if (eventSource) {
-        eventSource.close();
-        eventSource = null;
-      }
-      sseRetryCount++;
-      const delay = Math.min(3000 * Math.pow(2, sseRetryCount - 1), 30000);
-      console.log(`SSE: Retry ${sseRetryCount}/${MAX_SSE_RETRIES} in ${delay}ms`);
-      setTimeout(connectSSE, delay);
-    };
-
-    eventSource.addEventListener('status', (e) => {
+    es.addEventListener('status', (e) => {{
       const data = JSON.parse(e.data);
       updateStatus(data);
-    });
+    }});
 
-    eventSource.addEventListener('queue_updated', (e) => {
+    es.addEventListener('queue_updated', (e) => {{
       const data = JSON.parse(e.data);
       updateStatus(data);
-    });
+    }});
 
-    eventSource.addEventListener('task_started', (e) => {
+    es.addEventListener('task_started', (e) => {{
       const task = JSON.parse(e.data);
-      queueText.textContent = `Running: ${task.type}`;
+      queueText.textContent = `Running: ${{task.type}}`;
       btnKill.classList.remove('hidden');
       progressContainer.classList.remove('hidden');
       queueStatus.classList.remove('hidden');
-    });
+    }});
 
-    eventSource.addEventListener('task_progress', (e) => {
+    es.addEventListener('task_progress', (e) => {{
       const data = JSON.parse(e.data);
       const pct = data.total > 0 ? Math.round((data.current / data.total) * 100) : 0;
       progressFill.style.width = pct + '%';
-      progressText.textContent = `${data.current}/${data.total}`;
-      if (data.message) {
+      progressText.textContent = `${{data.current}}/${{data.total}}`;
+      if (data.message) {{
         queueText.textContent = data.message;
-      }
-    });
+      }}
+    }});
 
-    eventSource.addEventListener('task_completed', (e) => {
+    es.addEventListener('task_completed', (e) => {{
       const data = JSON.parse(e.data);
       queueText.textContent = 'Completed';
       btnKill.classList.add('hidden');
       progressContainer.classList.add('hidden');
       // Reload to show new gallery
-      if (data.result && data.result.run_id) {
+      if (data.result && data.result.run_id) {{
         setTimeout(() => location.reload(), 1000);
-      }
-    });
+      }}
+    }});
 
-    eventSource.addEventListener('task_failed', (e) => {
+    es.addEventListener('task_failed', (e) => {{
       const data = JSON.parse(e.data);
       queueText.textContent = 'Failed: ' + (data.error || 'Unknown error');
       btnKill.classList.add('hidden');
       progressContainer.classList.add('hidden');
-    });
+    }});
 
-    eventSource.addEventListener('task_cancelled', (e) => {
+    es.addEventListener('task_cancelled', (e) => {{
       queueText.textContent = 'Cancelled';
       btnKill.classList.add('hidden');
       progressContainer.classList.add('hidden');
-    });
+    }});
 
-    eventSource.addEventListener('task_log', (e) => {
+    es.addEventListener('task_log', (e) => {{
       const data = JSON.parse(e.data);
       appendLog(data.timestamp, data.message);
       // Auto-open log panel when logs arrive
-      if (logPanel && !logPanel.open) {
+      if (logPanel && !logPanel.open) {{
         logPanel.open = true;
-      }
-    });
+      }}
+    }});
+  }}
 
-    eventSource.addEventListener('ping', () => {});
-  }
-
-  function updateStatus(data) {
+  function updateStatus(data) {{
     const pending = data.pending_count || 0;
     const current = data.current;
 
-    if (current) {
+    if (current) {{
       queueStatus.classList.remove('hidden');
       btnKill.classList.remove('hidden');
       progressContainer.classList.remove('hidden');
-      queueText.textContent = current.progress?.message || `Running: ${current.type}`;
+      queueText.textContent = current.progress?.message || `Running: ${{current.type}}`;
 
-      if (current.progress && current.progress.total > 0) {
+      if (current.progress && current.progress.total > 0) {{
         const pct = Math.round((current.progress.current / current.progress.total) * 100);
         progressFill.style.width = pct + '%';
-        progressText.textContent = `${current.progress.current}/${current.progress.total}`;
-      }
-    } else if (pending > 0) {
+        progressText.textContent = `${{current.progress.current}}/${{current.progress.total}}`;
+      }}
+    }} else if (pending > 0) {{
       queueStatus.classList.remove('hidden');
-      queueText.textContent = `${pending} task(s) pending`;
+      queueText.textContent = `${{pending}} task(s) pending`;
       btnClear.classList.remove('hidden');
       btnKill.classList.add('hidden');
       progressContainer.classList.add('hidden');
-    } else {
+    }} else {{
       queueStatus.classList.add('hidden');
-    }
-  }
+    }}
+  }}
 
   // Form submission
-  form.addEventListener('submit', async function(e) {
+  form.addEventListener('submit', async function(e) {{
     e.preventDefault();
     console.log('Form submitted');
 
     const formData = new FormData(form);
     const promptValue = formData.get('prompt');
 
-    if (!promptValue || !promptValue.trim()) {
+    if (!promptValue || !promptValue.trim()) {{
       alert('Please enter a prompt');
       return;
-    }
+    }}
 
-    const data = {
+    const data = {{
       prompt: promptValue.trim(),
       prefix: formData.get('prefix') || 'image',
       count: parseInt(formData.get('count')) || 50,
@@ -545,7 +513,7 @@ document.addEventListener('DOMContentLoaded', function() {
       enhance: form.querySelector('#enhance')?.checked || false,
       enhance_softness: parseFloat(formData.get('enhance_softness')) || 0.5,
       enhance_after: form.querySelector('#enhance_after')?.checked || false,
-    };
+    }};
 
     console.log('Sending data:', data);
 
@@ -553,143 +521,93 @@ document.addEventListener('DOMContentLoaded', function() {
     queueStatus.classList.remove('hidden');
     queueText.textContent = 'Submitting...';
 
-    try {
-      const resp = await fetch('/api/generate', {
+    try {{
+      const resp = await fetch('/api/generate', {{
         method: 'POST',
-        headers: {'Content-Type': 'application/json'},
+        headers: {{'Content-Type': 'application/json'}},
         body: JSON.stringify(data),
-      });
+      }});
 
       console.log('Response status:', resp.status);
 
-      if (!resp.ok) {
+      if (!resp.ok) {{
         const err = await resp.json();
         console.error('Error response:', err);
         alert('Error: ' + (err.detail || 'Unknown error'));
         queueStatus.classList.add('hidden');
         return;
-      }
+      }}
 
       const result = await resp.json();
       console.log('Success:', result);
       queueText.textContent = result.message;
-    } catch (err) {
+    }} catch (err) {{
       console.error('Fetch error:', err);
       alert('Error: ' + err.message);
       queueStatus.classList.add('hidden');
-    }
-  });
+    }}
+  }});
 
   // Kill button
-  btnKill.addEventListener('click', async () => {
-    try {
-      await fetch('/api/worker/kill', {method: 'POST'});
-    } catch (err) {
+  btnKill.addEventListener('click', async () => {{
+    try {{
+      await fetch('/api/worker/kill', {{method: 'POST'}});
+    }} catch (err) {{
       console.error('Kill failed', err);
-    }
-  });
+    }}
+  }});
 
   // Clear queue button
-  btnClear.addEventListener('click', async () => {
-    try {
-      await fetch('/api/queue/clear', {method: 'POST'});
+  btnClear.addEventListener('click', async () => {{
+    try {{
+      await fetch('/api/queue/clear', {{method: 'POST'}});
       btnClear.classList.add('hidden');
       queueStatus.classList.add('hidden');
-    } catch (err) {
+    }} catch (err) {{
       console.error('Clear failed', err);
-    }
-  });
+    }}
+  }});
 
   // Start SSE connection
-  connectSSE();
-});
+  initSSE();
+}});
 
 // Delete gallery function (global so onclick can access it)
-window.deleteGallery = async function(runId) {
-  if (!confirm('Delete this gallery and all its images? This cannot be undone.')) {
+window.deleteGallery = async function(runId) {{
+  if (!confirm('Delete this gallery and all its images? This cannot be undone.')) {{
     return;
-  }
+  }}
 
-  try {
-    const resp = await fetch(`/api/gallery/${runId}`, { method: 'DELETE' });
-    if (!resp.ok) {
+  try {{
+    const resp = await fetch(`/api/gallery/${{runId}}`, {{ method: 'DELETE' }});
+    if (!resp.ok) {{
       const err = await resp.json();
       alert('Delete failed: ' + (err.detail || 'Unknown error'));
       return;
-    }
+    }}
     // Reload page to reflect deletion
     location.reload();
-  } catch (err) {
+  }} catch (err) {{
     alert('Delete failed: ' + err.message);
-  }
-};
+  }}
+}};
 </script>
 '''
 
 
 def _build_interactive_styles() -> str:
     """Build additional CSS for interactive mode."""
-    return '''
-    /* Form styles */
-    .form-section { background: #2a2a2a; border-radius: 12px; padding: 24px; margin-bottom: 24px; }
-    .form-section h2 { margin: 0 0 20px 0; font-size: 18px; }
-    .form-row { display: flex; gap: 16px; margin-bottom: 16px; flex-wrap: wrap; }
-    .form-group { display: flex; flex-direction: column; gap: 6px; min-width: 120px; }
-    .form-group.flex-grow { flex: 1; min-width: 200px; }
-    .form-group label { font-size: 12px; color: #888; }
-    .form-group input, .form-group select { background: #1a1a1a; border: 1px solid #444; border-radius: 6px; padding: 8px 12px; color: #fff; font-size: 14px; }
-    .form-group input:focus, .form-group select:focus { outline: none; border-color: #6af; }
-    .form-group input::placeholder { color: #666; }
-    .checkbox-group { flex-direction: row; align-items: center; }
-    .checkbox-group label { display: flex; align-items: center; gap: 8px; font-size: 14px; color: #ddd; cursor: pointer; }
-    .checkbox-group input[type="checkbox"] { width: 16px; height: 16px; }
-    .settings-section { background: #222; border-radius: 8px; margin-bottom: 16px; }
-    .settings-section summary { padding: 12px 16px; cursor: pointer; color: #888; font-size: 14px; list-style: none; }
-    .settings-section summary::-webkit-details-marker { display: none; }
-    .settings-section summary::before { content: "\\25B6"; margin-right: 8px; font-size: 10px; display: inline-block; transition: transform 0.2s; }
-    .settings-section[open] summary::before { transform: rotate(90deg); }
-    .settings-section[open] { padding-bottom: 16px; }
-    .settings-section > div { padding: 0 16px; }
-    .form-actions { margin-top: 20px; }
-    .btn-primary { background: #4a9eff; color: #fff; border: none; border-radius: 8px; padding: 12px 24px; font-size: 16px; cursor: pointer; font-weight: 500; }
-    .btn-primary:hover { background: #3d8be0; }
-    .btn-secondary { background: #444; color: #fff; border: none; border-radius: 6px; padding: 8px 16px; font-size: 14px; cursor: pointer; }
-    .btn-secondary:hover { background: #555; }
-    .btn-danger { background: #d44; color: #fff; border: none; border-radius: 6px; padding: 8px 16px; font-size: 14px; cursor: pointer; }
-    .btn-danger:hover { background: #c33; }
-    .btn-small { padding: 6px 12px; font-size: 12px; }
-
-    /* Queue status bar */
-    .queue-status { position: fixed; bottom: 0; left: 0; right: 0; background: #2a2a2a; border-top: 1px solid #444; padding: 12px 20px; display: flex; align-items: center; gap: 16px; z-index: 1000; }
-    .queue-status.hidden { display: none; }
-    .queue-info { flex: 1; font-size: 14px; color: #ddd; }
-    .progress-container { display: flex; align-items: center; gap: 12px; }
-    .progress-container.hidden { display: none; }
-    .progress-bar { width: 200px; height: 8px; background: #444; border-radius: 4px; overflow: hidden; }
-    .progress-fill { height: 100%; background: #4a9eff; transition: width 0.3s; }
-    .queue-actions { display: flex; gap: 8px; }
-    .queue-actions .hidden { display: none; }
-
+    return (
+        FormStyles.css() +
+        Buttons.css() +
+        QueueStatusBar.css() +
+        '''
     /* Adjust container padding for status bar */
     body { padding-bottom: 80px; }
-
-    /* Log panel */
-    .log-panel { background: #2a2a2a; border-radius: 8px; margin-bottom: 24px; }
-    .log-panel summary { padding: 12px 16px; cursor: pointer; display: flex; align-items: center; gap: 12px; list-style: none; }
-    .log-panel summary::-webkit-details-marker { display: none; }
-    .log-title { color: #888; font-size: 14px; }
-    .log-count { background: #444; color: #ddd; font-size: 11px; padding: 2px 8px; border-radius: 10px; }
-    .log-content { max-height: 300px; overflow-y: auto; padding: 0 16px 16px; font-family: monospace; font-size: 12px; line-height: 1.6; }
-    .log-line { color: #aaa; white-space: pre-wrap; word-break: break-all; }
-    .log-line .timestamp { color: #6af; margin-right: 8px; }
-    .log-line.error { color: #f88; }
-    .log-line.warning { color: #fa0; }
-
-    /* Delete button on cards */
-    .btn-delete { position: absolute; top: 8px; right: 8px; background: rgba(200, 50, 50, 0.85); color: #fff; border: none; border-radius: 6px; padding: 6px 8px; cursor: pointer; opacity: 0; transition: opacity 0.2s, background 0.2s; z-index: 10; }
-    .btn-delete:hover { background: rgba(220, 60, 60, 1); }
-    .card:hover .btn-delete { opacity: 1; }
-'''
+''' +
+        LogPanel.css() +
+        IndexStyles.css()
+    )
 
 
 def _build_card_html(run: dict, interactive: bool, is_archive: bool = False) -> str:
@@ -755,10 +673,58 @@ def _build_card_html(run: dict, interactive: bool, is_archive: bool = False) -> 
     </a>'''
 
 
-def _build_index_html(active_runs: list[dict], archived_runs: list[dict] = None, interactive: bool = False) -> str:
+def _build_flat_archive_card_html(archive: dict, interactive: bool) -> str:
+    """Build HTML for a flat archive card."""
+    escaped_prompt = html.escape(archive["user_prompt"])
+    truncated_prompt = (escaped_prompt[:100] + "...") if len(escaped_prompt) > 100 else escaped_prompt
+
+    first_image = archive.get("first_image")
+    if first_image and interactive:
+        # In interactive mode, use the saved route for images
+        thumbnail_src = f'/saved/{first_image.name}'
+        thumbnail_html = f'<img src="{thumbnail_src}" loading="lazy">'
+    elif first_image:
+        # In static mode, use relative path
+        thumbnail_html = f'<img src="saved/{first_image.name}" loading="lazy">'
+    else:
+        thumbnail_html = '<div class="no-thumbnail">No images</div>'
+
+    # Flat archives don't have gallery pages - they just display in the grid
+    reason = archive.get("backup_reason", "archived")
+    reason_label = {
+        "pre_regenerate": "Pre-Regen",
+        "pre_enhance": "Pre-Enhance",
+        "manual_archive": "Saved",
+    }.get(reason, "Backup")
+
+    badge_html = f'<span class="archive-badge">{reason_label}</span>'
+
+    return f'''    <div class="card archive flat-archive">
+      <div class="thumbnail">
+        {thumbnail_html}{badge_html}
+      </div>
+      <div class="info">
+        <div class="prompt" title="{escaped_prompt}">{truncated_prompt}</div>
+        <div class="meta">
+          <span class="time">{archive["display_time"]}</span>
+          <span class="stats">{archive["image_count"]} images</span>
+          <span class="model">{archive["model"]}</span>
+        </div>
+      </div>
+    </div>'''
+
+
+def _build_index_html(
+    active_runs: list[dict],
+    archived_runs: list[dict] = None,
+    flat_archives: list[dict] = None,
+    interactive: bool = False,
+) -> str:
     """Build the master index HTML document."""
     if archived_runs is None:
         archived_runs = []
+    if flat_archives is None:
+        flat_archives = []
 
     # Build active run cards
     active_cards_html = []
@@ -769,7 +735,7 @@ def _build_index_html(active_runs: list[dict], archived_runs: list[dict] = None,
     active_cards_joined = "\n".join(active_cards_html) if active_cards_html else '<p class="empty">No galleries found. Generate some images first!</p>'
     run_count = len(active_runs)
 
-    # Build archived run cards
+    # Build archived run cards (legacy directory-based)
     archived_section = ""
     if archived_runs:
         archived_cards_html = []
@@ -781,6 +747,20 @@ def _build_index_html(active_runs: list[dict], archived_runs: list[dict] = None,
     <h2 class="section-title">Saved Archives ({len(archived_runs)})</h2>
     <div class="grid">
 {archived_cards_joined}
+    </div>'''
+
+    # Build flat archive cards (new format)
+    flat_archive_section = ""
+    if flat_archives:
+        flat_cards_html = []
+        for archive in flat_archives:
+            card = _build_flat_archive_card_html(archive, interactive)
+            flat_cards_html.append(card)
+        flat_cards_joined = "\n".join(flat_cards_html)
+        flat_archive_section = f'''
+    <h2 class="section-title">Archived Images ({len(flat_archives)} sets, {sum(a["image_count"] for a in flat_archives)} images)</h2>
+    <div class="grid">
+{flat_cards_joined}
     </div>'''
 
     # Build interactive sections
@@ -806,6 +786,8 @@ def _build_index_html(active_runs: list[dict], archived_runs: list[dict] = None,
     .card:hover {{ transform: translateY(-4px); box-shadow: 0 8px 24px rgba(0,0,0,0.4); }}
     .card.archive {{ border: 2px solid #665500; }}
     .card.archive:hover {{ border-color: #997700; }}
+    .card.flat-archive {{ cursor: default; }}
+    .card.flat-archive:hover {{ transform: none; box-shadow: none; }}
     .thumbnail {{ aspect-ratio: 4/3; background: #333; overflow: hidden; position: relative; }}
     .thumbnail img {{ width: 100%; height: 100%; object-fit: cover; }}
     .no-thumbnail {{ width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; color: #666; }}
@@ -827,7 +809,7 @@ def _build_index_html(active_runs: list[dict], archived_runs: list[dict] = None,
 {form_html}{log_panel_html}
     <div class="grid">
 {active_cards_joined}
-    </div>{archived_section}
+    </div>{archived_section}{flat_archive_section}
   </div>
 {queue_html}
 {js_html}

@@ -1,9 +1,13 @@
 """Shared utility functions for the image-prompt-expander application."""
 
 import json
+import re
 import shutil
 from datetime import datetime
 from pathlib import Path
+
+from PIL import Image
+from PIL.PngImagePlugin import PngInfo
 
 
 def load_run_metadata(run_dir: Path) -> dict:
@@ -89,12 +93,68 @@ def get_prompts_from_run(run_dir: Path, prefix: str | None = None) -> list[str]:
     return [f.read_text() for f in prompt_files]
 
 
-def backup_run(run_dir: Path, saved_dir: Path, reason: str = "manual_archive") -> Path:
-    """Create a backup of a run directory (images and metadata only).
+def _get_prompt_text(run_dir: Path, prefix: str, prompt_idx: int) -> str:
+    """Get prompt text for a given index from a run directory.
 
-    Only copies PNG images and the metadata file to minimize archive size.
-    Prompts, logs, grammar, and gallery HTML are not included since they
-    can be regenerated and archives are meant for preserving image results.
+    Args:
+        run_dir: Path to the run directory
+        prefix: File prefix
+        prompt_idx: Index of the prompt
+
+    Returns:
+        Prompt text or empty string if not found
+    """
+    prompt_file = run_dir / f"{prefix}_{prompt_idx}.txt"
+    if prompt_file.exists():
+        return prompt_file.read_text()
+    return ""
+
+
+def _copy_with_exif(
+    src: Path,
+    dest: Path,
+    metadata: dict,
+    prompt_text: str,
+    reason: str,
+) -> None:
+    """Copy PNG and embed metadata in PNG text chunks.
+
+    Args:
+        src: Source image path
+        dest: Destination image path
+        metadata: Run metadata dictionary
+        prompt_text: The prompt text for this image
+        reason: Backup reason
+    """
+    img = Image.open(src)
+    png_info = PngInfo()
+
+    # Embed key metadata in PNG text chunks
+    png_info.add_text("prompt", prompt_text)
+    png_info.add_text("user_prompt", metadata.get("user_prompt", ""))
+    png_info.add_text("model", metadata.get("model", ""))
+    png_info.add_text("created_at", metadata.get("created_at", ""))
+    png_info.add_text("backup_reason", reason)
+
+    # Include image generation settings if available
+    img_settings = metadata.get("image_generation", {})
+    if img_settings:
+        png_info.add_text("width", str(img_settings.get("width", "")))
+        png_info.add_text("height", str(img_settings.get("height", "")))
+        png_info.add_text("steps", str(img_settings.get("steps", "")))
+        png_info.add_text("quantize", str(img_settings.get("quantize", "")))
+
+    img.save(dest, pnginfo=png_info)
+
+
+def backup_run(run_dir: Path, saved_dir: Path, reason: str = "manual_archive") -> list[Path]:
+    """Archive images to flat files with embedded PNG metadata.
+
+    Archives images as flat files in saved/ with format:
+    {prefix}_{timestamp}_{promptIdx}_{imgIdx}.png
+
+    Metadata is embedded in PNG text chunks instead of a separate JSON file.
+    This makes archives browsable and self-contained.
 
     Args:
         run_dir: Path to the run directory to backup
@@ -102,40 +162,123 @@ def backup_run(run_dir: Path, saved_dir: Path, reason: str = "manual_archive") -
         reason: "pre_regenerate", "pre_enhance", or "manual_archive"
 
     Returns:
-        Path to the created backup directory
+        List of paths to created archive files
     """
     if not run_dir.exists():
         raise ValueError(f"Run directory not found: {run_dir}")
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    backup_name = f"{run_dir.name}_{timestamp}"
-    backup_dir = saved_dir / backup_name
-
     saved_dir.mkdir(parents=True, exist_ok=True)
-    backup_dir.mkdir(parents=True, exist_ok=True)
 
-    prefix = get_prefix_from_metadata(run_dir)
+    # Load metadata for embedding
+    try:
+        metadata = load_run_metadata(run_dir)
+    except (ValueError, json.JSONDecodeError):
+        metadata = {}
 
-    # Copy only PNG images (pattern: {prefix}_{prompt_idx}_{image_idx}.png)
+    prefix = metadata.get("prefix", "image")
+
+    saved_files = []
+
+    # Find all PNG images matching pattern: prefix_promptIdx_imgIdx.png
     for png_file in run_dir.glob(f"{prefix}_*_*.png"):
-        shutil.copy2(png_file, backup_dir / png_file.name)
+        # Parse original name to extract indices
+        # Pattern: prefix_promptIdx_imgIdx.png
+        match = re.match(rf'^{re.escape(prefix)}_(\d+)_(\d+)\.png$', png_file.name)
+        if not match:
+            continue
 
-    # Copy metadata file (required for archive to be browsable in index)
-    meta_file = find_metadata_file(run_dir)
-    if meta_file:
-        dest_meta = backup_dir / meta_file.name
-        shutil.copy2(meta_file, dest_meta)
-        # Update with backup info
-        metadata = json.loads(dest_meta.read_text())
-        metadata["backup_info"] = {
-            "is_backup": True,
-            "source_run_id": run_dir.name,
-            "backup_created_at": datetime.now().isoformat(),
-            "backup_reason": reason,
-        }
-        dest_meta.write_text(json.dumps(metadata, indent=2))
+        prompt_idx = match.group(1)
+        img_idx = match.group(2)
 
-    return backup_dir
+        # Get prompt text for this image
+        prompt_text = _get_prompt_text(run_dir, prefix, int(prompt_idx))
+
+        # New flat filename: prefix_timestamp_promptIdx_imgIdx.png
+        new_name = f"{prefix}_{timestamp}_{prompt_idx}_{img_idx}.png"
+        dest_path = saved_dir / new_name
+
+        # Copy with EXIF metadata embedding (overwrites if exists)
+        _copy_with_exif(png_file, dest_path, metadata, prompt_text, reason)
+        saved_files.append(dest_path)
+
+    return saved_files
+
+
+def scan_flat_archives(saved_dir: Path) -> list[dict]:
+    """Scan saved/ for flat archived images and group by prefix+timestamp.
+
+    Flat archives follow the naming pattern: {prefix}_{timestamp}_{promptIdx}_{imgIdx}.png
+    where timestamp is YYYYMMDD_HHMMSS format.
+
+    Args:
+        saved_dir: Path to the saved/ directory
+
+    Returns:
+        List of dictionaries with archive info, each containing:
+        - prefix: The image prefix
+        - timestamp: Archive timestamp (YYYYMMDD_HHMMSS)
+        - images: List of image paths in this archive
+        - first_image: Path to first image (for thumbnail)
+        - image_count: Number of images in this archive
+    """
+    if not saved_dir.exists():
+        return []
+
+    archives: dict[tuple[str, str], dict] = {}
+
+    # Pattern: prefix_YYYYMMDD_HHMMSS_promptIdx_imgIdx.png
+    # We need to identify where the timestamp is (it's always YYYYMMDD_HHMMSS format)
+    timestamp_pattern = re.compile(r'^(.+)_(\d{8}_\d{6})_(\d+)_(\d+)\.png$')
+
+    for png_file in saved_dir.glob("*.png"):
+        match = timestamp_pattern.match(png_file.name)
+        if not match:
+            continue
+
+        prefix = match.group(1)
+        timestamp = match.group(2)
+        prompt_idx = match.group(3)
+        img_idx = match.group(4)
+
+        key = (prefix, timestamp)
+        if key not in archives:
+            archives[key] = {
+                "prefix": prefix,
+                "timestamp": timestamp,
+                "images": [],
+                "first_image": None,
+                "image_count": 0,
+            }
+
+        archives[key]["images"].append(png_file)
+        archives[key]["image_count"] += 1
+
+        # Track first image (sorted by prompt_idx, img_idx)
+        current_first = archives[key]["first_image"]
+        if current_first is None or png_file.name < current_first.name:
+            archives[key]["first_image"] = png_file
+
+    return list(archives.values())
+
+
+def get_flat_archive_metadata(image_path: Path) -> dict:
+    """Extract metadata from a flat archive PNG file.
+
+    Args:
+        image_path: Path to a flat archive PNG file
+
+    Returns:
+        Dictionary with embedded metadata (prompt, user_prompt, model, etc.)
+    """
+    try:
+        img = Image.open(image_path)
+        metadata = {}
+        if hasattr(img, 'text'):
+            metadata = dict(img.text)
+        return metadata
+    except Exception:
+        return {}
 
 
 def run_has_images(run_dir: Path) -> bool:

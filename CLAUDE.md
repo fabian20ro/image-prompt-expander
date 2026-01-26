@@ -120,9 +120,10 @@ python src/cli.py --clean
 6. **Backup & Archive System** (`src/utils.py`)
    - Auto-backup before destructive operations (regenerate prompts, enhance-all)
    - Manual archive via "Save to Archive" button in galleries
-   - Archives only contain PNG images and metadata (not prompts, logs, or HTML)
-   - Backups stored in `generated/saved/` with reason metadata
-   - Archives are read-only and shown separately in the master index
+   - **Flat file archives**: Images saved as `{prefix}_{timestamp}_{promptIdx}_{imgIdx}.png`
+   - Metadata embedded in PNG text chunks (prompt, user_prompt, model, backup_reason)
+   - No separate metadata JSON files - archives are self-contained
+   - Archives visible in master index as image grid (grouped by prefix+timestamp)
 
 ### Web UI Server (`src/server/`)
 
@@ -138,14 +139,15 @@ FastAPI-based web interface for the generation pipeline:
 **API Endpoints**:
 - `GET /index` - Master index with generation form
 - `GET /gallery/{run_id}` - Interactive gallery page
-- `GET /archive/{run_id}` - Archived gallery page (read-only)
+- `GET /archive/{run_id}` - Archived gallery page (legacy directory-based, read-only)
+- `GET /saved/{filename}` - Serve flat archived images
 - `POST /api/generate` - Start new generation pipeline
 - `GET /api/events` - SSE stream for real-time updates
 - `POST /api/queue/clear` - Clear pending tasks
 - `POST /api/worker/kill` - Kill current task
 - `PUT /api/gallery/{id}/grammar` - Update grammar
 - `POST /api/gallery/{id}/regenerate` - Regenerate prompts
-- `POST /api/gallery/{id}/archive` - Archive a gallery to saved/
+- `POST /api/gallery/{id}/archive` - Archive a gallery as flat files to saved/
 - `DELETE /api/gallery/{id}` - Delete a gallery (archives protected)
 
 ### Key Files
@@ -163,10 +165,12 @@ FastAPI-based web interface for the generation pipeline:
 
 **Web UI:**
 - `src/server/app.py` - FastAPI application setup
-- `src/server/routes.py` - API endpoints
+- `src/server/routes.py` - API endpoints (uses GalleryService)
 - `src/server/worker_subprocess.py` - Background task execution
 - `src/gallery.py` - HTML gallery generation
 - `src/gallery_index.py` - Master index generation
+- `src/html_components.py` - Shared HTML, JavaScript, and CSS components
+- `src/services/gallery_service.py` - Gallery operations service class
 
 **Configuration:**
 - `templates/system_prompt_*.txt` - Model-specific system prompts
