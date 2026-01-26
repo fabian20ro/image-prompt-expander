@@ -50,9 +50,21 @@ def get_system_prompt(model: str | None = None) -> str:
     return generic_path.read_text()
 
 
-def hash_prompt(user_prompt: str) -> str:
-    """Generate a short hash for caching grammars by prompt."""
-    return hashlib.sha256(user_prompt.encode()).hexdigest()[:12]
+def hash_prompt(user_prompt: str, model: str | None = None) -> str:
+    """Generate a short hash for caching grammars by prompt and model.
+
+    Args:
+        user_prompt: The user's image description
+        model: Image model name (included in hash to avoid using cached grammars
+               generated for different models with different system prompts)
+
+    Returns:
+        A 12-character hex hash
+    """
+    key = user_prompt
+    if model:
+        key = f"{model}:{user_prompt}"
+    return hashlib.sha256(key.encode()).hexdigest()[:12]
 
 
 def get_cached_grammar(prompt_hash: str) -> str | None:
@@ -73,7 +85,13 @@ def get_cached_grammar(prompt_hash: str) -> str | None:
     return None
 
 
-def cache_grammar(prompt_hash: str, grammar: str, raw_response: str, user_prompt: str) -> Path:
+def cache_grammar(
+    prompt_hash: str,
+    grammar: str,
+    raw_response: str,
+    user_prompt: str,
+    model: str | None = None,
+) -> Path:
     """
     Save a grammar to the cache.
 
@@ -82,6 +100,7 @@ def cache_grammar(prompt_hash: str, grammar: str, raw_response: str, user_prompt
         grammar: The cleaned grammar content
         raw_response: The raw LLM response (including thinking blocks)
         user_prompt: The original user prompt (for metadata)
+        model: The image model used (for metadata)
 
     Returns:
         Path to the cached grammar file
@@ -101,7 +120,8 @@ def cache_grammar(prompt_hash: str, grammar: str, raw_response: str, user_prompt
     metadata = {
         "user_prompt": user_prompt,
         "created_at": datetime.now().isoformat(),
-        "hash": prompt_hash
+        "hash": prompt_hash,
+        "model": model,
     }
     metadata_file.write_text(json.dumps(metadata, indent=2))
 
@@ -146,7 +166,7 @@ def generate_grammar(
     Returns:
         Tuple of (grammar content, was_cached, raw_response)
     """
-    prompt_hash = hash_prompt(user_prompt)
+    prompt_hash = hash_prompt(user_prompt, model)
 
     # Check cache first
     if use_cache:
@@ -179,7 +199,7 @@ def generate_grammar(
 
     # Cache the result
     if use_cache:
-        cache_grammar(prompt_hash, grammar, raw_response, user_prompt)
+        cache_grammar(prompt_hash, grammar, raw_response, user_prompt, model)
 
     return grammar, False, raw_response
 
