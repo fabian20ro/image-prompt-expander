@@ -4,6 +4,8 @@ import html
 import re
 from pathlib import Path
 
+from filelock import FileLock
+
 
 def create_gallery(
     output_dir: Path,
@@ -12,6 +14,8 @@ def create_gallery(
     images_per_prompt: int,
     grammar: str | None = None,
     raw_response_file: str | None = None,
+    interactive: bool = False,
+    run_id: str | None = None,
 ) -> Path:
     """Create initial gallery with placeholders for all expected images.
 
@@ -22,44 +26,94 @@ def create_gallery(
         images_per_prompt: Number of images generated per prompt
         grammar: Optional Tracery grammar JSON to display
         raw_response_file: Optional filename for raw LLM response link
+        interactive: If True, include editable grammar and action buttons
+        run_id: Run ID for API calls (required if interactive)
 
     Returns:
         Path to the created gallery.html file
     """
     gallery_path = output_dir / f"{prefix}_gallery.html"
-    total_images = len(prompts) * images_per_prompt
+    total_images = len(prompts) * max(images_per_prompt, 1)
 
-    # Build cards for all expected images
+    # Build cards for all prompts
     cards_html = []
     for prompt_idx, prompt_text in enumerate(prompts):
-        for image_idx in range(images_per_prompt):
-            image_filename = f"{prefix}_{prompt_idx}_{image_idx}.png"
-            escaped_prompt = html.escape(prompt_text)
+        escaped_prompt = html.escape(prompt_text)
 
-            # Check if image already exists (for resume scenarios)
-            image_path = output_dir / image_filename
-            if image_path.exists():
-                card = f'''    <div class="card" data-image="{image_filename}">
-      <a href="{image_filename}" target="_blank">
-        <img src="{image_filename}" loading="lazy">
-      </a>
-      <div class="prompt">{escaped_prompt}</div>
-    </div>'''
-            else:
-                card = f'''    <div class="card" data-image="{image_filename}">
-      <div class="placeholder">Pending...</div>
-      <div class="prompt">{escaped_prompt}</div>
-    </div>'''
+        if images_per_prompt == 0:
+            # No images expected - just show prompt with generate button
+            card = _build_card_html(
+                f"{prefix}_{prompt_idx}_0.png", escaped_prompt, prompt_idx, 0,
+                exists=False, interactive=interactive, no_image_expected=True
+            )
             cards_html.append(card)
+        else:
+            for image_idx in range(images_per_prompt):
+                image_filename = f"{prefix}_{prompt_idx}_{image_idx}.png"
+
+                # Check if image already exists (for resume scenarios)
+                image_path = output_dir / image_filename
+                if image_path.exists():
+                    card = _build_card_html(
+                        image_filename, escaped_prompt, prompt_idx, image_idx,
+                        exists=True, interactive=interactive
+                    )
+                else:
+                    card = _build_card_html(
+                        image_filename, escaped_prompt, prompt_idx, image_idx,
+                        exists=False, interactive=interactive
+                    )
+                cards_html.append(card)
 
     # Count existing images
-    completed = sum(1 for p in prompts for i in range(images_per_prompt)
-                   if (output_dir / f"{prefix}_{prompts.index(p)}_{i}.png").exists())
+    completed = sum(1 for p_idx, p in enumerate(prompts) for i in range(max(images_per_prompt, 1))
+                   if (output_dir / f"{prefix}_{p_idx}_{i}.png").exists())
 
-    gallery_html = _build_gallery_html(prefix, cards_html, completed, total_images, grammar, raw_response_file)
+    gallery_html = _build_gallery_html(
+        prefix, cards_html, completed, total_images, grammar, raw_response_file,
+        interactive=interactive, run_id=run_id
+    )
     gallery_path.write_text(gallery_html)
 
     return gallery_path
+
+
+def _build_card_html(
+    image_filename: str,
+    escaped_prompt: str,
+    prompt_idx: int,
+    image_idx: int,
+    exists: bool,
+    interactive: bool = False,
+    no_image_expected: bool = False,
+) -> str:
+    """Build HTML for a single image card."""
+    action_buttons = ""
+    if interactive:
+        action_buttons = f'''
+      <div class="card-actions">
+        <button class="btn-small btn-primary" onclick="generateImage({prompt_idx}, {image_idx})">Generate</button>
+        <button class="btn-small btn-secondary" onclick="enhanceImage({prompt_idx}, {image_idx})">Enhance</button>
+      </div>'''
+
+    if exists:
+        return f'''    <div class="card" data-image="{image_filename}" data-prompt-idx="{prompt_idx}" data-image-idx="{image_idx}">
+      <a href="{image_filename}" target="_blank">
+        <img src="{image_filename}" loading="lazy">
+      </a>
+      <div class="prompt">{escaped_prompt}</div>{action_buttons}
+    </div>'''
+    elif no_image_expected:
+        # Show prompt-only card with generate button
+        return f'''    <div class="card prompt-only" data-image="{image_filename}" data-prompt-idx="{prompt_idx}" data-image-idx="{image_idx}">
+      <div class="placeholder no-image">#{prompt_idx}</div>
+      <div class="prompt">{escaped_prompt}</div>{action_buttons}
+    </div>'''
+    else:
+        return f'''    <div class="card" data-image="{image_filename}" data-prompt-idx="{prompt_idx}" data-image-idx="{image_idx}">
+      <div class="placeholder">Pending...</div>
+      <div class="prompt">{escaped_prompt}</div>{action_buttons}
+    </div>'''
 
 
 def update_gallery(
@@ -81,37 +135,41 @@ def update_gallery(
     if not gallery_path.exists():
         return
 
-    html_content = gallery_path.read_text()
-    image_filename = image_path.name
+    # Use file locking to prevent concurrent update corruption
+    lock_path = gallery_path.with_suffix('.html.lock')
+    with FileLock(lock_path, timeout=10):
+        html_content = gallery_path.read_text()
+        image_filename = image_path.name
 
-    # Find the card for this image and replace placeholder with actual image
-    # Pattern matches the placeholder div for this specific image
-    placeholder_pattern = (
-        rf'(<div class="card" data-image="{re.escape(image_filename)}">)\s*'
-        rf'<div class="placeholder">Pending\.\.\.</div>'
-    )
+        # Find the card for this image and replace placeholder with actual image
+        # Pattern matches the placeholder div for this specific image
+        placeholder_pattern = (
+            rf'(<div class="card" data-image="{re.escape(image_filename)}"[^>]*>)\s*'
+            rf'<div class="placeholder">Pending\.\.\.</div>'
+        )
 
-    replacement = (
-        rf'\1\n      <a href="{image_filename}" target="_blank">\n'
-        rf'        <img src="{image_filename}" loading="lazy">\n'
-        rf'      </a>'
-    )
+        replacement = (
+            rf'\1\n      <a href="{image_filename}" target="_blank">\n'
+            rf'        <img src="{image_filename}" loading="lazy">\n'
+            rf'      </a>'
+        )
 
-    html_content = re.sub(placeholder_pattern, replacement, html_content)
+        html_content = re.sub(placeholder_pattern, replacement, html_content)
 
-    # Update the status count
-    status_pattern = r'<p class="status">Generated: \d+ / \d+ images</p>'
-    status_replacement = f'<p class="status">Generated: {completed} / {total} images</p>'
-    html_content = re.sub(status_pattern, status_replacement, html_content)
+        # Update the status count
+        status_pattern = r'<p class="status">Generated: \d+ / \d+ images</p>'
+        status_replacement = f'<p class="status">Generated: {completed} / {total} images</p>'
+        html_content = re.sub(status_pattern, status_replacement, html_content)
 
-    gallery_path.write_text(html_content)
+        gallery_path.write_text(html_content)
 
 
-def generate_gallery_for_directory(prompts_dir: Path) -> Path:
+def generate_gallery_for_directory(prompts_dir: Path, interactive: bool = False) -> Path:
     """Generate a gallery for an existing prompts directory.
 
     Args:
         prompts_dir: Directory containing prompt files and images
+        interactive: If True, include editable grammar and action buttons
 
     Returns:
         Path to the created gallery.html file
@@ -151,10 +209,345 @@ def generate_gallery_for_directory(prompts_dir: Path) -> Path:
     if raw_file.exists():
         raw_response_file = f"{prefix}_raw_response.txt"
 
+    # Get run_id from directory name
+    run_id = prompts_dir.name if interactive else None
+
     # Create gallery
-    gallery_path = create_gallery(prompts_dir, prefix, prompts, images_per_prompt, grammar, raw_response_file)
+    gallery_path = create_gallery(
+        prompts_dir, prefix, prompts, images_per_prompt, grammar, raw_response_file,
+        interactive=interactive, run_id=run_id
+    )
 
     return gallery_path
+
+
+def _build_interactive_grammar_section(grammar: str, run_id: str) -> str:
+    """Build the interactive grammar section with edit capabilities."""
+    escaped_grammar = html.escape(grammar)
+    return f'''
+  <div class="grammar-section-interactive">
+    <div class="grammar-header">
+      <span class="grammar-title">Tracery Grammar</span>
+      <div class="grammar-actions">
+        <button id="btn-save-grammar" class="btn-small btn-primary">Save</button>
+        <button id="btn-regenerate" class="btn-small btn-secondary">Regenerate Prompts</button>
+      </div>
+    </div>
+    <textarea id="grammar-editor" class="grammar-editor">{escaped_grammar}</textarea>
+  </div>
+'''
+
+
+def _build_interactive_action_bar(run_id: str) -> str:
+    """Build the action bar with generate/enhance all buttons."""
+    return f'''
+  <div class="action-bar">
+    <button id="btn-generate-all" class="btn-primary">Generate All Images</button>
+    <button id="btn-enhance-all" class="btn-secondary">Enhance All</button>
+    <div class="action-spacer"></div>
+    <button id="btn-clear-queue" class="btn-secondary">Clear Queue</button>
+    <button id="btn-kill" class="btn-danger">Kill Current</button>
+  </div>
+'''
+
+
+def _build_interactive_progress_bar() -> str:
+    """Build the fixed progress bar at bottom."""
+    return '''
+  <div id="progress-bar" class="progress-bar-fixed hidden">
+    <div class="progress-info">
+      <span id="progress-message">Idle</span>
+    </div>
+    <div class="progress-container">
+      <div class="progress-track">
+        <div id="progress-fill" class="progress-fill" style="width: 0%"></div>
+      </div>
+      <span id="progress-text">0/0</span>
+    </div>
+  </div>
+'''
+
+
+def _build_interactive_js(run_id: str) -> str:
+    """Build JavaScript for interactive gallery features."""
+    return f'''
+<script>
+(function() {{
+  const RUN_ID = "{run_id}";
+  const grammarEditor = document.getElementById('grammar-editor');
+  const btnSaveGrammar = document.getElementById('btn-save-grammar');
+  const btnRegenerate = document.getElementById('btn-regenerate');
+  const btnGenerateAll = document.getElementById('btn-generate-all');
+  const btnEnhanceAll = document.getElementById('btn-enhance-all');
+  const btnClearQueue = document.getElementById('btn-clear-queue');
+  const btnKill = document.getElementById('btn-kill');
+  const progressBar = document.getElementById('progress-bar');
+  const progressMessage = document.getElementById('progress-message');
+  const progressFill = document.getElementById('progress-fill');
+  const progressText = document.getElementById('progress-text');
+
+  let eventSource = null;
+
+  // Connect to SSE
+  function connectSSE() {{
+    eventSource = new EventSource('/api/events');
+
+    eventSource.onopen = () => console.log('SSE connected');
+    eventSource.onerror = (e) => {{
+      console.error('SSE error', e);
+      setTimeout(connectSSE, 3000);
+    }};
+
+    eventSource.addEventListener('status', (e) => {{
+      const data = JSON.parse(e.data);
+      if (data.current) {{
+        progressBar.classList.remove('hidden');
+        progressMessage.textContent = `Running: ${{data.current.type}}`;
+        if (data.current.progress) {{
+          const p = data.current.progress;
+          const pct = p.total > 0 ? Math.round((p.current / p.total) * 100) : 0;
+          progressFill.style.width = pct + '%';
+          progressText.textContent = `${{p.current}}/${{p.total}}`;
+          if (p.message) progressMessage.textContent = p.message;
+        }}
+      }}
+    }});
+
+    eventSource.addEventListener('task_started', (e) => {{
+      progressBar.classList.remove('hidden');
+      const task = JSON.parse(e.data);
+      progressMessage.textContent = `Running: ${{task.type}}`;
+    }});
+
+    eventSource.addEventListener('task_progress', (e) => {{
+      const data = JSON.parse(e.data);
+      const pct = data.total > 0 ? Math.round((data.current / data.total) * 100) : 0;
+      progressFill.style.width = pct + '%';
+      progressText.textContent = `${{data.current}}/${{data.total}}`;
+      if (data.message) progressMessage.textContent = data.message;
+    }});
+
+    eventSource.addEventListener('task_completed', (e) => {{
+      progressMessage.textContent = 'Completed';
+      // Don't hide immediately - queue_updated will handle visibility
+    }});
+
+    eventSource.addEventListener('task_failed', (e) => {{
+      const data = JSON.parse(e.data);
+      progressMessage.textContent = 'Failed: ' + data.error;
+    }});
+
+    eventSource.addEventListener('task_cancelled', (e) => {{
+      progressMessage.textContent = 'Cancelled';
+    }});
+
+    eventSource.addEventListener('queue_updated', (e) => {{
+      const data = JSON.parse(e.data);
+      if (data.current) {{
+        progressBar.classList.remove('hidden');
+        progressMessage.textContent = `Running: ${{data.current.type}}`;
+        if (data.current.progress) {{
+          const p = data.current.progress;
+          const pct = p.total > 0 ? Math.round((p.current / p.total) * 100) : 0;
+          progressFill.style.width = pct + '%';
+          progressText.textContent = `${{p.current}}/${{p.total}}`;
+          if (p.message) progressMessage.textContent = p.message;
+        }}
+      }} else if (data.pending_count > 0) {{
+        progressBar.classList.remove('hidden');
+        progressMessage.textContent = `${{data.pending_count}} task(s) pending...`;
+        progressFill.style.width = '0%';
+        progressText.textContent = '';
+      }} else {{
+        // No current task and no pending - hide after brief delay
+        setTimeout(() => {{
+          progressBar.classList.add('hidden');
+          progressFill.style.width = '0%';
+        }}, 1500);
+      }}
+    }});
+
+    eventSource.addEventListener('image_ready', (e) => {{
+      const data = JSON.parse(e.data);
+      if (data.run_id === RUN_ID) {{
+        updateImage(data.path);
+      }}
+    }});
+
+    eventSource.addEventListener('ping', () => {{}});
+  }}
+
+  function updateImage(filename) {{
+    const card = document.querySelector(`[data-image="${{filename}}"]`);
+    if (!card) return;
+
+    const placeholder = card.querySelector('.placeholder');
+    if (placeholder) {{
+      const link = document.createElement('a');
+      link.href = filename;
+      link.target = '_blank';
+      const img = document.createElement('img');
+      img.src = filename + '?t=' + Date.now();
+      img.loading = 'lazy';
+      link.appendChild(img);
+      placeholder.replaceWith(link);
+    }} else {{
+      const img = card.querySelector('img');
+      if (img) img.src = filename + '?t=' + Date.now();
+    }}
+  }}
+
+  // API helpers
+  async function apiPost(url, body = {{}}) {{
+    try {{
+      const resp = await fetch(url, {{
+        method: 'POST',
+        headers: {{'Content-Type': 'application/json'}},
+        body: JSON.stringify(body),
+      }});
+      if (!resp.ok) {{
+        const err = await resp.json();
+        throw new Error(err.detail || 'Request failed');
+      }}
+      return await resp.json();
+    }} catch (err) {{
+      alert('Error: ' + err.message);
+      throw err;
+    }}
+  }}
+
+  async function apiPut(url, body = {{}}) {{
+    try {{
+      const resp = await fetch(url, {{
+        method: 'PUT',
+        headers: {{'Content-Type': 'application/json'}},
+        body: JSON.stringify(body),
+      }});
+      if (!resp.ok) {{
+        const err = await resp.json();
+        throw new Error(err.detail || 'Request failed');
+      }}
+      return await resp.json();
+    }} catch (err) {{
+      alert('Error: ' + err.message);
+      throw err;
+    }}
+  }}
+
+  // Button handlers
+  if (btnSaveGrammar) {{
+    btnSaveGrammar.addEventListener('click', async () => {{
+      await apiPut(`/api/gallery/${{RUN_ID}}/grammar`, {{
+        grammar: grammarEditor.value
+      }});
+      alert('Grammar saved');
+    }});
+  }}
+
+  if (btnRegenerate) {{
+    btnRegenerate.addEventListener('click', async () => {{
+      await apiPost(`/api/gallery/${{RUN_ID}}/regenerate`);
+      progressBar.classList.remove('hidden');
+      progressMessage.textContent = 'Regenerating prompts...';
+    }});
+  }}
+
+  if (btnGenerateAll) {{
+    btnGenerateAll.addEventListener('click', async () => {{
+      await apiPost(`/api/gallery/${{RUN_ID}}/generate-all`, {{
+        images_per_prompt: 1,
+        resume: true
+      }});
+      progressBar.classList.remove('hidden');
+      progressMessage.textContent = 'Queued image generation...';
+    }});
+  }}
+
+  if (btnEnhanceAll) {{
+    btnEnhanceAll.addEventListener('click', async () => {{
+      await apiPost(`/api/gallery/${{RUN_ID}}/enhance-all`, {{
+        softness: 0.5
+      }});
+      progressBar.classList.remove('hidden');
+      progressMessage.textContent = 'Queued enhancement...';
+    }});
+  }}
+
+  if (btnClearQueue) {{
+    btnClearQueue.addEventListener('click', async () => {{
+      await apiPost('/api/queue/clear');
+    }});
+  }}
+
+  if (btnKill) {{
+    btnKill.addEventListener('click', async () => {{
+      await apiPost('/api/worker/kill');
+    }});
+  }}
+
+  // Global functions for per-image buttons
+  window.generateImage = async function(promptIdx, imageIdx) {{
+    await apiPost(`/api/gallery/${{RUN_ID}}/image/${{promptIdx}}/generate`, {{
+      image_idx: imageIdx
+    }});
+    progressBar.classList.remove('hidden');
+    progressMessage.textContent = `Generating image ${{promptIdx}}_${{imageIdx}}...`;
+  }};
+
+  window.enhanceImage = async function(promptIdx, imageIdx) {{
+    await apiPost(`/api/gallery/${{RUN_ID}}/image/${{promptIdx}}/enhance`, {{
+      image_idx: imageIdx,
+      softness: 0.5
+    }});
+    progressBar.classList.remove('hidden');
+    progressMessage.textContent = `Enhancing image ${{promptIdx}}_${{imageIdx}}...`;
+  }};
+
+  // Start SSE
+  connectSSE();
+}})();
+</script>
+'''
+
+
+def _build_interactive_styles() -> str:
+    """Build additional CSS for interactive gallery."""
+    return '''
+    /* Interactive grammar section */
+    .grammar-section-interactive { background: #2a2a2a; border-radius: 8px; margin-bottom: 20px; padding: 16px; }
+    .grammar-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+    .grammar-title { font-size: 14px; color: #888; }
+    .grammar-actions { display: flex; gap: 8px; }
+    .grammar-editor { width: 100%; height: 200px; background: #1a1a1a; border: 1px solid #444; border-radius: 6px; padding: 12px; color: #8f8; font-family: monospace; font-size: 12px; resize: vertical; }
+    .grammar-editor:focus { outline: none; border-color: #6af; }
+
+    /* Action bar */
+    .action-bar { display: flex; gap: 12px; margin-bottom: 20px; flex-wrap: wrap; align-items: center; }
+    .action-spacer { flex: 1; }
+
+    /* Buttons */
+    .btn-primary { background: #4a9eff; color: #fff; border: none; border-radius: 6px; padding: 10px 20px; font-size: 14px; cursor: pointer; font-weight: 500; }
+    .btn-primary:hover { background: #3d8be0; }
+    .btn-secondary { background: #444; color: #fff; border: none; border-radius: 6px; padding: 10px 20px; font-size: 14px; cursor: pointer; }
+    .btn-secondary:hover { background: #555; }
+    .btn-danger { background: #d44; color: #fff; border: none; border-radius: 6px; padding: 10px 20px; font-size: 14px; cursor: pointer; }
+    .btn-danger:hover { background: #c33; }
+    .btn-small { padding: 6px 12px; font-size: 12px; }
+
+    /* Card actions */
+    .card-actions { padding: 8px 12px; display: flex; gap: 8px; border-top: 1px solid #333; }
+
+    /* Progress bar */
+    .progress-bar-fixed { position: fixed; bottom: 0; left: 0; right: 0; background: #2a2a2a; border-top: 1px solid #444; padding: 12px 20px; display: flex; align-items: center; gap: 16px; z-index: 1000; }
+    .progress-bar-fixed.hidden { display: none; }
+    .progress-info { flex: 1; font-size: 14px; color: #ddd; }
+    .progress-container { display: flex; align-items: center; gap: 12px; }
+    .progress-track { width: 200px; height: 8px; background: #444; border-radius: 4px; overflow: hidden; }
+    .progress-fill { height: 100%; background: #4a9eff; transition: width 0.3s; }
+
+    /* Adjust body padding */
+    body { padding-bottom: 80px; }
+'''
 
 
 def _build_gallery_html(
@@ -164,9 +557,14 @@ def _build_gallery_html(
     total: int,
     grammar: str | None = None,
     raw_response_file: str | None = None,
+    interactive: bool = False,
+    run_id: str | None = None,
 ) -> str:
     """Build the complete gallery HTML document."""
     cards_joined = "\n".join(cards_html)
+
+    # Base tag for interactive galleries to resolve relative URLs correctly
+    base_tag = f'<base href="/gallery/{run_id}/">' if interactive and run_id else ""
 
     # Build header section with optional grammar display and raw response link
     header_section = ""
@@ -179,21 +577,31 @@ def _build_gallery_html(
     {" ".join(header_parts)}
   </div>'''
 
-    # Build collapsible grammar section
+    # Build grammar section
     grammar_section = ""
     if grammar:
-        escaped_grammar = html.escape(grammar)
-        grammar_section = f'''
+        if interactive and run_id:
+            grammar_section = _build_interactive_grammar_section(grammar, run_id)
+        else:
+            escaped_grammar = html.escape(grammar)
+            grammar_section = f'''
   <details class="grammar-section">
     <summary>Tracery Grammar</summary>
     <pre>{escaped_grammar}</pre>
   </details>'''
+
+    # Build interactive sections
+    action_bar = _build_interactive_action_bar(run_id) if interactive and run_id else ""
+    progress_bar = _build_interactive_progress_bar() if interactive else ""
+    interactive_js = _build_interactive_js(run_id) if interactive and run_id else ""
+    extra_styles = _build_interactive_styles() if interactive else ""
 
     return f'''<!DOCTYPE html>
 <html>
 <head>
   <title>Gallery: {prefix}</title>
   <meta charset="utf-8">
+  {base_tag}
   <style>
     body {{ font-family: system-ui; padding: 20px; background: #1a1a1a; color: #fff; }}
     h1 {{ margin-bottom: 10px; }}
@@ -209,15 +617,20 @@ def _build_gallery_html(
     .card {{ background: #2a2a2a; border-radius: 8px; overflow: hidden; }}
     .card img {{ width: 100%; aspect-ratio: 3/4; object-fit: cover; cursor: pointer; }}
     .card .placeholder {{ width: 100%; aspect-ratio: 3/4; background: #333; display: flex; align-items: center; justify-content: center; color: #666; }}
+    .card .placeholder.no-image {{ aspect-ratio: 1/1; background: #252525; color: #555; font-size: 24px; font-weight: bold; }}
+    .card.prompt-only {{ border: 1px dashed #444; }}
     .card .prompt {{ padding: 12px; font-size: 13px; color: #aaa; max-height: 150px; overflow-y: auto; }}
+{extra_styles}
   </style>
 </head>
 <body>
-  <h1>Gallery: {prefix}</h1>{header_section}{grammar_section}
+  <h1>Gallery: {prefix}</h1>{header_section}{grammar_section}{action_bar}
   <p class="status">Generated: {completed} / {total} images</p>
   <div class="grid">
 {cards_joined}
   </div>
+{progress_bar}
+{interactive_js}
 </body>
 </html>
 '''

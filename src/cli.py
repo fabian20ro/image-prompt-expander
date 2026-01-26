@@ -13,8 +13,6 @@ from grammar_generator import generate_grammar, hash_prompt
 from tracery_runner import run_tracery, TraceryError
 from image_generator import generate_image, clear_model_cache, SUPPORTED_MODELS, MODEL_DEFAULTS
 from image_enhancer import enhance_image, collect_images
-from gallery import create_gallery, update_gallery, generate_gallery_for_directory
-from gallery_index import generate_master_index
 
 
 GENERATED_DIR = Path(__file__).parent.parent / "generated"
@@ -51,9 +49,9 @@ def clean_generated():
 )
 @click.option(
     '-n', '--count',
-    default=500,
+    default=50,
     type=int,
-    help='Number of variations to generate (default: 500)'
+    help='Number of variations to generate (default: 50)'
 )
 @click.option(
     '-o', '--output',
@@ -176,14 +174,20 @@ def clean_generated():
     help='Skip already-generated images when resuming interrupted runs'
 )
 @click.option(
-    '--gallery',
-    type=click.Path(exists=True, path_type=Path),
-    help='Standalone: generate gallery.html for existing prompts directory'
-)
-@click.option(
     '--no-tiled-vae',
     is_flag=True,
     help='Disable tiled VAE decoding (uses more memory but may be faster)'
+)
+@click.option(
+    '--serve',
+    is_flag=True,
+    help='Start the web UI server at http://localhost:8000'
+)
+@click.option(
+    '--port',
+    default=8000,
+    type=int,
+    help='Port for web UI server (default: 8000)'
 )
 def main(
     prompt: str | None,
@@ -211,14 +215,15 @@ def main(
     enhance_after: bool,
     enhance_images: str | None,
     resume: bool,
-    gallery: Path | None,
     no_tiled_vae: bool,
+    serve: bool,
+    port: int,
 ):
     """
     Generate FLUX.2 Klein image prompt variations using LLM-powered Tracery grammars.
 
     Example:
-        python cli.py -p "a dragon flying over mountains" -n 500
+        python cli.py -p "a dragon flying over mountains" -n 50
         python cli.py --clean  # Remove all generated files
 
     With image generation:
@@ -244,8 +249,34 @@ def main(
     if clean:
         removed = clean_generated()
         click.echo(f"Cleaned {removed} items from generated/")
-        if not prompt and not from_grammar and not from_prompts and not enhance_images and not gallery:
+        if not prompt and not from_grammar and not from_prompts and not enhance_images and not serve:
             return
+
+    # Handle --serve: Start web UI server
+    if serve:
+        import webbrowser
+
+        click.echo(f"Starting web UI server at http://localhost:{port}")
+        click.echo("Press Ctrl+C to stop")
+
+        # Open browser after a short delay
+        def open_browser():
+            import time
+            time.sleep(1.5)
+            webbrowser.open(f"http://localhost:{port}")
+
+        import threading
+        threading.Thread(target=open_browser, daemon=True).start()
+
+        # Start the server
+        try:
+            import uvicorn
+            from server.app import app
+            uvicorn.run(app, host="0.0.0.0", port=port, log_level="info")
+        except ImportError as e:
+            click.echo(f"Error: Missing dependencies for web UI. Install with: pip install fastapi uvicorn sse-starlette", err=True)
+            sys.exit(1)
+        return
 
     # STANDALONE MODE: Enhance existing images
     if enhance_images:
@@ -290,23 +321,6 @@ def main(
         click.echo(f"\nEnhanced {enhanced_count} images")
         return
 
-    # STANDALONE MODE: Generate gallery for existing prompts directory
-    if gallery:
-        click.echo(f"Generating gallery for: {gallery}")
-        try:
-            gallery_path = generate_gallery_for_directory(gallery)
-            gallery_url = f"file://{gallery_path.resolve()}"
-            click.echo(f"Gallery created: {gallery_url}")
-
-            # Update master index
-            index_path = generate_master_index(GENERATED_DIR)
-            index_url = f"file://{index_path.resolve()}"
-            click.echo(f"Master index: {index_url}")
-        except ValueError as e:
-            click.echo(f"Error: {e}", err=True)
-            sys.exit(1)
-        return
-
     # Validation: mutual exclusivity
     if from_grammar and from_prompts:
         click.echo("Error: Cannot use both --from-grammar and --from-prompts", err=True)
@@ -316,8 +330,8 @@ def main(
         click.echo("Error: --from-prompts requires --generate-images", err=True)
         sys.exit(1)
 
-    if not prompt and not from_grammar and not from_prompts and not clean and not enhance_images and not gallery:
-        click.echo("Error: --prompt is required (or use --from-grammar/--from-prompts/--enhance-images/--gallery)", err=True)
+    if not prompt and not from_grammar and not from_prompts and not clean and not enhance_images:
+        click.echo("Error: --prompt is required (or use --from-grammar/--from-prompts/--enhance-images/--serve)", err=True)
         sys.exit(1)
 
     # Warn if --prompt is provided with --from-grammar or --from-prompts
@@ -609,20 +623,7 @@ def main(
         prompts_to_render = outputs[:max_prompts] if max_prompts else outputs
         total_images = len(prompts_to_render) * images_per_prompt
 
-        # Create gallery before starting image generation
-        gallery_path = create_gallery(
-            output, prefix, prompts_to_render, images_per_prompt,
-            grammar=grammar, raw_response_file=raw_response_file
-        )
-        gallery_url = f"file://{gallery_path.resolve()}"
-        click.echo(f"Gallery: {gallery_url}")
-
-        # Update master index
-        index_path = generate_master_index(GENERATED_DIR)
-        index_url = f"file://{index_path.resolve()}"
-        click.echo(f"Master index: {index_url}")
-
-        click.echo(f"\nGenerating {total_images} images ({len(prompts_to_render)} prompts x {images_per_prompt} images each)...")
+        click.echo(f"Generating {total_images} images ({len(prompts_to_render)} prompts x {images_per_prompt} images each)...")
         click.echo(f"Model: {model}, Steps: {steps or MODEL_DEFAULTS[model]['steps']}, Size: {width}x{height}")
 
         current_seed = seed
@@ -665,9 +666,6 @@ def main(
                 except Exception as e:
                     click.echo(f"Error generating image: {e}", err=True)
                     sys.exit(1)
-
-                # Update gallery after each image
-                update_gallery(gallery_path, output_path, prompt_text, generated_count - skipped_count, total_images - skipped_count)
 
                 # Enhance the image if requested (replaces original)
                 if enhance and not enhance_after:

@@ -5,3 +5,7 @@ tracery>=0.1.1
 mflux>=0.15.0
 pytest>=8.0.0
 pytest-cov>=4.0.0
+fastapi>=0.109.0
+uvicorn>=0.27.0
+sse-starlette>=1.8.0
+filelock>=3.0.0

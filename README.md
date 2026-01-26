@@ -36,7 +36,27 @@ Then install [LM Studio](https://lmstudio.ai/), download a model (e.g., Qwen 2.5
 
 ## Usage
 
-### Basic (Text Prompts Only)
+### Web UI (Recommended)
+
+Start the interactive web interface:
+
+```bash
+python src/cli.py --serve
+```
+
+This opens `http://localhost:8000` with:
+- **New Generation Form**: Enter prompts and configure all generation parameters
+- **Gallery Browser**: View and manage all existing galleries
+- **Live Progress**: Real-time updates via SSE as images generate
+- **Queue Management**: Queue multiple operations, kill running tasks
+
+Gallery pages include:
+- **Edit Grammar**: Modify Tracery grammar and regenerate prompts
+- **Generate Images**: Queue individual or all images for generation
+- **Enhance Images**: Apply SeedVR2 enhancement to individual or all images
+- **Kill/Clear**: Stop current task or clear pending queue
+
+### CLI: Basic (Text Prompts Only)
 
 ```bash
 # Generate 500 prompt variations
@@ -176,8 +196,9 @@ python src/cli.py --clean
 | `--enhance-after` | Defer enhancement to after all images generated (saves memory) |
 | `--enhance-images PATH` | Enhance existing images in-place (file, folder, or glob) |
 | `--resume` | Skip already-generated images when resuming interrupted runs |
-| `--gallery PATH` | Generate gallery for existing prompts directory |
 | `--no-tiled-vae` | Disable tiled VAE decoding (more memory, faster) |
+| `--serve` | Start interactive web UI at http://localhost:8000 |
+| `--port INT` | Port for web UI server (default: 8000) |
 
 ## Output Structure
 
@@ -192,7 +213,7 @@ generated/
     ├── dragon_1.txt          # Second prompt
     ├── dragon_1_0.png
     ├── ...
-    ├── dragon_gallery.html   # Live-updating gallery for this run
+    ├── dragon_gallery.html   # Gallery generated dynamically via --serve
     ├── dragon_grammar.json   # Tracery grammar used
     └── dragon_metadata.json  # Generation settings
 ```
