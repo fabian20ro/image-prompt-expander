@@ -10,6 +10,25 @@ from PIL import Image
 from PIL.PngImagePlugin import PngInfo
 
 
+def format_run_timestamp(timestamp: str) -> str:
+    """Format a run timestamp for display.
+
+    Converts YYYYMMDD_HHMMSS to YYYY-MM-DD HH:MM:SS format.
+
+    Args:
+        timestamp: Timestamp string in YYYYMMDD_HHMMSS format
+
+    Returns:
+        Formatted timestamp or original if format doesn't match
+    """
+    if len(timestamp) == 15 and timestamp[8] == "_":
+        return (
+            f"{timestamp[0:4]}-{timestamp[4:6]}-{timestamp[6:8]} "
+            f"{timestamp[9:11]}:{timestamp[11:13]}:{timestamp[13:15]}"
+        )
+    return timestamp
+
+
 def load_run_metadata(run_dir: Path) -> dict:
     """Load metadata from a run directory.
 

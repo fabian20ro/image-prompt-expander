@@ -5,7 +5,7 @@ import json
 import re
 from pathlib import Path
 
-from utils import scan_flat_archives, get_flat_archive_metadata
+from utils import scan_flat_archives, get_flat_archive_metadata, format_run_timestamp
 from html_components import (
     LogPanel,
     QueueStatusBar,
@@ -120,13 +120,8 @@ def _extract_run_info(run_dir: Path, is_archive: bool = False) -> dict | None:
     else:
         timestamp = run_dir.name
 
-    # Format timestamp for display (YYYYMMDD_HHMMSS -> YYYY-MM-DD HH:MM:SS)
-    display_time = timestamp
-    if len(timestamp) == 15 and timestamp[8] == "_":
-        display_time = (
-            f"{timestamp[0:4]}-{timestamp[4:6]}-{timestamp[6:8]} "
-            f"{timestamp[9:11]}:{timestamp[11:13]}:{timestamp[13:15]}"
-        )
+    # Format timestamp for display
+    display_time = format_run_timestamp(timestamp)
 
     # Get image count
     image_count = len(list(run_dir.glob(f"{prefix}_*_*.png")))
@@ -179,13 +174,8 @@ def _extract_flat_archive_infos(saved_dir: Path, interactive: bool = False) -> l
         timestamp = archive["timestamp"]
         first_image = archive["first_image"]
 
-        # Format timestamp for display (YYYYMMDD_HHMMSS -> YYYY-MM-DD HH:MM:SS)
-        display_time = timestamp
-        if len(timestamp) == 15 and timestamp[8] == "_":
-            display_time = (
-                f"{timestamp[0:4]}-{timestamp[4:6]}-{timestamp[6:8]} "
-                f"{timestamp[9:11]}:{timestamp[11:13]}:{timestamp[13:15]}"
-            )
+        # Format timestamp for display
+        display_time = format_run_timestamp(timestamp)
 
         # Get metadata from first image
         metadata = {}
@@ -788,12 +778,12 @@ def _build_index_html(
     .card.archive:hover {{ border-color: #997700; }}
     .card.flat-archive {{ cursor: default; }}
     .card.flat-archive:hover {{ transform: none; box-shadow: none; }}
-    .thumbnail {{ aspect-ratio: 4/3; background: #333; overflow: hidden; position: relative; }}
+    .thumbnail {{ aspect-ratio: 3/4; background: #333; overflow: hidden; position: relative; }}
     .thumbnail img {{ width: 100%; height: 100%; object-fit: cover; }}
     .no-thumbnail {{ width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; color: #666; }}
     .archive-badge {{ position: absolute; top: 8px; right: 8px; background: #665500; color: #fff; font-size: 10px; padding: 2px 8px; border-radius: 4px; }}
     .info {{ padding: 16px; }}
-    .prompt {{ font-size: 14px; color: #ddd; margin-bottom: 12px; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }}
+    .prompt {{ font-size: 13px; color: #ddd; margin-bottom: 12px; line-height: 1.4; height: calc(1.4em * 3); overflow: hidden; word-wrap: break-word; overflow-wrap: break-word; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; }}
     .meta {{ display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: #888; }}
     .meta .time {{ color: #6af; }}
     .meta .stats {{ color: #aaa; }}
