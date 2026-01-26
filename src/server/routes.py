@@ -11,7 +11,7 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import HTMLResponse, FileResponse
 from sse_starlette.sse import EventSourceResponse
 
-from .app import get_queue_manager, get_worker, get_shutdown_event, GENERATED_DIR
+from .app import get_queue_manager, get_worker, get_shutdown_event
 from .models import (
     GenerateRequest,
     RegeneratePromptsApiRequest,
@@ -27,10 +27,10 @@ from .models import (
     GalleryDetailResponse,
 )
 
-# Import gallery index generation
+# Import from parent directory
 import sys
-SRC_DIR = Path(__file__).parent.parent
-sys.path.insert(0, str(SRC_DIR))
+sys.path.insert(0, str(Path(__file__).parent.parent))
+from config import paths
 from gallery_index import generate_master_index, _extract_run_info
 from utils import backup_run, is_backup_run
 
@@ -46,7 +46,7 @@ router = APIRouter()
 async def get_index():
     """Serve the master index page with generation form."""
     # Regenerate index with interactive mode for the web UI
-    index_path = generate_master_index(GENERATED_DIR, interactive=True)
+    index_path = generate_master_index(paths.generated_dir, interactive=True)
 
     if index_path.exists():
         return HTMLResponse(content=index_path.read_text())
@@ -186,7 +186,7 @@ async def get_gallery(run_id: str):
     """Serve a gallery page with interactive features."""
     from gallery import generate_gallery_for_directory
 
-    prompts_dir = GENERATED_DIR / "prompts"
+    prompts_dir = paths.prompts_dir
     run_dir = prompts_dir / run_id
 
     if not run_dir.exists():
@@ -205,7 +205,7 @@ async def get_archive_gallery(run_id: str):
     """Serve an archived gallery page (read-only)."""
     from gallery import generate_gallery_for_directory
 
-    saved_dir = GENERATED_DIR / "saved"
+    saved_dir = paths.saved_dir
     run_dir = saved_dir / run_id
 
     if not run_dir.exists():
@@ -222,7 +222,7 @@ async def get_archive_gallery(run_id: str):
 @router.get("/archive/{run_id}/{filename:path}")
 async def get_archive_file(run_id: str, filename: str):
     """Serve static files (images, etc.) from an archive directory."""
-    saved_dir = GENERATED_DIR / "saved"
+    saved_dir = paths.saved_dir
     run_dir = saved_dir / run_id
     file_path = run_dir / filename
 
@@ -249,7 +249,7 @@ async def get_archive_file(run_id: str, filename: str):
 @router.get("/gallery/{run_id}/{filename:path}")
 async def get_gallery_file(run_id: str, filename: str):
     """Serve static files (images, etc.) from a gallery directory."""
-    prompts_dir = GENERATED_DIR / "prompts"
+    prompts_dir = paths.prompts_dir
     run_dir = prompts_dir / run_id
     file_path = run_dir / filename
 
@@ -276,7 +276,7 @@ async def get_gallery_file(run_id: str, filename: str):
 @router.get("/api/gallery/{run_id}")
 async def get_gallery_info(run_id: str) -> GalleryDetailResponse:
     """Get gallery details including grammar and prompts."""
-    prompts_dir = GENERATED_DIR / "prompts"
+    prompts_dir = paths.prompts_dir
     run_dir = prompts_dir / run_id
 
     if not run_dir.exists():
@@ -340,7 +340,7 @@ async def get_gallery_info(run_id: str) -> GalleryDetailResponse:
 @router.get("/api/gallery/{run_id}/grammar")
 async def get_grammar(run_id: str):
     """Get the grammar JSON for a gallery."""
-    prompts_dir = GENERATED_DIR / "prompts"
+    prompts_dir = paths.prompts_dir
     run_dir = prompts_dir / run_id
 
     if not run_dir.exists():
@@ -363,7 +363,7 @@ async def get_grammar(run_id: str):
 @router.put("/api/gallery/{run_id}/grammar", response_model=TaskResponse)
 async def update_grammar(run_id: str, req: GrammarUpdateRequest):
     """Update the grammar for a gallery."""
-    prompts_dir = GENERATED_DIR / "prompts"
+    prompts_dir = paths.prompts_dir
     run_dir = prompts_dir / run_id
 
     if not run_dir.exists():
@@ -391,7 +391,7 @@ async def update_grammar(run_id: str, req: GrammarUpdateRequest):
 @router.post("/api/gallery/{run_id}/regenerate", response_model=TaskResponse)
 async def regenerate_prompts(run_id: str, req: RegeneratePromptsApiRequest | None = None):
     """Regenerate prompts from the current grammar."""
-    prompts_dir = GENERATED_DIR / "prompts"
+    prompts_dir = paths.prompts_dir
     run_dir = prompts_dir / run_id
 
     if not run_dir.exists():
@@ -430,7 +430,7 @@ async def regenerate_prompts(run_id: str, req: RegeneratePromptsApiRequest | Non
 @router.post("/api/gallery/{run_id}/generate-all", response_model=TaskResponse)
 async def generate_all_images(run_id: str, req: GenerateAllImagesRequest | None = None):
     """Queue generation of all images for a gallery."""
-    prompts_dir = GENERATED_DIR / "prompts"
+    prompts_dir = paths.prompts_dir
     run_dir = prompts_dir / run_id
 
     if not run_dir.exists():
@@ -455,7 +455,7 @@ async def generate_all_images(run_id: str, req: GenerateAllImagesRequest | None 
 @router.post("/api/gallery/{run_id}/enhance-all", response_model=TaskResponse)
 async def enhance_all_images(run_id: str, req: EnhanceAllImagesRequest | None = None):
     """Queue enhancement of all images for a gallery."""
-    prompts_dir = GENERATED_DIR / "prompts"
+    prompts_dir = paths.prompts_dir
     run_dir = prompts_dir / run_id
 
     if not run_dir.exists():
@@ -483,7 +483,7 @@ async def generate_single_image(
     req: GenerateImageRequest | None = None,
 ):
     """Queue generation of a single image."""
-    prompts_dir = GENERATED_DIR / "prompts"
+    prompts_dir = paths.prompts_dir
     run_dir = prompts_dir / run_id
 
     if not run_dir.exists():
@@ -512,7 +512,7 @@ async def enhance_single_image(
     req: EnhanceImageRequest | None = None,
 ):
     """Queue enhancement of a single image."""
-    prompts_dir = GENERATED_DIR / "prompts"
+    prompts_dir = paths.prompts_dir
     run_dir = prompts_dir / run_id
 
     if not run_dir.exists():
@@ -546,7 +546,7 @@ async def get_gallery_logs(run_id: str, tail: int = 100):
     Returns:
         Log file contents
     """
-    prompts_dir = GENERATED_DIR / "prompts"
+    prompts_dir = paths.prompts_dir
     run_dir = prompts_dir / run_id
 
     if not run_dir.exists():
@@ -570,7 +570,7 @@ async def get_gallery_logs(run_id: str, tail: int = 100):
 @router.post("/api/gallery/{run_id}/archive", response_model=TaskResponse)
 async def archive_gallery(run_id: str):
     """Archive a gallery to the saved folder."""
-    prompts_dir = GENERATED_DIR / "prompts"
+    prompts_dir = paths.prompts_dir
     run_dir = prompts_dir / run_id
 
     if not run_dir.exists():
@@ -580,9 +580,9 @@ async def archive_gallery(run_id: str):
         raise HTTPException(status_code=400, detail="Cannot archive a backup")
 
     try:
-        saved_dir = GENERATED_DIR / "saved"
+        saved_dir = paths.saved_dir
         backup_path = backup_run(run_dir, saved_dir, reason="manual_archive")
-        generate_master_index(GENERATED_DIR, interactive=True)
+        generate_master_index(paths.generated_dir, interactive=True)
         return TaskResponse(task_id="", message=f"Archived to: {backup_path.name}")
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

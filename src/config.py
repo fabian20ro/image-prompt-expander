@@ -2,6 +2,7 @@
 
 import os
 from dataclasses import dataclass, field
+from pathlib import Path
 
 
 @dataclass(frozen=True)
@@ -34,6 +35,55 @@ class EnhancementConfig:
     """Configuration for image enhancement."""
     default_softness: float = 0.5
     default_scale: int = 2
+
+
+@dataclass(frozen=True)
+class PathConfig:
+    """Centralized path configuration for the application."""
+
+    @property
+    def root_dir(self) -> Path:
+        """Project root directory."""
+        return Path(__file__).parent.parent
+
+    @property
+    def src_dir(self) -> Path:
+        """Source code directory."""
+        return self.root_dir / "src"
+
+    @property
+    def generated_dir(self) -> Path:
+        """Directory for all generated output."""
+        return self.root_dir / "generated"
+
+    @property
+    def grammars_dir(self) -> Path:
+        """Directory for cached grammars."""
+        return self.generated_dir / "grammars"
+
+    @property
+    def prompts_dir(self) -> Path:
+        """Directory for prompt output runs."""
+        return self.generated_dir / "prompts"
+
+    @property
+    def saved_dir(self) -> Path:
+        """Directory for archived/backup runs."""
+        return self.generated_dir / "saved"
+
+    @property
+    def queue_path(self) -> Path:
+        """Path to the task queue JSON file."""
+        return self.generated_dir / "queue.json"
+
+    @property
+    def templates_dir(self) -> Path:
+        """Directory for system prompt templates."""
+        return self.root_dir / "templates"
+
+
+# Singleton path configuration instance
+paths = PathConfig()
 
 
 @dataclass

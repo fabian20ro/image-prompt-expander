@@ -10,28 +10,17 @@ Usage:
 """
 
 import json
-import os
 import sys
 import threading
-import time
-import traceback
 from datetime import datetime
 from pathlib import Path
 
 # Add parent directories to path for imports
 SRC_DIR = Path(__file__).parent.parent
-ROOT_DIR = SRC_DIR.parent
 sys.path.insert(0, str(SRC_DIR))
 
-from grammar_generator import generate_grammar, hash_prompt
-from tracery_runner import run_tracery, TraceryError
-from image_generator import generate_image, clear_model_cache, MODEL_DEFAULTS
-from image_enhancer import enhance_image
-from gallery import create_gallery, update_gallery
-from gallery_index import generate_master_index
-from utils import backup_run, run_has_images
-
-GENERATED_DIR = ROOT_DIR / "generated"
+from config import paths
+from pipeline import PipelineExecutor, PipelineResult
 
 # Global log file handle (set when we know the output directory)
 _log_file = None
@@ -104,17 +93,6 @@ def emit_image_ready(run_id: str, path: str):
     print(json.dumps(data), flush=True)
 
 
-def sync_file(path: Path) -> None:
-    """Ensure file is flushed to disk before notifying.
-
-    This prevents race conditions where the SSE event arrives
-    before the file is fully written to disk.
-    """
-    with open(path, 'r+b') as f:
-        f.flush()
-        os.fsync(f.fileno())
-
-
 class Heartbeat:
     """Context manager for emitting periodic heartbeats during long operations."""
 
@@ -149,6 +127,14 @@ class Heartbeat:
         return False
 
 
+def create_executor() -> PipelineExecutor:
+    """Create a PipelineExecutor with JSON progress callbacks."""
+    return PipelineExecutor(
+        on_progress=emit_progress,
+        on_image_ready=emit_image_ready,
+    )
+
+
 def run_generate_pipeline(params: dict):
     """Run full generation pipeline: LLM -> Tracery -> Images."""
     prompt = params["prompt"]
@@ -170,215 +156,43 @@ def run_generate_pipeline(params: dict):
     enhance_softness = params.get("enhance_softness", 0.5)
     enhance_after = params.get("enhance_after", False)
 
-    # Stage 1: Generate grammar
-    cache_msg = " (ignoring cache)" if no_cache else ""
-    emit_progress("generating_grammar", 0, 1, f"Generating grammar{cache_msg} for: {prompt[:50]}...")
+    executor = create_executor()
 
-    try:
-        grammar, was_cached, raw_response = generate_grammar(
-            user_prompt=prompt,
-            use_cache=not no_cache,
-            temperature=temperature,
+    with Heartbeat(f"Generating pipeline for: {prompt[:30]}..."):
+        result = executor.run_full_pipeline(
+            prompt=prompt,
+            count=count,
+            prefix=prefix,
             model=model,
+            temperature=temperature,
+            no_cache=no_cache,
+            generate_images=generate_images,
+            images_per_prompt=images_per_prompt,
+            width=width,
+            height=height,
+            steps=steps,
+            quantize=quantize,
+            seed=seed,
+            max_prompts=max_prompts,
+            tiled_vae=tiled_vae,
+            enhance=enhance,
+            enhance_softness=enhance_softness,
+            enhance_after=enhance_after,
         )
-    except Exception as e:
-        emit_result(False, error=f"Grammar generation failed: {e}")
-        return
 
-    emit_progress("generating_grammar", 1, 1, "Grammar generated")
+    # Set up log file after we know the output directory
+    if result.output_dir:
+        set_log_file(result.output_dir / f"{prefix}_worker.log")
+        log_to_file(f"Starting generation pipeline for: {prompt[:100]}...")
 
-    # Stage 2: Run Tracery
-    emit_progress("expanding_prompts", 0, count, f"Expanding {count} prompts...")
-
-    try:
-        outputs = run_tracery(grammar, count=count)
-    except TraceryError as e:
-        emit_result(False, error=f"Tracery expansion failed: {e}")
-        return
-
-    emit_progress("expanding_prompts", count, count, f"Generated {len(outputs)} prompts")
-
-    # Create output directory
-    prompt_hash = hash_prompt(prompt)
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    output_dir = GENERATED_DIR / "prompts" / f"{timestamp}_{prompt_hash}"
-    output_dir.mkdir(parents=True, exist_ok=True)
-    run_id = output_dir.name
-
-    # Set up per-task log file
-    set_log_file(output_dir / f"{prefix}_worker.log")
-    log_to_file(f"Starting generation pipeline for: {prompt[:100]}...")
-
-    # Save prompts
-    for i, text in enumerate(outputs):
-        output_file = output_dir / f"{prefix}_{i}.txt"
-        output_file.write_text(text)
-
-    # Build metadata
-    metadata = {
-        "user_prompt": prompt,
-        "count": len(outputs),
-        "created_at": datetime.now().isoformat(),
-        "grammar_cached": was_cached,
-        "prefix": prefix,
-    }
-
-    if generate_images:
-        effective_steps = steps if steps is not None else MODEL_DEFAULTS[model]["steps"]
-        metadata["image_generation"] = {
-            "enabled": True,
-            "model": model,
-            "steps": effective_steps,
-            "width": width,
-            "height": height,
-            "quantize": quantize,
-            "images_per_prompt": images_per_prompt,
-            "max_prompts": max_prompts,
-            "seed": seed,
-            "enhance": enhance,
-            "enhance_softness": enhance_softness if enhance else None,
-        }
-
-    # Save metadata and grammar
-    metadata_file = output_dir / f"{prefix}_metadata.json"
-    metadata_file.write_text(json.dumps(metadata, indent=2))
-
-    grammar_file = output_dir / f"{prefix}_grammar.json"
-    grammar_file.write_text(grammar)
-
-    # Save raw LLM response
-    raw_response_file = None
-    if raw_response:
-        raw_file = output_dir / f"{prefix}_raw_response.txt"
-        raw_file.write_text(raw_response)
-        raw_response_file = f"{prefix}_raw_response.txt"
-
-    # Always create gallery (even without images)
-    prompts_to_render = outputs[:max_prompts] if max_prompts else outputs
-    gallery_path = create_gallery(
-        output_dir, prefix, prompts_to_render, images_per_prompt if generate_images else 0,
-        grammar=grammar, raw_response_file=raw_response_file
-    )
-
-    # Update master index
-    generate_master_index(GENERATED_DIR)
-
-    # Stage 3: Generate images (if requested)
-    if generate_images:
-        total_images = len(prompts_to_render) * images_per_prompt
-        emit_progress("generating_images", 0, total_images, "Starting image generation...")
-
-        current_seed = seed
-        generated_count = 0
-        images_to_enhance = []
-
-        for prompt_idx, prompt_text in enumerate(prompts_to_render):
-            for image_idx in range(images_per_prompt):
-                output_path = output_dir / f"{prefix}_{prompt_idx}_{image_idx}.png"
-                generated_count += 1
-
-                emit_progress(
-                    "generating_images",
-                    generated_count,
-                    total_images,
-                    f"Generating {output_path.name}..."
-                )
-
-                try:
-                    with Heartbeat(f"Generating {output_path.name}..."):
-                        generate_image(
-                            prompt=prompt_text,
-                            output_path=output_path,
-                            model=model,
-                            seed=current_seed,
-                            steps=steps,
-                            width=width,
-                            height=height,
-                            quantize=quantize,
-                            tiled_vae=tiled_vae,
-                        )
-                except Exception as e:
-                    context = f"model={model}, prompt_idx={prompt_idx}, image_idx={image_idx}"
-                    emit_progress("error_detail", 0, 0, traceback.format_exc())
-                    emit_result(False, error=f"Image generation failed ({context}): {e}")
-                    return
-
-                # Sync file to disk before notifying
-                sync_file(output_path)
-
-                # Update gallery
-                update_gallery(gallery_path, output_path, prompt_text, generated_count, total_images)
-
-                # Notify about new image
-                emit_image_ready(run_id, output_path.name)
-
-                # Enhancement
-                if enhance and not enhance_after:
-                    emit_progress(
-                        "enhancing_image",
-                        generated_count,
-                        total_images,
-                        f"Enhancing {output_path.name}..."
-                    )
-                    try:
-                        with Heartbeat(f"Enhancing {output_path.name}..."):
-                            enhance_image(
-                                image_path=output_path,
-                                output_path=output_path,
-                                softness=enhance_softness,
-                                seed=current_seed,
-                                quantize=quantize,
-                                tiled_vae=tiled_vae,
-                            )
-                    except Exception as e:
-                        context = f"prompt_idx={prompt_idx}, image_idx={image_idx}"
-                        emit_progress("error_detail", 0, 0, traceback.format_exc())
-                        emit_result(False, error=f"Enhancement failed ({context}): {e}")
-                        return
-
-                    sync_file(output_path)
-                    emit_image_ready(run_id, output_path.name)
-                elif enhance and enhance_after:
-                    images_to_enhance.append((output_path, current_seed))
-
-                if current_seed is not None:
-                    current_seed += 1
-
-        # Batch enhancement
-        if enhance and enhance_after and images_to_enhance:
-            clear_model_cache()
-            emit_progress("enhancing_images", 0, len(images_to_enhance), "Starting batch enhancement...")
-
-            for idx, (image_path, image_seed) in enumerate(images_to_enhance, 1):
-                emit_progress(
-                    "enhancing_images",
-                    idx,
-                    len(images_to_enhance),
-                    f"Enhancing {image_path.name}..."
-                )
-                try:
-                    with Heartbeat(f"Enhancing {image_path.name}..."):
-                        enhance_image(
-                            image_path=image_path,
-                            output_path=image_path,
-                            softness=enhance_softness,
-                            seed=image_seed,
-                            quantize=quantize,
-                            tiled_vae=tiled_vae,
-                        )
-                except Exception as e:
-                    emit_progress("error_detail", 0, 0, traceback.format_exc())
-                    emit_result(False, error=f"Enhancement failed ({image_path.name}): {e}")
-                    return
-
-                sync_file(image_path)
-                emit_image_ready(run_id, image_path.name)
-
-    emit_result(True, data={
-        "run_id": run_id,
-        "prompt_count": len(outputs),
-        "output_dir": str(output_dir),
-    })
+    if result.success:
+        emit_result(True, data={
+            "run_id": result.run_id,
+            "prompt_count": result.prompt_count,
+            "output_dir": str(result.output_dir),
+        })
+    else:
+        emit_result(False, error=result.error)
 
 
 def run_regenerate_prompts(params: dict):
@@ -387,93 +201,33 @@ def run_regenerate_prompts(params: dict):
     grammar = params["grammar"]
     count = params.get("count")
 
-    output_dir = GENERATED_DIR / "prompts" / run_id
+    output_dir = paths.prompts_dir / run_id
 
-    if not output_dir.exists():
-        emit_result(False, error=f"Run directory not found: {run_id}")
-        return
-
-    # Load existing metadata
+    # Load metadata for prefix
     meta_files = list(output_dir.glob("*_metadata.json"))
-    if not meta_files:
-        emit_result(False, error="No metadata file found")
-        return
+    if meta_files:
+        metadata = json.loads(meta_files[0].read_text())
+        prefix = metadata.get("prefix", "image")
+        set_log_file(output_dir / f"{prefix}_worker.log")
+        log_to_file(f"Regenerating prompts: count={count}")
 
-    metadata = json.loads(meta_files[0].read_text())
-    prefix = metadata.get("prefix", "image")
+    executor = create_executor()
 
-    # Set up per-task log file
-    set_log_file(output_dir / f"{prefix}_worker.log")
-    log_to_file(f"Regenerating prompts: count={count}")
+    with Heartbeat(f"Regenerating prompts for: {run_id}..."):
+        result = executor.regenerate_prompts(
+            run_id=run_id,
+            grammar=grammar,
+            count=count,
+        )
 
-    if count is None:
-        count = metadata.get("count", 50)
-
-    # Create backup before regenerating if there are images
-    if run_has_images(output_dir):
-        emit_progress("backup", 0, 1, "Creating backup before regenerating...")
-        try:
-            saved_dir = GENERATED_DIR / "saved"
-            backup_path = backup_run(output_dir, saved_dir, reason="pre_regenerate")
-            log_to_file(f"Backup created: {backup_path.name}")
-        except Exception as e:
-            log_to_file(f"Backup warning: {e}")
-
-    emit_progress("expanding_prompts", 0, count, f"Regenerating {count} prompts...")
-
-    try:
-        outputs = run_tracery(grammar, count=count)
-    except TraceryError as e:
-        emit_result(False, error=f"Tracery expansion failed: {e}")
-        return
-
-    # Delete old prompt files
-    for old_file in output_dir.glob(f"{prefix}_*.txt"):
-        if old_file.stem.count('_') == 1:  # Only prompts, not metadata
-            old_file.unlink()
-
-    # Save new prompts
-    for i, text in enumerate(outputs):
-        output_file = output_dir / f"{prefix}_{i}.txt"
-        output_file.write_text(text)
-
-    # Update grammar file
-    grammar_file = output_dir / f"{prefix}_grammar.json"
-    grammar_file.write_text(grammar)
-
-    # Update metadata
-    metadata["count"] = len(outputs)
-    metadata["regenerated_at"] = datetime.now().isoformat()
-    meta_files[0].write_text(json.dumps(metadata, indent=2))
-
-    # Regenerate the gallery HTML with updated prompts
-    emit_progress("updating_gallery", 0, 1, "Updating gallery...")
-
-    # Load grammar for gallery
-    grammar_content = grammar
-    raw_response_file = None
-    raw_file = output_dir / f"{prefix}_raw_response.txt"
-    if raw_file.exists():
-        raw_response_file = f"{prefix}_raw_response.txt"
-
-    # Get images_per_prompt from metadata
-    images_per_prompt = metadata.get("image_generation", {}).get("images_per_prompt", 1)
-    if not metadata.get("image_generation", {}).get("enabled", False):
-        images_per_prompt = 0
-
-    gallery_path = create_gallery(
-        output_dir, prefix, outputs, images_per_prompt,
-        grammar=grammar_content, raw_response_file=raw_response_file,
-        interactive=True, run_id=run_id
-    )
-
-    emit_progress("updating_gallery", 1, 1, "Gallery updated")
-    emit_progress("expanding_prompts", count, count, f"Generated {len(outputs)} prompts")
-    emit_result(True, data={
-        "run_id": run_id,
-        "prompt_count": len(outputs),
-        "task_type": "regenerate_prompts",
-    })
+    if result.success:
+        emit_result(True, data={
+            "run_id": result.run_id,
+            "prompt_count": result.prompt_count,
+            "task_type": "regenerate_prompts",
+        })
+    else:
+        emit_result(False, error=result.error)
 
 
 def run_generate_image(params: dict):
@@ -482,64 +236,32 @@ def run_generate_image(params: dict):
     prompt_idx = params["prompt_idx"]
     image_idx = params.get("image_idx", 0)
 
-    output_dir = GENERATED_DIR / "prompts" / run_id
+    output_dir = paths.prompts_dir / run_id
 
-    if not output_dir.exists():
-        emit_result(False, error=f"Run directory not found: {run_id}")
-        return
-
-    # Load metadata
+    # Load metadata for logging
     meta_files = list(output_dir.glob("*_metadata.json"))
-    if not meta_files:
-        emit_result(False, error="No metadata file found")
-        return
+    if meta_files:
+        metadata = json.loads(meta_files[0].read_text())
+        prefix = metadata.get("prefix", "image")
+        set_log_file(output_dir / f"{prefix}_worker.log")
+        log_to_file(f"Generating single image: prompt_idx={prompt_idx}, image_idx={image_idx}")
 
-    metadata = json.loads(meta_files[0].read_text())
-    prefix = metadata.get("prefix", "image")
-    image_settings = metadata.get("image_generation", {})
+    executor = create_executor()
 
-    # Set up per-task log file
-    set_log_file(output_dir / f"{prefix}_worker.log")
-    log_to_file(f"Generating single image: prompt_idx={prompt_idx}, image_idx={image_idx}")
+    with Heartbeat(f"Generating image {prompt_idx}_{image_idx}..."):
+        result = executor.generate_single_image(
+            run_id=run_id,
+            prompt_idx=prompt_idx,
+            image_idx=image_idx,
+        )
 
-    # Load prompt
-    prompt_file = output_dir / f"{prefix}_{prompt_idx}.txt"
-    if not prompt_file.exists():
-        emit_result(False, error=f"Prompt file not found: {prompt_file.name}")
-        return
-
-    prompt_text = prompt_file.read_text()
-    output_path = output_dir / f"{prefix}_{prompt_idx}_{image_idx}.png"
-
-    emit_progress("generating_image", 0, 1, f"Generating {output_path.name}...")
-
-    model = image_settings.get("model", "z-image-turbo")
-    try:
-        with Heartbeat(f"Generating {output_path.name}..."):
-            generate_image(
-                prompt=prompt_text,
-                output_path=output_path,
-                model=model,
-                seed=image_settings.get("seed"),
-                steps=image_settings.get("steps"),
-                width=image_settings.get("width", 864),
-                height=image_settings.get("height", 1152),
-                quantize=image_settings.get("quantize", 8),
-                tiled_vae=True,
-            )
-    except Exception as e:
-        context = f"model={model}, run_id={run_id}, prompt_idx={prompt_idx}, image_idx={image_idx}"
-        emit_progress("error_detail", 0, 0, traceback.format_exc())
-        emit_result(False, error=f"Image generation failed ({context}): {e}")
-        return
-
-    sync_file(output_path)
-    emit_image_ready(run_id, output_path.name)
-    emit_progress("generating_image", 1, 1, "Image generated")
-    emit_result(True, data={
-        "run_id": run_id,
-        "image_path": output_path.name,
-    })
+    if result.success:
+        emit_result(True, data={
+            "run_id": result.run_id,
+            "image_path": result.data.get("image_path"),
+        })
+    else:
+        emit_result(False, error=result.error)
 
 
 def run_enhance_image(params: dict):
@@ -549,55 +271,33 @@ def run_enhance_image(params: dict):
     image_idx = params.get("image_idx", 0)
     softness = params.get("softness", 0.5)
 
-    output_dir = GENERATED_DIR / "prompts" / run_id
+    output_dir = paths.prompts_dir / run_id
 
-    if not output_dir.exists():
-        emit_result(False, error=f"Run directory not found: {run_id}")
-        return
-
-    # Load metadata
+    # Load metadata for logging
     meta_files = list(output_dir.glob("*_metadata.json"))
-    if not meta_files:
-        emit_result(False, error="No metadata file found")
-        return
+    if meta_files:
+        metadata = json.loads(meta_files[0].read_text())
+        prefix = metadata.get("prefix", "image")
+        set_log_file(output_dir / f"{prefix}_worker.log")
+        log_to_file(f"Enhancing single image: prompt_idx={prompt_idx}, image_idx={image_idx}")
 
-    metadata = json.loads(meta_files[0].read_text())
-    prefix = metadata.get("prefix", "image")
-    image_settings = metadata.get("image_generation", {})
+    executor = create_executor()
 
-    # Set up per-task log file
-    set_log_file(output_dir / f"{prefix}_worker.log")
-    log_to_file(f"Enhancing single image: prompt_idx={prompt_idx}, image_idx={image_idx}")
+    with Heartbeat(f"Enhancing image {prompt_idx}_{image_idx}..."):
+        result = executor.enhance_single_image(
+            run_id=run_id,
+            prompt_idx=prompt_idx,
+            image_idx=image_idx,
+            softness=softness,
+        )
 
-    image_path = output_dir / f"{prefix}_{prompt_idx}_{image_idx}.png"
-    if not image_path.exists():
-        emit_result(False, error=f"Image not found: {image_path.name}")
-        return
-
-    emit_progress("enhancing_image", 0, 1, f"Enhancing {image_path.name}...")
-
-    try:
-        with Heartbeat(f"Enhancing {image_path.name}..."):
-            enhance_image(
-                image_path=image_path,
-                output_path=image_path,
-                softness=softness,
-                quantize=image_settings.get("quantize", 8),
-                tiled_vae=True,
-            )
-    except Exception as e:
-        context = f"run_id={run_id}, prompt_idx={prompt_idx}, image_idx={image_idx}"
-        emit_progress("error_detail", 0, 0, traceback.format_exc())
-        emit_result(False, error=f"Enhancement failed ({context}): {e}")
-        return
-
-    sync_file(image_path)
-    emit_image_ready(run_id, image_path.name)
-    emit_progress("enhancing_image", 1, 1, "Enhancement complete")
-    emit_result(True, data={
-        "run_id": run_id,
-        "image_path": image_path.name,
-    })
+    if result.success:
+        emit_result(True, data={
+            "run_id": result.run_id,
+            "image_path": result.data.get("image_path"),
+        })
+    else:
+        emit_result(False, error=result.error)
 
 
 def run_generate_all_images(params: dict):
@@ -606,94 +306,33 @@ def run_generate_all_images(params: dict):
     images_per_prompt = params.get("images_per_prompt", 1)
     resume = params.get("resume", True)
 
-    output_dir = GENERATED_DIR / "prompts" / run_id
+    output_dir = paths.prompts_dir / run_id
 
-    if not output_dir.exists():
-        emit_result(False, error=f"Run directory not found: {run_id}")
-        return
-
-    # Load metadata
+    # Load metadata for logging
     meta_files = list(output_dir.glob("*_metadata.json"))
-    if not meta_files:
-        emit_result(False, error="No metadata file found")
-        return
+    if meta_files:
+        metadata = json.loads(meta_files[0].read_text())
+        prefix = metadata.get("prefix", "image")
+        set_log_file(output_dir / f"{prefix}_worker.log")
+        log_to_file(f"Generating all images: images_per_prompt={images_per_prompt}, resume={resume}")
 
-    metadata = json.loads(meta_files[0].read_text())
-    prefix = metadata.get("prefix", "image")
-    image_settings = metadata.get("image_generation", {})
+    executor = create_executor()
 
-    # Set up per-task log file
-    set_log_file(output_dir / f"{prefix}_worker.log")
-    log_to_file(f"Generating all images: images_per_prompt={images_per_prompt}, resume={resume}")
+    with Heartbeat(f"Generating all images for: {run_id}..."):
+        result = executor.generate_all_images(
+            run_id=run_id,
+            images_per_prompt=images_per_prompt,
+            resume=resume,
+        )
 
-    # Load prompts
-    prompt_files = sorted(output_dir.glob(f"{prefix}_*.txt"))
-    prompt_files = [f for f in prompt_files if f.stem.count('_') == 1]
-
-    if not prompt_files:
-        emit_result(False, error="No prompt files found")
-        return
-
-    prompts = [f.read_text() for f in prompt_files]
-    total_images = len(prompts) * images_per_prompt
-
-    emit_progress("generating_images", 0, total_images, "Starting image generation...")
-
-    current_seed = image_settings.get("seed")
-    generated_count = 0
-    skipped_count = 0
-
-    for prompt_idx, prompt_text in enumerate(prompts):
-        for image_idx in range(images_per_prompt):
-            output_path = output_dir / f"{prefix}_{prompt_idx}_{image_idx}.png"
-
-            if resume and output_path.exists():
-                skipped_count += 1
-                generated_count += 1
-                if current_seed is not None:
-                    current_seed += 1
-                continue
-
-            generated_count += 1
-            emit_progress(
-                "generating_images",
-                generated_count,
-                total_images,
-                f"Generating {output_path.name}..."
-            )
-
-            model = image_settings.get("model", "z-image-turbo")
-            try:
-                with Heartbeat(f"Generating {output_path.name}..."):
-                    generate_image(
-                        prompt=prompt_text,
-                        output_path=output_path,
-                        model=model,
-                        seed=current_seed,
-                        steps=image_settings.get("steps"),
-                        width=image_settings.get("width", 864),
-                        height=image_settings.get("height", 1152),
-                        quantize=image_settings.get("quantize", 8),
-                        tiled_vae=True,
-                    )
-            except Exception as e:
-                context = f"model={model}, run_id={run_id}, prompt_idx={prompt_idx}, image_idx={image_idx}"
-                emit_progress("error_detail", 0, 0, traceback.format_exc())
-                emit_result(False, error=f"Image generation failed ({context}): {e}")
-                return
-
-            sync_file(output_path)
-            emit_image_ready(run_id, output_path.name)
-
-            if current_seed is not None:
-                current_seed += 1
-
-    actual_generated = generated_count - skipped_count
-    emit_result(True, data={
-        "run_id": run_id,
-        "generated": actual_generated,
-        "skipped": skipped_count,
-    })
+    if result.success:
+        emit_result(True, data={
+            "run_id": result.run_id,
+            "generated": result.image_count,
+            "skipped": result.skipped_count,
+        })
+    else:
+        emit_result(False, error=result.error)
 
 
 def run_enhance_all_images(params: dict):
@@ -701,76 +340,31 @@ def run_enhance_all_images(params: dict):
     run_id = params["run_id"]
     softness = params.get("softness", 0.5)
 
-    output_dir = GENERATED_DIR / "prompts" / run_id
+    output_dir = paths.prompts_dir / run_id
 
-    if not output_dir.exists():
-        emit_result(False, error=f"Run directory not found: {run_id}")
-        return
-
-    # Load metadata
+    # Load metadata for logging
     meta_files = list(output_dir.glob("*_metadata.json"))
-    if not meta_files:
-        emit_result(False, error="No metadata file found")
-        return
+    if meta_files:
+        metadata = json.loads(meta_files[0].read_text())
+        prefix = metadata.get("prefix", "image")
+        set_log_file(output_dir / f"{prefix}_worker.log")
+        log_to_file(f"Enhancing all images: softness={softness}")
 
-    metadata = json.loads(meta_files[0].read_text())
-    prefix = metadata.get("prefix", "image")
-    image_settings = metadata.get("image_generation", {})
+    executor = create_executor()
 
-    # Set up per-task log file
-    set_log_file(output_dir / f"{prefix}_worker.log")
-    log_to_file(f"Enhancing all images: softness={softness}")
-
-    # Find all images
-    images = sorted(output_dir.glob(f"{prefix}_*_*.png"))
-    if not images:
-        emit_result(False, error="No images found")
-        return
-
-    # Create backup before enhancement if not already done
-    if not metadata.get("_enhancement_backup_created"):
-        emit_progress("backup", 0, 1, "Creating backup before enhancement...")
-        try:
-            saved_dir = GENERATED_DIR / "saved"
-            backup_path = backup_run(output_dir, saved_dir, reason="pre_enhance")
-            log_to_file(f"Backup created: {backup_path.name}")
-            # Mark that we created a backup
-            metadata["_enhancement_backup_created"] = datetime.now().isoformat()
-            meta_files[0].write_text(json.dumps(metadata, indent=2))
-        except Exception as e:
-            log_to_file(f"Backup warning: {e}")
-
-    emit_progress("enhancing_images", 0, len(images), "Starting enhancement...")
-
-    for idx, image_path in enumerate(images, 1):
-        emit_progress(
-            "enhancing_images",
-            idx,
-            len(images),
-            f"Enhancing {image_path.name}..."
+    with Heartbeat(f"Enhancing all images for: {run_id}..."):
+        result = executor.enhance_all_images(
+            run_id=run_id,
+            softness=softness,
         )
 
-        try:
-            with Heartbeat(f"Enhancing {image_path.name}..."):
-                enhance_image(
-                    image_path=image_path,
-                    output_path=image_path,
-                    softness=softness,
-                    quantize=image_settings.get("quantize", 8),
-                    tiled_vae=True,
-                )
-        except Exception as e:
-            emit_progress("error_detail", 0, 0, traceback.format_exc())
-            emit_result(False, error=f"Enhancement failed ({image_path.name}): {e}")
-            return
-
-        sync_file(image_path)
-        emit_image_ready(run_id, image_path.name)
-
-    emit_result(True, data={
-        "run_id": run_id,
-        "enhanced": len(images),
-    })
+    if result.success:
+        emit_result(True, data={
+            "run_id": result.run_id,
+            "enhanced": result.image_count,
+        })
+    else:
+        emit_result(False, error=result.error)
 
 
 TASK_HANDLERS = {
@@ -810,6 +404,7 @@ def main():
     try:
         handler(params)
     except Exception as e:
+        import traceback
         log_to_file(f"Unhandled exception: {traceback.format_exc()}")
         emit_result(False, error=str(e))
         sys.exit(1)

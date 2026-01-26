@@ -120,6 +120,7 @@ python src/cli.py --clean
 6. **Backup & Archive System** (`src/utils.py`)
    - Auto-backup before destructive operations (regenerate prompts, enhance-all)
    - Manual archive via "Save to Archive" button in galleries
+   - Archives only contain PNG images and metadata (not prompts, logs, or HTML)
    - Backups stored in `generated/saved/` with reason metadata
    - Archives are read-only and shown separately in the master index
 
@@ -148,20 +149,27 @@ FastAPI-based web interface for the generation pipeline:
 
 ### Key Files
 
-- `src/cli.py` - Click-based CLI, orchestrates the pipeline
-- `src/config.py` - Centralized configuration (LM Studio URL, defaults, timeouts)
-- `src/utils.py` - Shared utility functions (metadata, images, backups)
-- `src/server/` - Web UI server package (FastAPI + SSE)
-- `src/image_enhancer.py` - SeedVR2 image enhancement module
-- `src/gallery.py` - HTML gallery generation with live updates
-- `src/gallery_index.py` - Master index generation linking all galleries
-- `templates/system_prompt_z-image-turbo.txt` - Camera-first prompt structure for z-image-turbo
-- `templates/system_prompt_flux2-klein.txt` - Prose-based prompt structure for flux2-klein models
-- `generated/index.html` - Master index linking all run galleries
-- `generated/grammars/` - Cached grammars (by prompt hash)
-- `generated/prompts/` - Active run directories with prompts, images, and metadata
-- `generated/saved/` - Archived/backed-up runs (auto or manual)
-- `generated/queue.json` - Task queue persistence for web UI
+**Core modules:**
+- `src/pipeline.py` - PipelineExecutor class with unified interface for all operations
+- `src/cli.py` - Click-based CLI, delegates to PipelineExecutor
+- `src/config.py` - Centralized configuration and paths (`paths.generated_dir`, etc.)
+
+**Pipeline stages:**
+- `src/grammar_generator.py` - LLM grammar generation with caching
+- `src/tracery_runner.py` - Tracery expansion engine
+- `src/image_generator.py` - mflux image generation wrapper
+- `src/image_enhancer.py` - SeedVR2 enhancement module
+
+**Web UI:**
+- `src/server/app.py` - FastAPI application setup
+- `src/server/routes.py` - API endpoints
+- `src/server/worker_subprocess.py` - Background task execution
+- `src/gallery.py` - HTML gallery generation
+- `src/gallery_index.py` - Master index generation
+
+**Configuration:**
+- `templates/system_prompt_*.txt` - Model-specific system prompts
+- `generated/queue.json` - Task queue persistence
 
 ### Output Naming Convention
 

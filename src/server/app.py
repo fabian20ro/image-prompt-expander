@@ -1,6 +1,7 @@
 """FastAPI application for the web UI."""
 
 import asyncio
+import sys
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -8,15 +9,12 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import RedirectResponse
 
+# Add parent dir to path for config import
+sys.path.insert(0, str(Path(__file__).parent.parent))
+from config import paths
+
 from .queue_manager import QueueManager
 from .worker import Worker
-
-
-# Paths
-SRC_DIR = Path(__file__).parent.parent
-ROOT_DIR = SRC_DIR.parent
-GENERATED_DIR = ROOT_DIR / "generated"
-QUEUE_PATH = GENERATED_DIR / "queue.json"
 
 
 # Global instances
@@ -55,18 +53,18 @@ async def lifespan(app: FastAPI):
     global queue_manager, worker, shutdown_event
 
     # Ensure generated directory exists
-    GENERATED_DIR.mkdir(parents=True, exist_ok=True)
-    (GENERATED_DIR / "prompts").mkdir(exist_ok=True)
-    (GENERATED_DIR / "grammars").mkdir(exist_ok=True)
+    paths.generated_dir.mkdir(parents=True, exist_ok=True)
+    paths.prompts_dir.mkdir(exist_ok=True)
+    paths.grammars_dir.mkdir(exist_ok=True)
 
     # Initialize shutdown event
     shutdown_event = asyncio.Event()
 
     # Initialize queue manager
-    queue_manager = QueueManager(QUEUE_PATH)
+    queue_manager = QueueManager(paths.queue_path)
 
     # Initialize and start worker
-    worker = Worker(queue_manager, GENERATED_DIR)
+    worker = Worker(queue_manager, paths.generated_dir)
     worker_task = asyncio.create_task(worker.run())
 
     yield
@@ -101,10 +99,10 @@ def create_app() -> FastAPI:
     # This must be done after routes to not shadow API endpoints
     @app.on_event("startup")
     async def mount_static():
-        if GENERATED_DIR.exists():
+        if paths.generated_dir.exists():
             app.mount(
                 "/generated",
-                StaticFiles(directory=str(GENERATED_DIR)),
+                StaticFiles(directory=str(paths.generated_dir)),
                 name="generated",
             )
 

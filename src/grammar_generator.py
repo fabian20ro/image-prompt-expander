@@ -8,15 +8,15 @@ from pathlib import Path
 
 from openai import OpenAI
 
-from config import settings
+from config import settings, paths
 
 
 # Default LM Studio endpoint (from centralized config)
 LM_STUDIO_BASE_URL = settings.lm_studio.base_url
 LM_STUDIO_API_KEY = settings.lm_studio.api_key
 
-# Cache directory for generated grammars
-CACHE_DIR = Path(__file__).parent.parent / "generated" / "grammars"
+# Cache directory for generated grammars (from centralized paths)
+CACHE_DIR = paths.grammars_dir
 
 
 def get_system_prompt(model: str | None = None) -> str:
@@ -31,7 +31,7 @@ def get_system_prompt(model: str | None = None) -> str:
     Returns:
         The system prompt content
     """
-    templates_dir = Path(__file__).parent.parent / "templates"
+    templates_dir = paths.templates_dir
 
     # Determine the model-specific prompt filename
     if model:

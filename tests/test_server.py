@@ -573,6 +573,27 @@ class TestConfig:
         with pytest.raises(Exception):  # FrozenInstanceError
             config.base_url = "http://changed"
 
+    def test_path_config(self):
+        """Test that path configuration provides correct paths."""
+        from config import paths
+
+        # Verify paths are Path objects
+        assert isinstance(paths.root_dir, Path)
+        assert isinstance(paths.generated_dir, Path)
+        assert isinstance(paths.grammars_dir, Path)
+        assert isinstance(paths.prompts_dir, Path)
+        assert isinstance(paths.saved_dir, Path)
+        assert isinstance(paths.queue_path, Path)
+        assert isinstance(paths.templates_dir, Path)
+
+        # Verify path relationships
+        assert paths.generated_dir == paths.root_dir / "generated"
+        assert paths.grammars_dir == paths.generated_dir / "grammars"
+        assert paths.prompts_dir == paths.generated_dir / "prompts"
+        assert paths.saved_dir == paths.generated_dir / "saved"
+        assert paths.queue_path == paths.generated_dir / "queue.json"
+        assert paths.templates_dir == paths.root_dir / "templates"
+
 
 class TestUtils:
     """Tests for utility functions."""
@@ -674,7 +695,8 @@ class TestUtils:
             backup_path = backup_run(run_dir, saved_dir, reason="pre_regenerate")
 
             assert backup_path.exists()
-            assert (backup_path / "test_0.txt").exists()
+            # Only PNG images and metadata are backed up (not prompt .txt files)
+            assert not (backup_path / "test_0.txt").exists()
             assert (backup_path / "test_0_0.png").exists()
 
             # Check backup metadata

@@ -90,7 +90,11 @@ def get_prompts_from_run(run_dir: Path, prefix: str | None = None) -> list[str]:
 
 
 def backup_run(run_dir: Path, saved_dir: Path, reason: str = "manual_archive") -> Path:
-    """Create a backup of a run directory.
+    """Create a backup of a run directory (images and metadata only).
+
+    Only copies PNG images and the metadata file to minimize archive size.
+    Prompts, logs, grammar, and gallery HTML are not included since they
+    can be regenerated and archives are meant for preserving image results.
 
     Args:
         run_dir: Path to the run directory to backup
@@ -108,19 +112,28 @@ def backup_run(run_dir: Path, saved_dir: Path, reason: str = "manual_archive") -
     backup_dir = saved_dir / backup_name
 
     saved_dir.mkdir(parents=True, exist_ok=True)
-    shutil.copytree(run_dir, backup_dir)
+    backup_dir.mkdir(parents=True, exist_ok=True)
 
-    # Mark as backup in metadata
-    meta_file = find_metadata_file(backup_dir)
+    prefix = get_prefix_from_metadata(run_dir)
+
+    # Copy only PNG images (pattern: {prefix}_{prompt_idx}_{image_idx}.png)
+    for png_file in run_dir.glob(f"{prefix}_*_*.png"):
+        shutil.copy2(png_file, backup_dir / png_file.name)
+
+    # Copy metadata file (required for archive to be browsable in index)
+    meta_file = find_metadata_file(run_dir)
     if meta_file:
-        metadata = json.loads(meta_file.read_text())
+        dest_meta = backup_dir / meta_file.name
+        shutil.copy2(meta_file, dest_meta)
+        # Update with backup info
+        metadata = json.loads(dest_meta.read_text())
         metadata["backup_info"] = {
             "is_backup": True,
             "source_run_id": run_dir.name,
             "backup_created_at": datetime.now().isoformat(),
             "backup_reason": reason,
         }
-        meta_file.write_text(json.dumps(metadata, indent=2))
+        dest_meta.write_text(json.dumps(metadata, indent=2))
 
     return backup_dir
 

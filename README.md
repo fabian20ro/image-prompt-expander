@@ -69,7 +69,7 @@ Gallery pages include:
 - **Kill/Clear**: Stop current task or clear pending queue
 - **Back to Index**: Navigate back to the master index
 
-**Auto-Backup**: The system automatically creates backups before destructive operations (regenerating prompts when images exist, enhancing all images). Backups are stored in `generated/saved/` and appear in a separate "Saved Archives" section on the index.
+**Auto-Backup**: The system automatically creates backups before destructive operations (regenerating prompts when images exist, enhancing all images). Backups contain only PNG images and metadata (not prompts, logs, or HTML), and are stored in `generated/saved/`. Archives appear in a separate "Saved Archives" section on the index.
 
 ### CLI: Basic (Text Prompts Only)
 
@@ -234,7 +234,8 @@ generated/
 │   └── dragon_metadata.json  # Generation settings
 └── saved/                    # Archived/backed-up runs
     └── {original_run}_{backup_timestamp}/
-        └── (same structure as prompts/)
+        ├── *.png                # PNG images only
+        └── *_metadata.json      # Metadata with backup info
 ```
 
 The master index at `generated/index.html` provides a unified entry point to browse all generation runs with thumbnails and metadata. Archives appear in a separate "Saved Archives" section. Grammars are cached and reused for identical prompts.
