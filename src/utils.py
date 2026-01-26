@@ -1,6 +1,8 @@
 """Shared utility functions for the image-prompt-expander application."""
 
 import json
+import shutil
+from datetime import datetime
 from pathlib import Path
 
 
@@ -85,3 +87,54 @@ def get_prompts_from_run(run_dir: Path, prefix: str | None = None) -> list[str]:
     prompt_files = [f for f in prompt_files if f.stem.count('_') == 1]
 
     return [f.read_text() for f in prompt_files]
+
+
+def backup_run(run_dir: Path, saved_dir: Path, reason: str = "manual_archive") -> Path:
+    """Create a backup of a run directory.
+
+    Args:
+        run_dir: Path to the run directory to backup
+        saved_dir: Path to the saved/ directory
+        reason: "pre_regenerate", "pre_enhance", or "manual_archive"
+
+    Returns:
+        Path to the created backup directory
+    """
+    if not run_dir.exists():
+        raise ValueError(f"Run directory not found: {run_dir}")
+
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    backup_name = f"{run_dir.name}_{timestamp}"
+    backup_dir = saved_dir / backup_name
+
+    saved_dir.mkdir(parents=True, exist_ok=True)
+    shutil.copytree(run_dir, backup_dir)
+
+    # Mark as backup in metadata
+    meta_file = find_metadata_file(backup_dir)
+    if meta_file:
+        metadata = json.loads(meta_file.read_text())
+        metadata["backup_info"] = {
+            "is_backup": True,
+            "source_run_id": run_dir.name,
+            "backup_created_at": datetime.now().isoformat(),
+            "backup_reason": reason,
+        }
+        meta_file.write_text(json.dumps(metadata, indent=2))
+
+    return backup_dir
+
+
+def run_has_images(run_dir: Path) -> bool:
+    """Check if a run directory contains any generated images."""
+    prefix = get_prefix_from_metadata(run_dir)
+    return len(list(run_dir.glob(f"{prefix}_*_*.png"))) > 0
+
+
+def is_backup_run(run_dir: Path) -> bool:
+    """Check if a run directory is a backup."""
+    try:
+        metadata = load_run_metadata(run_dir)
+        return metadata.get("backup_info", {}).get("is_backup", False)
+    except (ValueError, json.JSONDecodeError):
+        return False

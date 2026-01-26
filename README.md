@@ -65,7 +65,11 @@ Gallery pages include:
 - **Edit Grammar**: Modify Tracery grammar and regenerate prompts
 - **Generate Images**: Queue individual or all images for generation
 - **Enhance Images**: Apply SeedVR2 enhancement to individual or all images
+- **Save to Archive**: Manually backup the current gallery state
 - **Kill/Clear**: Stop current task or clear pending queue
+- **Back to Index**: Navigate back to the master index
+
+**Auto-Backup**: The system automatically creates backups before destructive operations (regenerating prompts when images exist, enhancing all images). Backups are stored in `generated/saved/` and appear in a separate "Saved Archives" section on the index.
 
 ### CLI: Basic (Text Prompts Only)
 
@@ -216,20 +220,24 @@ python src/cli.py --clean
 ```
 generated/
 ├── index.html                # Master index linking all galleries
+├── queue.json                # Task queue persistence for web UI
 ├── grammars/                 # Cached grammars (by prompt hash)
-└── prompts/{timestamp}_{hash}/
-    ├── dragon_0.txt          # First prompt
-    ├── dragon_0_0.png        # First image (enhanced in-place if --enhance)
-    ├── dragon_0_1.png        # Second image (if --images-per-prompt 2)
-    ├── dragon_1.txt          # Second prompt
-    ├── dragon_1_0.png
-    ├── ...
-    ├── dragon_gallery.html   # Gallery generated dynamically via --serve
-    ├── dragon_grammar.json   # Tracery grammar used
-    └── dragon_metadata.json  # Generation settings
+├── prompts/{timestamp}_{hash}/    # Active generation runs
+│   ├── dragon_0.txt          # First prompt
+│   ├── dragon_0_0.png        # First image (enhanced in-place if --enhance)
+│   ├── dragon_0_1.png        # Second image (if --images-per-prompt 2)
+│   ├── dragon_1.txt          # Second prompt
+│   ├── dragon_1_0.png
+│   ├── ...
+│   ├── dragon_gallery.html   # Gallery generated dynamically via --serve
+│   ├── dragon_grammar.json   # Tracery grammar used
+│   └── dragon_metadata.json  # Generation settings
+└── saved/                    # Archived/backed-up runs
+    └── {original_run}_{backup_timestamp}/
+        └── (same structure as prompts/)
 ```
 
-The master index at `generated/index.html` provides a unified entry point to browse all generation runs with thumbnails and metadata. Grammars are cached and reused for identical prompts.
+The master index at `generated/index.html` provides a unified entry point to browse all generation runs with thumbnails and metadata. Archives appear in a separate "Saved Archives" section. Grammars are cached and reused for identical prompts.
 
 ## How It Works
 

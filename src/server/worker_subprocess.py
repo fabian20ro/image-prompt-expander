@@ -29,6 +29,7 @@ from image_generator import generate_image, clear_model_cache, MODEL_DEFAULTS
 from image_enhancer import enhance_image
 from gallery import create_gallery, update_gallery
 from gallery_index import generate_master_index
+from utils import backup_run, run_has_images
 
 GENERATED_DIR = ROOT_DIR / "generated"
 
@@ -408,6 +409,16 @@ def run_regenerate_prompts(params: dict):
     if count is None:
         count = metadata.get("count", 50)
 
+    # Create backup before regenerating if there are images
+    if run_has_images(output_dir):
+        emit_progress("backup", 0, 1, "Creating backup before regenerating...")
+        try:
+            saved_dir = GENERATED_DIR / "saved"
+            backup_path = backup_run(output_dir, saved_dir, reason="pre_regenerate")
+            log_to_file(f"Backup created: {backup_path.name}")
+        except Exception as e:
+            log_to_file(f"Backup warning: {e}")
+
     emit_progress("expanding_prompts", 0, count, f"Regenerating {count} prompts...")
 
     try:
@@ -715,6 +726,19 @@ def run_enhance_all_images(params: dict):
     if not images:
         emit_result(False, error="No images found")
         return
+
+    # Create backup before enhancement if not already done
+    if not metadata.get("_enhancement_backup_created"):
+        emit_progress("backup", 0, 1, "Creating backup before enhancement...")
+        try:
+            saved_dir = GENERATED_DIR / "saved"
+            backup_path = backup_run(output_dir, saved_dir, reason="pre_enhance")
+            log_to_file(f"Backup created: {backup_path.name}")
+            # Mark that we created a backup
+            metadata["_enhancement_backup_created"] = datetime.now().isoformat()
+            meta_files[0].write_text(json.dumps(metadata, indent=2))
+        except Exception as e:
+            log_to_file(f"Backup warning: {e}")
 
     emit_progress("enhancing_images", 0, len(images), "Starting enhancement...")
 

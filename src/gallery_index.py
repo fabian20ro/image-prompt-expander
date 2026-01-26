@@ -19,10 +19,11 @@ def generate_master_index(generated_dir: Path, interactive: bool = False) -> Pat
         Path to the created index.html file
     """
     prompts_dir = generated_dir / "prompts"
+    saved_dir = generated_dir / "saved"
     index_path = generated_dir / "index.html"
 
-    # Scan for directories matching YYYYMMDD_HHMMSS_* pattern
-    runs = []
+    # Scan active runs
+    active_runs = []
     if prompts_dir.exists():
         for run_dir in prompts_dir.iterdir():
             if not run_dir.is_dir():
@@ -32,26 +33,39 @@ def generate_master_index(generated_dir: Path, interactive: bool = False) -> Pat
             if not re.match(r'^\d{8}_\d{6}_', run_dir.name):
                 continue
 
-            run_info = _extract_run_info(run_dir)
+            run_info = _extract_run_info(run_dir, is_archive=False)
             if run_info:
-                runs.append(run_info)
+                active_runs.append(run_info)
+
+    # Scan archived runs
+    archived_runs = []
+    if saved_dir.exists():
+        for archive_dir in saved_dir.iterdir():
+            if not archive_dir.is_dir():
+                continue
+
+            run_info = _extract_run_info(archive_dir, is_archive=True)
+            if run_info:
+                archived_runs.append(run_info)
 
     # Sort by timestamp (newest first)
-    runs.sort(key=lambda x: x["timestamp"], reverse=True)
+    active_runs.sort(key=lambda x: x["timestamp"], reverse=True)
+    archived_runs.sort(key=lambda x: x["timestamp"], reverse=True)
 
     # Generate index HTML
-    index_html = _build_index_html(runs, interactive=interactive)
+    index_html = _build_index_html(active_runs, archived_runs, interactive=interactive)
     index_path.write_text(index_html)
 
     return index_path
 
 
-def _extract_run_info(run_dir: Path) -> dict | None:
+def _extract_run_info(run_dir: Path, is_archive: bool = False) -> dict | None:
     """
     Extract information about a run directory.
 
     Args:
         run_dir: Path to a run directory
+        is_archive: Whether this is an archived run
 
     Returns:
         Dictionary with run info, or None if not a valid run
@@ -102,18 +116,30 @@ def _extract_run_info(run_dir: Path) -> dict | None:
     # Get prompt count
     prompt_count = metadata.get("count", 0)
 
+    # Build paths based on whether this is an archive
+    if is_archive:
+        gallery_path = f"saved/{run_dir.name}/{prefix}_gallery.html"
+    else:
+        gallery_path = f"prompts/{run_dir.name}/{prefix}_gallery.html"
+
+    # Get backup info if available
+    backup_info = metadata.get("backup_info", {})
+    backup_reason = backup_info.get("backup_reason", "")
+
     return {
         "dir_name": run_dir.name,
         "timestamp": timestamp,
         "display_time": display_time,
         "user_prompt": metadata.get("user_prompt", "Unknown prompt"),
         "prefix": prefix,
-        "gallery_path": f"prompts/{run_dir.name}/{prefix}_gallery.html",
+        "gallery_path": gallery_path,
         "thumbnail": str(thumbnail) if thumbnail else None,
         "thumbnail_file": thumbnail_file,
         "image_count": image_count,
         "prompt_count": prompt_count,
         "model": metadata.get("image_generation", {}).get("model", "N/A"),
+        "is_archive": is_archive,
+        "backup_reason": backup_reason,
     }
 
 
@@ -641,30 +667,46 @@ def _build_interactive_styles() -> str:
 '''
 
 
-def _build_index_html(runs: list[dict], interactive: bool = False) -> str:
-    """Build the master index HTML document."""
-    cards_html = []
+def _build_card_html(run: dict, interactive: bool, is_archive: bool = False) -> str:
+    """Build HTML for a single gallery card."""
+    escaped_prompt = html.escape(run["user_prompt"])
+    truncated_prompt = (escaped_prompt[:100] + "...") if len(escaped_prompt) > 100 else escaped_prompt
 
-    for run in runs:
-        escaped_prompt = html.escape(run["user_prompt"])
-        truncated_prompt = (escaped_prompt[:100] + "...") if len(escaped_prompt) > 100 else escaped_prompt
-
-        if run["thumbnail_file"] and interactive:
-            # In interactive mode, use the gallery route for images
-            thumbnail_src = f'/gallery/{run["dir_name"]}/{run["thumbnail_file"]}'
-            thumbnail_html = f'<img src="{thumbnail_src}" loading="lazy">'
-        elif run["thumbnail"]:
-            # In static mode, use relative path
-            thumbnail_html = f'<img src="{run["thumbnail"]}" loading="lazy">'
+    if run["thumbnail_file"] and interactive:
+        # In interactive mode, use the gallery route for images
+        if is_archive:
+            thumbnail_src = f'/archive/{run["dir_name"]}/{run["thumbnail_file"]}'
         else:
-            thumbnail_html = '<div class="no-thumbnail">No images</div>'
+            thumbnail_src = f'/gallery/{run["dir_name"]}/{run["thumbnail_file"]}'
+        thumbnail_html = f'<img src="{thumbnail_src}" loading="lazy">'
+    elif run["thumbnail"]:
+        # In static mode, use relative path
+        thumbnail_html = f'<img src="{run["thumbnail"]}" loading="lazy">'
+    else:
+        thumbnail_html = '<div class="no-thumbnail">No images</div>'
 
-        # Use gallery route in interactive mode, relative path in static mode
-        gallery_href = f'/gallery/{run["dir_name"]}' if interactive else run["gallery_path"]
+    # Use gallery route in interactive mode, relative path in static mode
+    if interactive:
+        gallery_href = f'/archive/{run["dir_name"]}' if is_archive else f'/gallery/{run["dir_name"]}'
+    else:
+        gallery_href = run["gallery_path"]
 
-        card = f'''    <a href="{gallery_href}" class="card">
+    card_class = "card archive" if is_archive else "card"
+
+    # Add archive badge if this is an archive
+    badge_html = ""
+    if is_archive:
+        reason = run.get("backup_reason", "archived")
+        reason_label = {
+            "pre_regenerate": "Pre-Regen",
+            "pre_enhance": "Pre-Enhance",
+            "manual_archive": "Saved",
+        }.get(reason, "Backup")
+        badge_html = f'<span class="archive-badge">{reason_label}</span>'
+
+    return f'''    <a href="{gallery_href}" class="{card_class}">
       <div class="thumbnail">
-        {thumbnail_html}
+        {thumbnail_html}{badge_html}
       </div>
       <div class="info">
         <div class="prompt" title="{escaped_prompt}">{truncated_prompt}</div>
@@ -675,10 +717,35 @@ def _build_index_html(runs: list[dict], interactive: bool = False) -> str:
         </div>
       </div>
     </a>'''
-        cards_html.append(card)
 
-    cards_joined = "\n".join(cards_html) if cards_html else '<p class="empty">No galleries found. Generate some images first!</p>'
-    run_count = len(runs)
+
+def _build_index_html(active_runs: list[dict], archived_runs: list[dict] = None, interactive: bool = False) -> str:
+    """Build the master index HTML document."""
+    if archived_runs is None:
+        archived_runs = []
+
+    # Build active run cards
+    active_cards_html = []
+    for run in active_runs:
+        card = _build_card_html(run, interactive, is_archive=False)
+        active_cards_html.append(card)
+
+    active_cards_joined = "\n".join(active_cards_html) if active_cards_html else '<p class="empty">No galleries found. Generate some images first!</p>'
+    run_count = len(active_runs)
+
+    # Build archived run cards
+    archived_section = ""
+    if archived_runs:
+        archived_cards_html = []
+        for run in archived_runs:
+            card = _build_card_html(run, interactive, is_archive=True)
+            archived_cards_html.append(card)
+        archived_cards_joined = "\n".join(archived_cards_html)
+        archived_section = f'''
+    <h2 class="section-title">Saved Archives ({len(archived_runs)})</h2>
+    <div class="grid">
+{archived_cards_joined}
+    </div>'''
 
     # Build interactive sections
     form_html = _build_generation_form() if interactive else ""
@@ -697,12 +764,16 @@ def _build_index_html(runs: list[dict], interactive: bool = False) -> str:
     .container {{ max-width: 1400px; margin: 0 auto; }}
     h1 {{ margin-bottom: 8px; }}
     .subtitle {{ color: #888; margin-bottom: 24px; }}
+    .section-title {{ margin: 32px 0 16px; font-size: 16px; color: #888; }}
     .grid {{ display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 20px; }}
     .card {{ background: #2a2a2a; border-radius: 12px; overflow: hidden; text-decoration: none; color: inherit; transition: transform 0.2s, box-shadow 0.2s; display: block; }}
     .card:hover {{ transform: translateY(-4px); box-shadow: 0 8px 24px rgba(0,0,0,0.4); }}
-    .thumbnail {{ aspect-ratio: 4/3; background: #333; overflow: hidden; }}
+    .card.archive {{ border: 2px solid #665500; }}
+    .card.archive:hover {{ border-color: #997700; }}
+    .thumbnail {{ aspect-ratio: 4/3; background: #333; overflow: hidden; position: relative; }}
     .thumbnail img {{ width: 100%; height: 100%; object-fit: cover; }}
     .no-thumbnail {{ width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; color: #666; }}
+    .archive-badge {{ position: absolute; top: 8px; right: 8px; background: #665500; color: #fff; font-size: 10px; padding: 2px 8px; border-radius: 4px; }}
     .info {{ padding: 16px; }}
     .prompt {{ font-size: 14px; color: #ddd; margin-bottom: 12px; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }}
     .meta {{ display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: #888; }}
@@ -719,8 +790,8 @@ def _build_index_html(runs: list[dict], interactive: bool = False) -> str:
     <p class="subtitle">{run_count} generation runs</p>
 {form_html}{log_panel_html}
     <div class="grid">
-{cards_joined}
-    </div>
+{active_cards_joined}
+    </div>{archived_section}
   </div>
 {queue_html}
 {js_html}

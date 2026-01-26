@@ -221,6 +221,14 @@ def generate_gallery_for_directory(prompts_dir: Path, interactive: bool = False)
     return gallery_path
 
 
+def _build_nav_header() -> str:
+    """Build navigation header with back link."""
+    return '''
+  <nav class="nav-header">
+    <a href="/index" class="nav-link">&larr; Back to Index</a>
+  </nav>'''
+
+
 def _build_interactive_grammar_section(grammar: str, run_id: str) -> str:
     """Build the interactive grammar section with edit capabilities."""
     escaped_grammar = html.escape(grammar)
@@ -244,6 +252,7 @@ def _build_interactive_action_bar(run_id: str) -> str:
   <div class="action-bar">
     <button id="btn-generate-all" class="btn-primary">Generate All Images</button>
     <button id="btn-enhance-all" class="btn-secondary">Enhance All</button>
+    <button id="btn-archive" class="btn-secondary">Save to Archive</button>
     <div class="action-spacer"></div>
     <button id="btn-clear-queue" class="btn-secondary">Clear Queue</button>
     <button id="btn-kill" class="btn-danger">Kill Current</button>
@@ -586,6 +595,17 @@ def _build_interactive_js(run_id: str) -> str:
     }});
   }}
 
+  const btnArchive = document.getElementById('btn-archive');
+  if (btnArchive) {{
+    btnArchive.addEventListener('click', async () => {{
+      if (!confirm('Save this gallery to archive?')) return;
+      try {{
+        const resp = await apiPost(`/api/gallery/${{RUN_ID}}/archive`);
+        alert(resp.message || 'Archived successfully');
+      }} catch (err) {{ /* error shown by apiPost */ }}
+    }});
+  }}
+
   // Global functions for per-image buttons
   window.generateImage = async function(promptIdx, imageIdx) {{
     await apiPost(`/api/gallery/${{RUN_ID}}/image/${{promptIdx}}/generate`, {{
@@ -614,6 +634,11 @@ def _build_interactive_js(run_id: str) -> str:
 def _build_interactive_styles() -> str:
     """Build additional CSS for interactive gallery."""
     return '''
+    /* Navigation header */
+    .nav-header { margin-bottom: 16px; }
+    .nav-link { color: #6af; text-decoration: none; font-size: 14px; }
+    .nav-link:hover { text-decoration: underline; }
+
     /* Interactive grammar section */
     .grammar-section-interactive { background: #2a2a2a; border-radius: 8px; margin-bottom: 20px; padding: 16px; }
     .grammar-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
@@ -704,6 +729,7 @@ def _build_gallery_html(
   </details>'''
 
     # Build interactive sections
+    nav_header = _build_nav_header() if interactive else ""
     action_bar = _build_interactive_action_bar(run_id) if interactive and run_id else ""
     log_panel = _build_log_panel() if interactive else ""
     progress_bar = _build_interactive_progress_bar() if interactive else ""
@@ -737,7 +763,7 @@ def _build_gallery_html(
 {extra_styles}
   </style>
 </head>
-<body>
+<body>{nav_header}
   <h1>Gallery: {prefix}</h1>{header_section}{grammar_section}{action_bar}{log_panel}
   <p class="status">Generated: {completed} / {total} images</p>
   <div class="grid">

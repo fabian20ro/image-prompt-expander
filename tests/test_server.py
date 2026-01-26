@@ -385,6 +385,36 @@ class TestGalleryInteractive:
             assert "generateImage" in content
             assert "enhanceImage" in content
 
+    def test_gallery_interactive_has_nav_and_archive(self):
+        """Test that interactive gallery includes nav header and archive button."""
+        from gallery import generate_gallery_for_directory
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmpdir = Path(tmpdir)
+
+            # Create mock data
+            (tmpdir / "test_0.txt").write_text("Prompt 0")
+            (tmpdir / "test_metadata.json").write_text(json.dumps({
+                "prefix": "test",
+                "count": 1,
+                "user_prompt": "test prompt",
+                "image_generation": {"images_per_prompt": 1},
+            }))
+            (tmpdir / "test_grammar.json").write_text(json.dumps({"origin": ["test"]}))
+
+            # Generate interactive gallery
+            gallery_path = generate_gallery_for_directory(tmpdir, interactive=True)
+            content = gallery_path.read_text()
+
+            # Check for nav header
+            assert "nav-header" in content
+            assert "Back to Index" in content
+            assert "/index" in content
+
+            # Check for archive button
+            assert "btn-archive" in content
+            assert "Save to Archive" in content
+
     def test_gallery_non_interactive_mode(self):
         """Test that non-interactive gallery doesn't include interactive elements."""
         from gallery import generate_gallery_for_directory
@@ -454,6 +484,49 @@ class TestGalleryIndexInteractive:
             # Check that form is NOT present
             assert "generate-form" not in content
             assert "queue-status" not in content
+
+    def test_index_with_archived_runs(self):
+        """Test that index shows archived runs separately."""
+        from gallery_index import generate_master_index
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmpdir = Path(tmpdir)
+
+            # Create active run
+            active_run = tmpdir / "prompts" / "20240101_120000_abc123"
+            active_run.mkdir(parents=True)
+            (active_run / "test_metadata.json").write_text(json.dumps({
+                "prefix": "test",
+                "count": 1,
+                "user_prompt": "active prompt",
+            }))
+            (active_run / "test_gallery.html").write_text("<html></html>")
+
+            # Create archived run
+            archived_run = tmpdir / "saved" / "20240101_100000_def456_20240101_130000"
+            archived_run.mkdir(parents=True)
+            (archived_run / "test_metadata.json").write_text(json.dumps({
+                "prefix": "test",
+                "count": 1,
+                "user_prompt": "archived prompt",
+                "backup_info": {
+                    "is_backup": True,
+                    "backup_reason": "pre_regenerate",
+                    "source_run_id": "20240101_100000_def456",
+                },
+            }))
+            (archived_run / "test_gallery.html").write_text("<html></html>")
+
+            # Generate index
+            index_path = generate_master_index(tmpdir, interactive=True)
+            content = index_path.read_text()
+
+            # Check for both runs
+            assert "active prompt" in content
+            assert "archived prompt" in content
+            assert "Saved Archives" in content
+            assert "archive-badge" in content
+            assert "Pre-Regen" in content  # Badge for pre_regenerate
 
 
 class TestConfig:
@@ -578,6 +651,68 @@ class TestUtils:
             assert len(prompts) == 3
             assert prompts[0] == "First prompt"
             assert prompts[2] == "Third prompt"
+
+    def test_backup_run(self):
+        """Test backing up a run directory."""
+        from utils import backup_run, is_backup_run
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmpdir = Path(tmpdir)
+            run_dir = tmpdir / "prompts" / "20240101_120000_abc123"
+            saved_dir = tmpdir / "saved"
+            run_dir.mkdir(parents=True)
+
+            # Create test files
+            (run_dir / "test_metadata.json").write_text(json.dumps({
+                "prefix": "test",
+                "user_prompt": "a dragon",
+            }))
+            (run_dir / "test_0.txt").write_text("Prompt 0")
+            (run_dir / "test_0_0.png").write_bytes(b"fake image")
+
+            # Create backup
+            backup_path = backup_run(run_dir, saved_dir, reason="pre_regenerate")
+
+            assert backup_path.exists()
+            assert (backup_path / "test_0.txt").exists()
+            assert (backup_path / "test_0_0.png").exists()
+
+            # Check backup metadata
+            meta = json.loads((backup_path / "test_metadata.json").read_text())
+            assert meta["backup_info"]["is_backup"] is True
+            assert meta["backup_info"]["backup_reason"] == "pre_regenerate"
+            assert meta["backup_info"]["source_run_id"] == "20240101_120000_abc123"
+
+            # Check is_backup_run
+            assert is_backup_run(backup_path) is True
+            assert is_backup_run(run_dir) is False
+
+    def test_backup_run_not_found(self):
+        """Test that backup fails for non-existent directory."""
+        from utils import backup_run
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmpdir = Path(tmpdir)
+            non_existent = tmpdir / "does_not_exist"
+            saved_dir = tmpdir / "saved"
+
+            with pytest.raises(ValueError, match="Run directory not found"):
+                backup_run(non_existent, saved_dir)
+
+    def test_run_has_images(self):
+        """Test checking if a run has images."""
+        from utils import run_has_images
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmpdir = Path(tmpdir)
+            (tmpdir / "test_metadata.json").write_text(json.dumps({"prefix": "test"}))
+
+            # No images yet
+            assert run_has_images(tmpdir) is False
+
+            # Add an image
+            (tmpdir / "test_0_0.png").write_bytes(b"fake image")
+            assert run_has_images(tmpdir) is True
 
 
 class TestInputValidation:

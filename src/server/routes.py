@@ -32,6 +32,7 @@ import sys
 SRC_DIR = Path(__file__).parent.parent
 sys.path.insert(0, str(SRC_DIR))
 from gallery_index import generate_master_index, _extract_run_info
+from utils import backup_run, is_backup_run
 
 
 router = APIRouter()
@@ -197,6 +198,52 @@ async def get_gallery(run_id: str):
         return HTMLResponse(content=gallery_path.read_text())
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.get("/archive/{run_id}", response_class=HTMLResponse)
+async def get_archive_gallery(run_id: str):
+    """Serve an archived gallery page (read-only)."""
+    from gallery import generate_gallery_for_directory
+
+    saved_dir = GENERATED_DIR / "saved"
+    run_dir = saved_dir / run_id
+
+    if not run_dir.exists():
+        raise HTTPException(status_code=404, detail="Archive not found")
+
+    # Regenerate gallery - archives are read-only (interactive=False)
+    try:
+        gallery_path = generate_gallery_for_directory(run_dir, interactive=False)
+        return HTMLResponse(content=gallery_path.read_text())
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.get("/archive/{run_id}/{filename:path}")
+async def get_archive_file(run_id: str, filename: str):
+    """Serve static files (images, etc.) from an archive directory."""
+    saved_dir = GENERATED_DIR / "saved"
+    run_dir = saved_dir / run_id
+    file_path = run_dir / filename
+
+    if not run_dir.exists():
+        raise HTTPException(status_code=404, detail="Archive not found")
+
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="File not found")
+
+    # Security: ensure file is within the run directory
+    try:
+        file_path.resolve().relative_to(run_dir.resolve())
+    except ValueError:
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    # Determine media type
+    media_type, _ = mimetypes.guess_type(str(file_path))
+    if media_type is None:
+        media_type = "application/octet-stream"
+
+    return FileResponse(file_path, media_type=media_type)
 
 
 @router.get("/gallery/{run_id}/{filename:path}")
@@ -518,3 +565,24 @@ async def get_gallery_logs(run_id: str, tail: int = 100):
         content = '\n'.join(lines[-tail:])
 
     return {"logs": content, "filename": log_file.name}
+
+
+@router.post("/api/gallery/{run_id}/archive", response_model=TaskResponse)
+async def archive_gallery(run_id: str):
+    """Archive a gallery to the saved folder."""
+    prompts_dir = GENERATED_DIR / "prompts"
+    run_dir = prompts_dir / run_id
+
+    if not run_dir.exists():
+        raise HTTPException(status_code=404, detail="Gallery not found")
+
+    if is_backup_run(run_dir):
+        raise HTTPException(status_code=400, detail="Cannot archive a backup")
+
+    try:
+        saved_dir = GENERATED_DIR / "saved"
+        backup_path = backup_run(run_dir, saved_dir, reason="manual_archive")
+        generate_master_index(GENERATED_DIR, interactive=True)
+        return TaskResponse(task_id="", message=f"Archived to: {backup_path.name}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

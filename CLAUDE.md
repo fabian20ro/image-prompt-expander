@@ -110,9 +110,18 @@ python src/cli.py --clean
    - Shows prompts below each image (scrollable for long prompts)
    - Editable Tracery grammar with save/regenerate functionality
    - Per-image generate/enhance buttons
+   - "Save to Archive" button for manual backups
+   - Navigation header with "Back to Index" link
    - Links to raw LLM response file
    - Real-time updates via SSE as images are generated
    - Auto-generates master index with generation form at `generated/index.html`
+   - Master index shows both active runs and saved archives
+
+6. **Backup & Archive System** (`src/utils.py`)
+   - Auto-backup before destructive operations (regenerate prompts, enhance-all)
+   - Manual archive via "Save to Archive" button in galleries
+   - Backups stored in `generated/saved/` with reason metadata
+   - Archives are read-only and shown separately in the master index
 
 ### Web UI Server (`src/server/`)
 
@@ -128,28 +137,30 @@ FastAPI-based web interface for the generation pipeline:
 **API Endpoints**:
 - `GET /index` - Master index with generation form
 - `GET /gallery/{run_id}` - Interactive gallery page
+- `GET /archive/{run_id}` - Archived gallery page (read-only)
 - `POST /api/generate` - Start new generation pipeline
 - `GET /api/events` - SSE stream for real-time updates
 - `POST /api/queue/clear` - Clear pending tasks
 - `POST /api/worker/kill` - Kill current task
 - `PUT /api/gallery/{id}/grammar` - Update grammar
 - `POST /api/gallery/{id}/regenerate` - Regenerate prompts
+- `POST /api/gallery/{id}/archive` - Archive a gallery to saved/
 
 ### Key Files
 
 - `src/cli.py` - Click-based CLI, orchestrates the pipeline
 - `src/config.py` - Centralized configuration (LM Studio URL, defaults, timeouts)
-- `src/utils.py` - Shared utility functions (metadata loading, image counting)
+- `src/utils.py` - Shared utility functions (metadata, images, backups)
 - `src/server/` - Web UI server package (FastAPI + SSE)
 - `src/image_enhancer.py` - SeedVR2 image enhancement module
 - `src/gallery.py` - HTML gallery generation with live updates
 - `src/gallery_index.py` - Master index generation linking all galleries
-- `templates/system_prompt.txt` - Default instructions for LLM to generate Tracery grammars
 - `templates/system_prompt_z-image-turbo.txt` - Camera-first prompt structure for z-image-turbo
 - `templates/system_prompt_flux2-klein.txt` - Prose-based prompt structure for flux2-klein models
 - `generated/index.html` - Master index linking all run galleries
 - `generated/grammars/` - Cached grammars (by prompt hash)
-- `generated/prompts/` - Output directories with prompts, images, and metadata
+- `generated/prompts/` - Active run directories with prompts, images, and metadata
+- `generated/saved/` - Archived/backed-up runs (auto or manual)
 - `generated/queue.json` - Task queue persistence for web UI
 
 ### Output Naming Convention
@@ -212,3 +223,23 @@ See `src/config.py` for all available settings.
 - LM Studio must be running locally at `http://localhost:1234` for grammar generation
 - mflux requires macOS with Apple Silicon (M1/M2/M3/M4) for image generation
 - Recommended: M4 Max with 36GB+ unified memory for concurrent generation + enhancement
+
+## Documentation Maintenance
+
+**After completing a task implementation**, update documentation:
+
+1. **CLAUDE.md** - Update if the change affects:
+   - Architecture or pipeline stages
+   - API endpoints
+   - Key files or directory structure
+   - Commands or configuration options
+   - Testing procedures
+
+2. **README.md** - Update if the change affects:
+   - User-facing features or workflows
+   - CLI options or usage examples
+   - Output structure
+   - Installation or requirements
+   - Troubleshooting scenarios
+
+Keep documentation concise and focused on what users/developers need to know. Remove outdated information but err on the side of preserving details that might still be relevant.
