@@ -482,8 +482,6 @@ async def generate_all_images(
             params["height"] = req.height
         if req.steps is not None:
             params["steps"] = req.steps
-        if req.quantize is not None:
-            params["quantize"] = req.quantize
         if req.seed is not None:
             params["seed"] = req.seed
         if req.max_prompts is not None:

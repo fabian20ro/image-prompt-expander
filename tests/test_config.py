@@ -19,7 +19,7 @@ class TestConfig:
         assert settings.lm_studio.api_key == "lm-studio"
         assert settings.image_generation.default_width == 864
         assert settings.image_generation.default_height == 1152
-        assert settings.image_generation.default_model == "z-image-turbo"
+        assert settings.image_generation.default_model == "flux2-klein-4b"
         assert settings.server.sse_queue_size == 100
         assert settings.enhancement.default_softness == 0.5
 

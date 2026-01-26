@@ -32,7 +32,7 @@ def clear_model_cache():
     gc.collect()
 
 
-def _get_model(model: str, quantize: int, tiled_vae: bool = True):
+def _get_model(model: str, quantize: int, tiled_vae: bool = False):
     """Get or create a cached model instance."""
     cache_key = (model, quantize, tiled_vae)
     if cache_key in _model_cache:
@@ -92,7 +92,7 @@ def generate_image(
     width: int = 864,
     height: int = 1152,
     quantize: int = 8,
-    tiled_vae: bool = True,
+    tiled_vae: bool = False,
 ) -> Path:
     """
     Generate a single image from a prompt using mflux.

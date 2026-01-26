@@ -64,7 +64,7 @@ class GenerateRequest(BaseModel):
     prompt: str = Field(..., min_length=1, max_length=5000)
     count: int = Field(50, ge=1, le=10000)
     prefix: str = Field("image", min_length=1, max_length=100, pattern=r'^[a-zA-Z0-9_-]+$')
-    model: str = Field("z-image-turbo")
+    model: str = Field("flux2-klein-4b")
     temperature: float = Field(0.7, ge=0.0, le=2.0)
     no_cache: bool = False
     generate_images: bool = False
@@ -72,10 +72,9 @@ class GenerateRequest(BaseModel):
     width: int = Field(864, ge=64, le=4096)
     height: int = Field(1152, ge=64, le=4096)
     steps: int | None = Field(None, ge=1, le=100)
-    quantize: int = Field(8, ge=3, le=8)
     seed: int | None = Field(None, ge=0)
     max_prompts: int | None = Field(None, ge=1)
-    tiled_vae: bool = True
+    tiled_vae: bool = False
     enhance: bool = False
     enhance_softness: float = Field(0.5, ge=0.0, le=1.0)
     enhance_after: bool = False
@@ -118,7 +117,6 @@ class GenerateAllImagesRequest(BaseModel):
     width: int | None = Field(None, ge=64, le=4096)
     height: int | None = Field(None, ge=64, le=4096)
     steps: int | None = Field(None, ge=1, le=100)
-    quantize: int | None = Field(None, ge=3, le=8)
     seed: int | None = Field(None, ge=0)
     max_prompts: int | None = Field(None, ge=1)
     # Enhancement settings

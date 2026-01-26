@@ -154,7 +154,7 @@ def run_generate_pipeline(params: dict):
     quantize = params.get("quantize", 8)
     seed = params.get("seed")
     max_prompts = params.get("max_prompts")
-    tiled_vae = params.get("tiled_vae", True)
+    tiled_vae = params.get("tiled_vae", False)
     enhance = params.get("enhance", False)
     enhance_softness = params.get("enhance_softness", 0.5)
     enhance_after = params.get("enhance_after", False)

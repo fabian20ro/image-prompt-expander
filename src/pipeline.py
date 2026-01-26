@@ -86,7 +86,7 @@ class ImageGenerationConfig:
     quantize: int = 8
     seed: int | None = None
     max_prompts: int | None = None  # Limit prompts to render
-    tiled_vae: bool = True
+    tiled_vae: bool = False
     resume: bool = False  # Skip existing images
 
     def to_dict(self) -> dict:
@@ -1018,6 +1018,32 @@ class PipelineExecutor:
             "enhance_softness": enhance_softness if enhance else None,
         }
         meta_files[0].write_text(json.dumps(metadata, indent=2))
+
+        # Check if gallery needs regeneration (settings changed)
+        old_ipp = image_settings.get("images_per_prompt", 1)
+        old_max = image_settings.get("max_prompts")
+
+        if images_per_prompt != old_ipp or max_prompts != old_max:
+            # Load grammar for gallery
+            grammar = None
+            grammar_file = output_dir / f"{prefix}_grammar.json"
+            if grammar_file.exists():
+                grammar = grammar_file.read_text()
+
+            raw_response_file = None
+            raw_file = output_dir / f"{prefix}_raw_response.txt"
+            if raw_file.exists():
+                raw_response_file = f"{prefix}_raw_response.txt"
+
+            # Load user_prompt for gallery
+            user_prompt = metadata.get("user_prompt", "")
+
+            # Regenerate gallery with new settings
+            create_gallery(
+                output_dir, prefix, prompts, images_per_prompt,
+                grammar=grammar, raw_response_file=raw_response_file,
+                interactive=True, run_id=run_id, user_prompt=user_prompt
+            )
 
         self.on_progress("generating_images", 0, total_images, "Starting image generation...")
 

@@ -73,14 +73,13 @@ class TestModels:
         assert req.prompt == "a dragon"
         assert req.count == 50
         assert req.prefix == "image"
-        assert req.model == "z-image-turbo"
+        assert req.model == "flux2-klein-4b"
         assert req.temperature == 0.7
         assert req.no_cache is False
         assert req.generate_images is False
         assert req.width == 864
         assert req.height == 1152
-        assert req.quantize == 8
-        assert req.tiled_vae is True
+        assert req.tiled_vae is False
         assert req.enhance is False
 
     def test_generate_request_custom(self):

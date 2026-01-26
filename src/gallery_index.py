@@ -227,8 +227,8 @@ def _build_generation_form() -> str:
           <div class="form-group">
             <label for="model">Model</label>
             <select id="model" name="model">
-              <option value="z-image-turbo" selected>z-image-turbo</option>
-              <option value="flux2-klein-4b">flux2-klein-4b</option>
+              <option value="z-image-turbo">z-image-turbo</option>
+              <option value="flux2-klein-4b" selected>flux2-klein-4b</option>
               <option value="flux2-klein-9b">flux2-klein-9b</option>
             </select>
           </div>
@@ -246,7 +246,7 @@ def _build_generation_form() -> str:
           </div>
           <div class="form-group checkbox-group">
             <label>
-              <input type="checkbox" id="tiled_vae" name="tiled_vae" checked>
+              <input type="checkbox" id="tiled_vae" name="tiled_vae">
               Tiled VAE (memory efficient)
             </label>
           </div>
@@ -412,10 +412,10 @@ document.addEventListener('DOMContentLoaded', function() {{
       prompt: promptValue.trim(),
       prefix: formData.get('prefix') || 'image',
       count: parseInt(formData.get('count')) || 50,
-      model: formData.get('model') || 'z-image-turbo',
+      model: formData.get('model') || 'flux2-klein-4b',
       temperature: parseFloat(formData.get('temperature')) || 0.7,
       no_cache: form.querySelector('#no_cache')?.checked || false,
-      tiled_vae: form.querySelector('#tiled_vae')?.checked ?? true,
+      tiled_vae: form.querySelector('#tiled_vae')?.checked ?? false,
     }};
 
     console.log('Sending data:', data);

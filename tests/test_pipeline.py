@@ -51,7 +51,7 @@ class TestImageGenerationConfig:
         assert config.steps is None
         assert config.quantize == 8
         assert config.seed is None
-        assert config.tiled_vae is True
+        assert config.tiled_vae is False
         assert config.resume is False
 
     def test_custom_values(self):

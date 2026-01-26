@@ -19,7 +19,7 @@ class ImageGenerationConfig:
     default_height: int = 1152
     default_steps: int = 4
     default_quantize: int = 8
-    default_model: str = "z-image-turbo"
+    default_model: str = "flux2-klein-4b"
 
 
 @dataclass(frozen=True)

@@ -101,7 +101,7 @@ def cli_progress(stage: str, current: int = 0, total: int = 0, message: str = ""
     '--model', '-m',
     default=None,
     type=click.Choice(SUPPORTED_MODELS),
-    help='mflux model to use (default: z-image-turbo)'
+    help='mflux model to use (default: flux2-klein-4b)'
 )
 @click.option(
     '--steps',
@@ -301,7 +301,7 @@ def main(
 
     # Set defaults
     prefix = prefix or "image"
-    model = model or "z-image-turbo"
+    model = model or "flux2-klein-4b"
     width = width or 864
     height = height or 1152
     quantize = quantize or 8

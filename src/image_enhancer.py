@@ -16,7 +16,7 @@ def clear_enhancer_cache():
     gc.collect()
 
 
-def _get_enhancer(quantize: int, tiled_vae: bool = True):
+def _get_enhancer(quantize: int, tiled_vae: bool = False):
     """Get or create a cached SeedVR2 enhancer instance."""
     cache_key = (quantize, tiled_vae)
     if cache_key in _enhancer_cache:
@@ -47,7 +47,7 @@ def enhance_image(
     softness: float = 0.5,
     seed: int | None = None,
     quantize: int = 8,
-    tiled_vae: bool = True,
+    tiled_vae: bool = False,
 ) -> Path:
     """
     Enhance a single image using SeedVR2 2x upscaling.

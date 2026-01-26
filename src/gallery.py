@@ -25,6 +25,7 @@ def create_gallery(
     raw_response_file: str | None = None,
     interactive: bool = False,
     run_id: str | None = None,
+    user_prompt: str = "",
 ) -> Path:
     """Create initial gallery with placeholders for all expected images.
 
@@ -80,7 +81,7 @@ def create_gallery(
 
     gallery_html = _build_gallery_html(
         prefix, cards_html, completed, total_images, grammar, raw_response_file,
-        interactive=interactive, run_id=run_id
+        interactive=interactive, run_id=run_id, user_prompt=user_prompt
     )
     gallery_path.write_text(gallery_html)
 
@@ -195,6 +196,7 @@ def generate_gallery_for_directory(prompts_dir: Path, interactive: bool = False)
 
     metadata = json.loads(meta_files[0].read_text())
     prefix = metadata.get("prefix", "image")
+    user_prompt = metadata.get("user_prompt", "")
     images_per_prompt = metadata.get("image_generation", {}).get("images_per_prompt", 1)
 
     # Load prompts
@@ -224,7 +226,7 @@ def generate_gallery_for_directory(prompts_dir: Path, interactive: bool = False)
     # Create gallery
     gallery_path = create_gallery(
         prompts_dir, prefix, prompts, images_per_prompt, grammar, raw_response_file,
-        interactive=interactive, run_id=run_id
+        interactive=interactive, run_id=run_id, user_prompt=user_prompt
     )
 
     return gallery_path
@@ -255,7 +257,7 @@ def _build_interactive_grammar_section(grammar: str, run_id: str) -> str:
 def _build_image_settings_section() -> str:
     """Build the collapsible image settings section."""
     return '''
-  <details id="image-settings" class="settings-section">
+  <details id="image-settings" class="settings-section" open>
     <summary>Image Settings</summary>
     <div class="settings-form">
       <div class="form-row">
@@ -263,17 +265,17 @@ def _build_image_settings_section() -> str:
           <label for="img-model">Model</label>
           <select id="img-model" name="model">
             <option value="z-image-turbo">z-image-turbo</option>
-            <option value="flux2-klein-4b">flux2-klein-4b</option>
+            <option value="flux2-klein-4b" selected>flux2-klein-4b</option>
             <option value="flux2-klein-9b">flux2-klein-9b</option>
           </select>
         </div>
         <div class="form-group">
           <label for="img-images-per-prompt">Images/Prompt</label>
-          <input type="number" id="img-images-per-prompt" name="images_per_prompt" value="1" min="1">
+          <input type="number" id="img-images-per-prompt" name="images_per_prompt" value="2" min="1">
         </div>
         <div class="form-group">
           <label for="img-max-prompts">Max Prompts</label>
-          <input type="number" id="img-max-prompts" name="max_prompts" placeholder="all" min="1">
+          <input type="number" id="img-max-prompts" name="max_prompts" value="100" min="1">
         </div>
       </div>
       <div class="form-row">
@@ -291,16 +293,6 @@ def _build_image_settings_section() -> str:
         </div>
       </div>
       <div class="form-row">
-        <div class="form-group">
-          <label for="img-quantize">Quantize</label>
-          <select id="img-quantize" name="quantize">
-            <option value="8" selected>8-bit</option>
-            <option value="6">6-bit</option>
-            <option value="5">5-bit</option>
-            <option value="4">4-bit</option>
-            <option value="3">3-bit</option>
-          </select>
-        </div>
         <div class="form-group">
           <label for="img-seed">Seed</label>
           <input type="number" id="img-seed" name="seed" placeholder="random">
@@ -548,13 +540,12 @@ def _build_interactive_js(run_id: str) -> str:
     btnGenerateAll.addEventListener('click', async () => {{
       // Collect image settings from form
       const data = {{
-        images_per_prompt: parseInt(document.getElementById('img-images-per-prompt')?.value) || 1,
+        images_per_prompt: parseInt(document.getElementById('img-images-per-prompt')?.value) || 2,
         resume: true,
         model: document.getElementById('img-model')?.value || null,
         width: parseInt(document.getElementById('img-width')?.value) || null,
         height: parseInt(document.getElementById('img-height')?.value) || null,
         steps: document.getElementById('img-steps')?.value ? parseInt(document.getElementById('img-steps').value) : null,
-        quantize: parseInt(document.getElementById('img-quantize')?.value) || null,
         seed: document.getElementById('img-seed')?.value ? parseInt(document.getElementById('img-seed').value) : null,
         max_prompts: document.getElementById('img-max-prompts')?.value ? parseInt(document.getElementById('img-max-prompts').value) : null,
         enhance: document.getElementById('img-enhance')?.checked || false,
@@ -668,12 +659,19 @@ def _build_gallery_html(
     raw_response_file: str | None = None,
     interactive: bool = False,
     run_id: str | None = None,
+    user_prompt: str = "",
 ) -> str:
     """Build the complete gallery HTML document."""
     cards_joined = "\n".join(cards_html)
 
     # Base tag for interactive galleries to resolve relative URLs correctly
     base_tag = f'<base href="/gallery/{run_id}/">' if interactive and run_id else ""
+
+    # Build original prompt display
+    prompt_display = ""
+    if user_prompt:
+        escaped_user_prompt = html.escape(user_prompt)
+        prompt_display = f'\n  <p class="original-prompt">{escaped_user_prompt}</p>'
 
     # Build header section with optional grammar display and raw response link
     header_section = ""
@@ -717,6 +715,7 @@ def _build_gallery_html(
   <style>
     body {{ font-family: system-ui; padding: 20px; background: #1a1a1a; color: #fff; }}
     h1 {{ margin-bottom: 10px; }}
+    .original-prompt {{ color: #888; font-size: 14px; margin-bottom: 16px; font-style: italic; }}
     .header-links {{ margin-bottom: 15px; }}
     .header-links a {{ color: #6af; text-decoration: none; margin-right: 20px; }}
     .header-links a:hover {{ text-decoration: underline; }}
@@ -736,7 +735,7 @@ def _build_gallery_html(
   </style>
 </head>
 <body>{nav_header}
-  <h1>Gallery: {prefix}</h1>{header_section}{grammar_section}{image_settings}{action_bar}{log_panel}
+  <h1>Gallery: {prefix}</h1>{prompt_display}{header_section}{grammar_section}{image_settings}{action_bar}{log_panel}
   <p class="status">Generated: {completed} / {total} images</p>
   <div class="grid">
 {cards_joined}
