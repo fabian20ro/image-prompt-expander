@@ -42,5 +42,5 @@ pytest -k "grammar" -v
 pytest --cov=src --cov-report=term-missing
 
 # Run single test
-pytest tests/test_server.py::TestConfig::test_default_values -v
+pytest tests/test_pipeline.py::TestPipelineResult::test_successful_result -v
 ```

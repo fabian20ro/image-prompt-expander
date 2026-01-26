@@ -39,6 +39,8 @@ Analyze code for:
 - [ ] Using pathlib instead of os.path
 - [ ] Dataclasses/Pydantic for structured data
 - [ ] No unnecessary complexity
+- [ ] Using MetadataManager for run metadata (not raw JSON)
+- [ ] Using PipelineConfig for complex parameter passing
 
 ### Test Coverage
 - [ ] New functions have corresponding tests

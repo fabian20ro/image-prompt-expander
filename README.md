@@ -293,6 +293,80 @@ export PROMPT_GEN_DEFAULT_HEIGHT=768
 
 **Out of memory** - Use `--enhance-after` for batch enhancement (single model at a time). Reduce resolution, use `flux2-klein-4b`, or use `--no-tiled-vae` to trade memory for speed.
 
+## Development
+
+### Setup
+
+```bash
+git clone https://github.com/fabian20ro/image-prompt-expander.git
+cd image-prompt-expander
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+pip install -r requirements-dev.txt  # pytest, pytest-asyncio, pytest-cov
+```
+
+### Running Tests
+
+```bash
+source venv/bin/activate
+
+# Run all tests
+pytest -v --tb=short
+
+# Run specific test file
+pytest tests/test_pipeline.py -v
+
+# Run with coverage
+pytest --cov=src --cov-report=html
+```
+
+The test suite includes 267 tests covering:
+- Pipeline orchestration (`test_pipeline.py`)
+- Image generation (`test_image_generator.py`)
+- Grammar expansion (`test_tracery_runner.py`)
+- API routes (`test_routes.py`)
+- Background workers (`test_worker.py`, `test_worker_subprocess.py`)
+- Metadata management (`test_metadata_manager.py`)
+- Utility functions (`test_utils.py`, `test_gallery.py`)
+
+### Architecture
+
+```
+src/
+├── cli.py                 # CLI entry point
+├── pipeline.py            # Core orchestration (PipelineExecutor)
+├── metadata_manager.py    # Centralized metadata operations
+├── grammar_generator.py   # LLM-based grammar generation
+├── tracery_runner.py      # Grammar expansion
+├── image_generator.py     # mflux image generation
+├── image_enhancer.py      # SeedVR2 enhancement
+├── gallery.py             # Gallery HTML generation
+├── gallery_index.py       # Master index generation
+├── utils.py               # Shared utilities
+├── config.py              # Path configuration
+└── server/
+    ├── app.py             # FastAPI application
+    ├── routes.py          # API endpoints
+    ├── models.py          # Pydantic models
+    ├── worker.py          # Background task processor
+    ├── worker_subprocess.py  # Isolated task execution
+    └── queue_manager.py   # Task queue management
+```
+
+Key patterns:
+- **MetadataManager**: Use for all run metadata operations instead of raw JSON
+- **PipelineConfig**: Dataclass for grouping pipeline parameters
+- **FastAPI DI**: Routes use `Depends()` with `lru_cache` for service singletons
+
+### Contributing
+
+1. Fork the repository
+2. Create a feature branch
+3. Add tests for new functionality
+4. Ensure all tests pass: `pytest -v --tb=short`
+5. Submit a pull request
+
 ## Credits
 
 - [Fifty Shades Generator](https://github.com/lisawray/fiftyshades) by Lisa Wray - original inspiration
