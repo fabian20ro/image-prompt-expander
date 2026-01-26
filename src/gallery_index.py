@@ -137,7 +137,7 @@ def _extract_run_info(run_dir: Path, is_archive: bool = False) -> dict | None:
         "thumbnail_file": thumbnail_file,
         "image_count": image_count,
         "prompt_count": prompt_count,
-        "model": metadata.get("image_generation", {}).get("model", "N/A"),
+        "model": metadata.get("model") or metadata.get("image_generation", {}).get("model") or "N/A",
         "is_archive": is_archive,
         "backup_reason": backup_reason,
     }
@@ -603,6 +603,26 @@ document.addEventListener('DOMContentLoaded', function() {
   // Start SSE connection
   connectSSE();
 });
+
+// Delete gallery function (global so onclick can access it)
+window.deleteGallery = async function(runId) {
+  if (!confirm('Delete this gallery and all its images? This cannot be undone.')) {
+    return;
+  }
+
+  try {
+    const resp = await fetch(`/api/gallery/${runId}`, { method: 'DELETE' });
+    if (!resp.ok) {
+      const err = await resp.json();
+      alert('Delete failed: ' + (err.detail || 'Unknown error'));
+      return;
+    }
+    // Reload page to reflect deletion
+    location.reload();
+  } catch (err) {
+    alert('Delete failed: ' + err.message);
+  }
+};
 </script>
 '''
 
@@ -664,6 +684,11 @@ def _build_interactive_styles() -> str:
     .log-line .timestamp { color: #6af; margin-right: 8px; }
     .log-line.error { color: #f88; }
     .log-line.warning { color: #fa0; }
+
+    /* Delete button on cards */
+    .btn-delete { position: absolute; top: 8px; right: 8px; background: rgba(200, 50, 50, 0.85); color: #fff; border: none; border-radius: 6px; padding: 6px 8px; cursor: pointer; opacity: 0; transition: opacity 0.2s, background 0.2s; z-index: 10; }
+    .btn-delete:hover { background: rgba(220, 60, 60, 1); }
+    .card:hover .btn-delete { opacity: 1; }
 '''
 
 
@@ -704,9 +729,20 @@ def _build_card_html(run: dict, interactive: bool, is_archive: bool = False) -> 
         }.get(reason, "Backup")
         badge_html = f'<span class="archive-badge">{reason_label}</span>'
 
+    # Add delete button for active galleries in interactive mode
+    delete_btn_html = ""
+    if interactive and not is_archive:
+        delete_btn_html = f'''
+      <button class="btn-delete" onclick="event.preventDefault(); event.stopPropagation(); deleteGallery('{run["dir_name"]}');" title="Delete gallery">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="3 6 5 6 21 6"></polyline>
+          <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+        </svg>
+      </button>'''
+
     return f'''    <a href="{gallery_href}" class="{card_class}">
       <div class="thumbnail">
-        {thumbnail_html}{badge_html}
+        {thumbnail_html}{badge_html}{delete_btn_html}
       </div>
       <div class="info">
         <div class="prompt" title="{escaped_prompt}">{truncated_prompt}</div>

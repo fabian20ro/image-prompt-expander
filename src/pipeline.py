@@ -196,6 +196,7 @@ class PipelineExecutor:
             "created_at": datetime.now().isoformat(),
             "grammar_cached": was_cached,
             "prefix": prefix,
+            "model": model,
         }
 
         if generate_images:
@@ -370,6 +371,7 @@ class PipelineExecutor:
             "created_at": datetime.now().isoformat(),
             "grammar_cached": True,
             "prefix": prefix,
+            "model": model,
         }
 
         if generate_images:

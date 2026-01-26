@@ -151,3 +151,31 @@ def is_backup_run(run_dir: Path) -> bool:
         return metadata.get("backup_info", {}).get("is_backup", False)
     except (ValueError, json.JSONDecodeError):
         return False
+
+
+def delete_run(run_dir: Path, prompts_dir: Path) -> None:
+    """Delete a gallery run directory completely.
+
+    Args:
+        run_dir: Directory to delete
+        prompts_dir: The prompts directory (for safety validation)
+
+    Raises:
+        ValueError: If run_dir doesn't exist, is not in prompts_dir, or is an archive
+    """
+    # Safety check 1: Verify run_dir exists
+    if not run_dir.exists():
+        raise ValueError(f"Run directory not found: {run_dir}")
+
+    # Safety check 2: Verify run_dir is inside prompts_dir (prevent path traversal)
+    try:
+        run_dir.resolve().relative_to(prompts_dir.resolve())
+    except ValueError:
+        raise ValueError(f"Run directory is not inside prompts directory: {run_dir}")
+
+    # Safety check 3: Verify it's not an archive
+    if is_backup_run(run_dir):
+        raise ValueError(f"Cannot delete archived galleries: {run_dir}")
+
+    # Delete the directory
+    shutil.rmtree(run_dir)

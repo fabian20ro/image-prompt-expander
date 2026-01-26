@@ -146,6 +146,7 @@ FastAPI-based web interface for the generation pipeline:
 - `PUT /api/gallery/{id}/grammar` - Update grammar
 - `POST /api/gallery/{id}/regenerate` - Regenerate prompts
 - `POST /api/gallery/{id}/archive` - Archive a gallery to saved/
+- `DELETE /api/gallery/{id}` - Delete a gallery (archives protected)
 
 ### Key Files
 

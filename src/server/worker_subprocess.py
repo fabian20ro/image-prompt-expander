@@ -21,6 +21,8 @@ sys.path.insert(0, str(SRC_DIR))
 
 from config import paths
 from pipeline import PipelineExecutor, PipelineResult
+from utils import delete_run
+from gallery_index import generate_master_index
 
 # Global log file handle (set when we know the output directory)
 _log_file = None
@@ -367,6 +369,22 @@ def run_enhance_all_images(params: dict):
         emit_result(False, error=result.error)
 
 
+def run_delete_gallery(params: dict):
+    """Delete a gallery directory."""
+    run_id = params["run_id"]
+    output_dir = paths.prompts_dir / run_id
+
+    emit_progress("deleting", 0, 1, f"Deleting gallery: {run_id}")
+
+    # Delete the directory
+    delete_run(output_dir, paths.prompts_dir)
+
+    # Regenerate master index
+    generate_master_index(paths.generated_dir)
+
+    emit_result(True, data={"run_id": run_id, "deleted": True})
+
+
 TASK_HANDLERS = {
     "generate_pipeline": run_generate_pipeline,
     "regenerate_prompts": run_regenerate_prompts,
@@ -374,6 +392,7 @@ TASK_HANDLERS = {
     "enhance_image": run_enhance_image,
     "generate_all_images": run_generate_all_images,
     "enhance_all_images": run_enhance_all_images,
+    "delete_gallery": run_delete_gallery,
 }
 
 

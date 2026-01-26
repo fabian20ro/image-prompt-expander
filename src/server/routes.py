@@ -586,3 +586,34 @@ async def archive_gallery(run_id: str):
         return TaskResponse(task_id="", message=f"Archived to: {backup_path.name}")
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.delete("/api/gallery/{run_id}", response_model=TaskResponse)
+async def delete_gallery(run_id: str):
+    """Delete a gallery and all its contents.
+
+    Only active galleries in prompts/ can be deleted.
+    Archives in saved/ are protected and cannot be deleted.
+    """
+    prompts_dir = paths.prompts_dir
+    run_dir = prompts_dir / run_id
+
+    # Validate gallery exists
+    if not run_dir.exists():
+        raise HTTPException(status_code=404, detail="Gallery not found")
+
+    # Validate it's not an archive (extra safety check)
+    if is_backup_run(run_dir):
+        raise HTTPException(status_code=400, detail="Cannot delete archived galleries")
+
+    # Queue the delete task
+    qm = get_queue_manager()
+    task = qm.add_task(
+        TaskType.DELETE_GALLERY,
+        {"run_id": run_id},
+    )
+
+    return TaskResponse(
+        task_id=task.id,
+        message=f"Gallery deletion queued (task {task.id[:8]})",
+    )

@@ -14,6 +14,7 @@ class TaskType(str, Enum):
     ENHANCE_IMAGE = "enhance_image"
     GENERATE_ALL_IMAGES = "generate_all_images"
     ENHANCE_ALL_IMAGES = "enhance_all_images"
+    DELETE_GALLERY = "delete_gallery"
 
 
 class TaskStatus(str, Enum):

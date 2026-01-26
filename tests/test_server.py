@@ -32,6 +32,7 @@ class TestModels:
         assert TaskType.ENHANCE_IMAGE.value == "enhance_image"
         assert TaskType.GENERATE_ALL_IMAGES.value == "generate_all_images"
         assert TaskType.ENHANCE_ALL_IMAGES.value == "enhance_all_images"
+        assert TaskType.DELETE_GALLERY.value == "delete_gallery"
 
     def test_task_status_enum(self):
         """Test TaskStatus enum values."""
@@ -735,6 +736,84 @@ class TestUtils:
             # Add an image
             (tmpdir / "test_0_0.png").write_bytes(b"fake image")
             assert run_has_images(tmpdir) is True
+
+    def test_delete_run(self):
+        """Test deleting a run directory."""
+        from utils import delete_run
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmpdir = Path(tmpdir)
+            prompts_dir = tmpdir / "prompts"
+            prompts_dir.mkdir()
+            run_dir = prompts_dir / "20240101_120000_abc123"
+            run_dir.mkdir()
+
+            # Create test files
+            (run_dir / "test_metadata.json").write_text(json.dumps({
+                "prefix": "test",
+                "user_prompt": "a dragon",
+            }))
+            (run_dir / "test_0.txt").write_text("Prompt 0")
+            (run_dir / "test_0_0.png").write_bytes(b"fake image")
+
+            assert run_dir.exists()
+
+            # Delete the run
+            delete_run(run_dir, prompts_dir)
+
+            assert not run_dir.exists()
+
+    def test_delete_run_not_found(self):
+        """Test that delete fails for non-existent directory."""
+        from utils import delete_run
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmpdir = Path(tmpdir)
+            prompts_dir = tmpdir / "prompts"
+            prompts_dir.mkdir()
+            non_existent = prompts_dir / "does_not_exist"
+
+            with pytest.raises(ValueError, match="Run directory not found"):
+                delete_run(non_existent, prompts_dir)
+
+    def test_delete_run_outside_prompts_dir(self):
+        """Test that delete fails for directories outside prompts_dir."""
+        from utils import delete_run
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmpdir = Path(tmpdir)
+            prompts_dir = tmpdir / "prompts"
+            prompts_dir.mkdir()
+            outside_dir = tmpdir / "outside"
+            outside_dir.mkdir()
+            (outside_dir / "test_metadata.json").write_text(json.dumps({"prefix": "test"}))
+
+            with pytest.raises(ValueError, match="not inside prompts directory"):
+                delete_run(outside_dir, prompts_dir)
+
+    def test_delete_run_archive_protected(self):
+        """Test that delete fails for archived galleries."""
+        from utils import delete_run
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmpdir = Path(tmpdir)
+            prompts_dir = tmpdir / "prompts"
+            prompts_dir.mkdir()
+            run_dir = prompts_dir / "20240101_120000_abc123"
+            run_dir.mkdir()
+
+            # Create backup metadata (marks this as an archive)
+            (run_dir / "test_metadata.json").write_text(json.dumps({
+                "prefix": "test",
+                "backup_info": {
+                    "is_backup": True,
+                    "source_run_id": "original",
+                    "backup_reason": "manual_archive",
+                },
+            }))
+
+            with pytest.raises(ValueError, match="Cannot delete archived galleries"):
+                delete_run(run_dir, prompts_dir)
 
 
 class TestInputValidation:
