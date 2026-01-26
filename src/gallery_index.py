@@ -244,86 +244,10 @@ def _build_generation_form() -> str:
               Force regenerate grammar (ignore cache)
             </label>
           </div>
-        </div>
-      </details>
-
-      <details class="settings-section">
-        <summary>Image Settings</summary>
-        <div class="form-row">
-          <div class="form-group checkbox-group">
-            <label>
-              <input type="checkbox" id="generate_images" name="generate_images">
-              Generate Images
-            </label>
-          </div>
-          <div class="form-group">
-            <label for="images_per_prompt">Images/Prompt</label>
-            <input type="number" id="images_per_prompt" name="images_per_prompt" value="1" min="1">
-          </div>
-        </div>
-        <div class="form-row">
-          <div class="form-group">
-            <label for="width">Width</label>
-            <input type="number" id="width" name="width" value="864" step="8">
-          </div>
-          <div class="form-group">
-            <label for="height">Height</label>
-            <input type="number" id="height" name="height" value="1152" step="8">
-          </div>
-          <div class="form-group">
-            <label for="steps">Steps</label>
-            <input type="number" id="steps" name="steps" placeholder="auto" min="1">
-          </div>
-        </div>
-        <div class="form-row">
-          <div class="form-group">
-            <label for="quantize">Quantize</label>
-            <select id="quantize" name="quantize">
-              <option value="8" selected>8-bit</option>
-              <option value="6">6-bit</option>
-              <option value="5">5-bit</option>
-              <option value="4">4-bit</option>
-              <option value="3">3-bit</option>
-            </select>
-          </div>
-          <div class="form-group">
-            <label for="seed">Seed</label>
-            <input type="number" id="seed" name="seed" placeholder="random">
-          </div>
-          <div class="form-group">
-            <label for="max_prompts">Max Prompts</label>
-            <input type="number" id="max_prompts" name="max_prompts" placeholder="all" min="1">
-          </div>
-        </div>
-        <div class="form-row">
           <div class="form-group checkbox-group">
             <label>
               <input type="checkbox" id="tiled_vae" name="tiled_vae" checked>
               Tiled VAE (memory efficient)
-            </label>
-          </div>
-        </div>
-      </details>
-
-      <details class="settings-section">
-        <summary>Enhancement Settings</summary>
-        <div class="form-row">
-          <div class="form-group checkbox-group">
-            <label>
-              <input type="checkbox" id="enhance" name="enhance">
-              Enhance with SeedVR2
-            </label>
-          </div>
-          <div class="form-group">
-            <label for="enhance_softness">Softness</label>
-            <input type="number" id="enhance_softness" name="enhance_softness" value="0.5" step="0.1" min="0" max="1">
-          </div>
-        </div>
-        <div class="form-row">
-          <div class="form-group checkbox-group">
-            <label>
-              <input type="checkbox" id="enhance_after" name="enhance_after">
-              Enhance after all images (saves memory)
             </label>
           </div>
         </div>
@@ -491,18 +415,7 @@ document.addEventListener('DOMContentLoaded', function() {{
       model: formData.get('model') || 'z-image-turbo',
       temperature: parseFloat(formData.get('temperature')) || 0.7,
       no_cache: form.querySelector('#no_cache')?.checked || false,
-      generate_images: form.querySelector('#generate_images')?.checked || false,
-      images_per_prompt: parseInt(formData.get('images_per_prompt')) || 1,
-      width: parseInt(formData.get('width')) || 864,
-      height: parseInt(formData.get('height')) || 1152,
-      steps: formData.get('steps') ? parseInt(formData.get('steps')) : null,
-      quantize: parseInt(formData.get('quantize')) || 8,
-      seed: formData.get('seed') ? parseInt(formData.get('seed')) : null,
-      max_prompts: formData.get('max_prompts') ? parseInt(formData.get('max_prompts')) : null,
-      tiled_vae: form.querySelector('#tiled_vae')?.checked || false,
-      enhance: form.querySelector('#enhance')?.checked || false,
-      enhance_softness: parseFloat(formData.get('enhance_softness')) || 0.5,
-      enhance_after: form.querySelector('#enhance_after')?.checked || false,
+      tiled_vae: form.querySelector('#tiled_vae')?.checked ?? true,
     }};
 
     console.log('Sending data:', data);

@@ -113,6 +113,17 @@ class GenerateAllImagesRequest(BaseModel):
     """Request to generate all images for a gallery."""
     images_per_prompt: int = Field(1, ge=1, le=100)
     resume: bool = True
+    # Image generation settings (override metadata defaults)
+    model: str | None = None
+    width: int | None = Field(None, ge=64, le=4096)
+    height: int | None = Field(None, ge=64, le=4096)
+    steps: int | None = Field(None, ge=1, le=100)
+    quantize: int | None = Field(None, ge=3, le=8)
+    seed: int | None = Field(None, ge=0)
+    max_prompts: int | None = Field(None, ge=1)
+    # Enhancement settings
+    enhance: bool = False
+    enhance_softness: float = Field(0.5, ge=0.0, le=1.0)
 
 
 class EnhanceAllImagesRequest(BaseModel):

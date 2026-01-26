@@ -330,6 +330,17 @@ def run_generate_all_images(params: dict):
     images_per_prompt = params.get("images_per_prompt", 1)
     resume = params.get("resume", True)
 
+    # Optional image settings (passed from gallery form)
+    model = params.get("model")
+    width = params.get("width")
+    height = params.get("height")
+    steps = params.get("steps")
+    quantize = params.get("quantize")
+    seed = params.get("seed")
+    max_prompts = params.get("max_prompts")
+    enhance = params.get("enhance", False)
+    enhance_softness = params.get("enhance_softness", 0.5)
+
     output_dir = paths.prompts_dir / run_id
 
     if not output_dir.exists():
@@ -341,7 +352,8 @@ def run_generate_all_images(params: dict):
         metadata = MetadataManager.load(output_dir)
         prefix = metadata.prefix
         set_log_file(output_dir / f"{prefix}_worker.log")
-        log_to_file(f"Generating all images: images_per_prompt={images_per_prompt}, resume={resume}")
+        log_to_file(f"Generating all images: images_per_prompt={images_per_prompt}, resume={resume}, "
+                    f"model={model}, width={width}, height={height}, enhance={enhance}")
     except MetadataError as e:
         log_to_file(f"Warning: Could not load metadata: {e}")
         prefix = "image"
@@ -354,6 +366,15 @@ def run_generate_all_images(params: dict):
             run_id=run_id,
             images_per_prompt=images_per_prompt,
             resume=resume,
+            model=model,
+            width=width,
+            height=height,
+            steps=steps,
+            quantize=quantize,
+            seed=seed,
+            max_prompts=max_prompts,
+            enhance=enhance,
+            enhance_softness=enhance_softness,
         )
 
     if result.success:

@@ -16,6 +16,7 @@ Given a user's image description, generate a Tracery grammar that produces meani
 - Lighting is critical—describe source, quality, direction, temperature
 - Every phrase should add visual information; avoid filler text
 - Aim for 7-9 sentences of rich, evocative description
+- Provide **7-9 meaningfully different options** per variable rule to ensure rich variety
 
 ## Tracery Syntax Reference
 
@@ -81,17 +82,17 @@ Mix constants with variables for controlled variation:
 {
   "origin": ["#subject#. #setting#. #details#. #lighting#. #atmosphere#"],
   "subject": ["A #dragonType# dragon with two #wingStyle# wings, four powerful legs tucked beneath its body, and a single #tailStyle# tail #action#"],
-  "dragonType": ["crimson", "obsidian", "golden", "emerald"],
-  "wingStyle": ["enormous bat-like", "feathered", "membrane", "iridescent"],
-  "tailStyle": ["serpentine", "spiked", "whip-like", "armored"],
-  "action": ["soars majestically", "glides effortlessly", "circles slowly"],
+  "dragonType": ["crimson", "obsidian", "golden", "emerald", "sapphire", "pearl-white", "storm-gray", "bronze"],
+  "wingStyle": ["enormous bat-like", "feathered", "translucent membrane", "iridescent", "scaled leather", "gossamer", "jagged crystalline", "flame-veined"],
+  "tailStyle": ["serpentine", "spiked", "whip-like", "armored", "barbed", "finned", "club-ended"],
+  "action": ["soars majestically", "glides effortlessly", "circles slowly", "dives steeply", "banks gracefully", "hovers motionless", "spirals upward"],
   "setting": ["Jagged peaks stretch to the horizon below"],
   "details": ["Its scales catch the light as it banks through the air"],
   "lighting": ["#lightType# illuminates the scene"],
-  "lightType": ["Warm golden sunlight", "Cool silvery moonlight", "Soft diffused light", "Dramatic stormy light"],
+  "lightType": ["Warm golden sunlight", "Cool silvery moonlight", "Soft diffused light", "Dramatic stormy light", "Fiery sunset glow", "Pale dawn radiance", "Harsh midday brilliance", "Aurora borealis shimmer"],
   "atmosphere": ["The atmosphere is #mood#, evoking #feeling#"],
-  "mood": ["epic and grand", "serene and peaceful", "mysterious and ancient", "wild and untamed"],
-  "feeling": ["a sense of wonder", "quiet contemplation", "primal power", "timeless majesty"]
+  "mood": ["epic and grand", "serene and peaceful", "mysterious and ancient", "wild and untamed", "foreboding and dark", "triumphant and bold", "ethereal and dreamlike", "primal and fierce"],
+  "feeling": ["a sense of wonder", "quiet contemplation", "primal power", "timeless majesty", "ancient wisdom", "raw untamed energy", "mythic grandeur", "soaring freedom"]
 }
 ```
 
@@ -109,18 +110,18 @@ Output:
 {
   "origin": ["#subject#. #location#. #details#. #lighting#. #atmosphere#"],
   "subject": ["A #catType# cat with four soft paws, two pointed ears, and a single #tailStyle# tail #catPose#"],
-  "catType": ["ginger tabby", "fluffy white Persian", "sleek black", "calico", "gray striped"],
-  "tailStyle": ["curled", "long fluffy", "elegant", "bushy"],
-  "catPose": ["curls contentedly into a ball", "stretches lazily across the cushions", "nestles comfortably among the blankets", "dozes peacefully with eyes half-closed"],
+  "catType": ["ginger tabby", "fluffy white Persian", "sleek black", "calico", "gray striped", "cream-colored Siamese", "spotted Bengal", "long-haired Maine Coon"],
+  "tailStyle": ["curled", "long fluffy", "elegant", "bushy", "sleek", "tufted", "ringed"],
+  "catPose": ["curls contentedly into a ball", "stretches lazily across the cushions", "nestles comfortably among the blankets", "dozes peacefully with eyes half-closed", "kneads softly at the fabric beneath it", "tucks its paws beneath its chest", "sprawls on its side with belly exposed", "perches alertly with tail wrapped around its paws"],
   "location": ["#settingType#"],
-  "settingType": ["It rests on a worn velvet armchair in a quiet study", "It lounges in a sun-drenched window seat overlooking a garden", "It lies atop a plush duvet covered in soft blankets", "It sleeps on a soft rug before a stone fireplace"],
+  "settingType": ["It rests on a worn velvet armchair in a quiet study", "It lounges in a sun-drenched window seat overlooking a garden", "It lies atop a plush duvet covered in soft blankets", "It sleeps on a soft rug before a stone fireplace", "It claims a cushioned bench beneath a bay window", "It occupies a basket lined with fleece in a sunny corner", "It sprawls across a leather ottoman in a book-filled room", "It naps on a quilted throw draped over an antique sofa"],
   "details": ["#detailType#"],
-  "detailType": ["Its whiskers twitch gently as it dreams, one paw tucked beneath its chin", "Soft curtains frame the view as the cat watches birds flutter past the window", "Pillows surround the drowsy feline as it kneads the soft blanket beneath it", "Its fur gleams warmly in the ambient glow, chest rising and falling steadily"],
+  "detailType": ["Its whiskers twitch gently as it dreams, one paw tucked beneath its chin", "Soft curtains frame the view as the cat watches birds flutter past the window", "Pillows surround the drowsy feline as it kneads the soft blanket beneath it", "Its fur gleams warmly in the ambient glow, chest rising and falling steadily", "A half-drunk cup of tea sits forgotten on a nearby table", "Dust motes drift lazily through the air around the sleeping cat", "An open book lies spine-up on the armrest beside it", "Its ears rotate occasionally toward distant sounds while it rests"],
   "lighting": ["#lightStyle#"],
-  "lightStyle": ["Gentle morning light streams through sheer curtains, casting soft shadows across the room", "Warm afternoon sunlight fills the space with a golden, honeyed glow", "Soft lamplight creates intimate pools of amber warmth in the corners", "A crackling fire casts dancing shadows and bathes everything in warm orange light"],
+  "lightStyle": ["Gentle morning light streams through sheer curtains, casting soft shadows across the room", "Warm afternoon sunlight fills the space with a golden, honeyed glow", "Soft lamplight creates intimate pools of amber warmth in the corners", "A crackling fire casts dancing shadows and bathes everything in warm orange light", "Filtered light through lace curtains dapples the scene with delicate patterns", "Late evening twilight bathes the room in soft purple and blue tones", "Candlelight flickers gently, creating a warm intimate atmosphere", "Pale winter light diffuses softly through frost-touched windows"],
   "atmosphere": ["The atmosphere is #mood#, evoking #feeling#"],
-  "mood": ["intimate and tranquil", "warm and peaceful", "serene and restful", "cozy and inviting"],
-  "feeling": ["a sense of quiet domestic comfort", "the simple joy of home", "peaceful contentment", "gentle relaxation"]
+  "mood": ["intimate and tranquil", "warm and peaceful", "serene and restful", "cozy and inviting", "drowsy and content", "hushed and still", "gentle and soothing", "lazy and unhurried"],
+  "feeling": ["a sense of quiet domestic comfort", "the simple joy of home", "peaceful contentment", "gentle relaxation", "timeless afternoon stillness", "the warmth of familiar surroundings", "soft unhurried moments", "deep restful calm"]
 }
 
 Remember: Output ONLY valid JSON, no explanation or code blocks. All values must be arrays of strings.

@@ -937,6 +937,15 @@ class PipelineExecutor:
         run_id: str,
         images_per_prompt: int = 1,
         resume: bool = True,
+        model: str | None = None,
+        width: int | None = None,
+        height: int | None = None,
+        steps: int | None = None,
+        quantize: int | None = None,
+        seed: int | None = None,
+        max_prompts: int | None = None,
+        enhance: bool = False,
+        enhance_softness: float = 0.5,
     ) -> PipelineResult:
         """Generate all images for a gallery.
 
@@ -944,6 +953,15 @@ class PipelineExecutor:
             run_id: Run directory name
             images_per_prompt: Images per prompt
             resume: Skip existing images
+            model: Image model (uses metadata default if None)
+            width: Image width (uses metadata default if None)
+            height: Image height (uses metadata default if None)
+            steps: Inference steps (uses metadata default if None)
+            quantize: Quantization level (uses metadata default if None)
+            seed: Random seed (uses metadata default if None)
+            max_prompts: Limit prompts to render
+            enhance: Enable enhancement after generation
+            enhance_softness: Enhancement softness
 
         Returns:
             PipelineResult with operation results
@@ -962,6 +980,14 @@ class PipelineExecutor:
         prefix = metadata.get("prefix", "image")
         image_settings = metadata.get("image_generation", {})
 
+        # Use passed settings or fall back to metadata defaults
+        effective_model = model or image_settings.get("model") or metadata.get("model", "z-image-turbo")
+        effective_width = width or image_settings.get("width", 864)
+        effective_height = height or image_settings.get("height", 1152)
+        effective_steps = steps or image_settings.get("steps")
+        effective_quantize = quantize or image_settings.get("quantize", 8)
+        effective_seed = seed if seed is not None else image_settings.get("seed")
+
         # Load prompts
         prompt_files = sorted(output_dir.glob(f"{prefix}_*.txt"))
         prompt_files = [f for f in prompt_files if f.stem.count('_') == 1]
@@ -970,15 +996,35 @@ class PipelineExecutor:
             return PipelineResult(success=False, error="No prompt files found")
 
         prompts = [f.read_text() for f in prompt_files]
+
+        # Apply max_prompts limit
+        if max_prompts is not None:
+            prompts = prompts[:max_prompts]
+
         total_images = len(prompts) * images_per_prompt
+
+        # Update metadata with effective settings
+        metadata["image_generation"] = {
+            "enabled": True,
+            "model": effective_model,
+            "width": effective_width,
+            "height": effective_height,
+            "steps": effective_steps,
+            "quantize": effective_quantize,
+            "seed": effective_seed,
+            "images_per_prompt": images_per_prompt,
+            "max_prompts": max_prompts,
+            "enhance": enhance,
+            "enhance_softness": enhance_softness if enhance else None,
+        }
+        meta_files[0].write_text(json.dumps(metadata, indent=2))
 
         self.on_progress("generating_images", 0, total_images, "Starting image generation...")
 
-        current_seed = image_settings.get("seed")
+        current_seed = effective_seed
         generated_count = 0
         skipped_count = 0
-
-        model = image_settings.get("model", "z-image-turbo")
+        images_to_enhance = []
 
         for prompt_idx, prompt_text in enumerate(prompts):
             for image_idx in range(images_per_prompt):
@@ -1003,12 +1049,12 @@ class PipelineExecutor:
                     generate_image(
                         prompt=prompt_text,
                         output_path=output_path,
-                        model=model,
+                        model=effective_model,
                         seed=current_seed,
-                        steps=image_settings.get("steps"),
-                        width=image_settings.get("width", 864),
-                        height=image_settings.get("height", 1152),
-                        quantize=image_settings.get("quantize", 8),
+                        steps=effective_steps,
+                        width=effective_width,
+                        height=effective_height,
+                        quantize=effective_quantize,
                         tiled_vae=True,
                     )
                 except Exception as e:
@@ -1020,10 +1066,46 @@ class PipelineExecutor:
                 self._sync_file(output_path)
                 self.on_image_ready(run_id, output_path.name)
 
+                if enhance:
+                    images_to_enhance.append((output_path, current_seed))
+
                 if current_seed is not None:
                     current_seed += 1
 
         actual_generated = generated_count - skipped_count
+
+        # Enhancement pass after all images generated
+        if enhance and images_to_enhance:
+            clear_model_cache()
+            self.on_progress(
+                "enhancing_images", 0, len(images_to_enhance),
+                "Starting enhancement..."
+            )
+
+            for idx, (image_path, image_seed) in enumerate(images_to_enhance, 1):
+                self.on_progress(
+                    "enhancing_images",
+                    idx,
+                    len(images_to_enhance),
+                    f"Enhancing {image_path.name}..."
+                )
+                try:
+                    enhance_image(
+                        image_path=image_path,
+                        output_path=image_path,
+                        softness=enhance_softness,
+                        seed=image_seed,
+                        quantize=effective_quantize,
+                        tiled_vae=True,
+                    )
+                except Exception as e:
+                    return PipelineResult(
+                        success=False,
+                        error=f"Enhancement failed ({image_path.name}): {e}"
+                    )
+
+                self._sync_file(image_path)
+                self.on_image_ready(run_id, image_path.name)
 
         return PipelineResult(
             success=True,

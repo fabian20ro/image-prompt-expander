@@ -252,6 +252,77 @@ def _build_interactive_grammar_section(grammar: str, run_id: str) -> str:
 '''
 
 
+def _build_image_settings_section() -> str:
+    """Build the collapsible image settings section."""
+    return '''
+  <details id="image-settings" class="settings-section">
+    <summary>Image Settings</summary>
+    <div class="settings-form">
+      <div class="form-row">
+        <div class="form-group">
+          <label for="img-model">Model</label>
+          <select id="img-model" name="model">
+            <option value="z-image-turbo">z-image-turbo</option>
+            <option value="flux2-klein-4b">flux2-klein-4b</option>
+            <option value="flux2-klein-9b">flux2-klein-9b</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="img-images-per-prompt">Images/Prompt</label>
+          <input type="number" id="img-images-per-prompt" name="images_per_prompt" value="1" min="1">
+        </div>
+        <div class="form-group">
+          <label for="img-max-prompts">Max Prompts</label>
+          <input type="number" id="img-max-prompts" name="max_prompts" placeholder="all" min="1">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label for="img-width">Width</label>
+          <input type="number" id="img-width" name="width" value="864" step="8">
+        </div>
+        <div class="form-group">
+          <label for="img-height">Height</label>
+          <input type="number" id="img-height" name="height" value="1152" step="8">
+        </div>
+        <div class="form-group">
+          <label for="img-steps">Steps</label>
+          <input type="number" id="img-steps" name="steps" placeholder="auto" min="1">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label for="img-quantize">Quantize</label>
+          <select id="img-quantize" name="quantize">
+            <option value="8" selected>8-bit</option>
+            <option value="6">6-bit</option>
+            <option value="5">5-bit</option>
+            <option value="4">4-bit</option>
+            <option value="3">3-bit</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="img-seed">Seed</label>
+          <input type="number" id="img-seed" name="seed" placeholder="random">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group checkbox-group">
+          <label>
+            <input type="checkbox" id="img-enhance" name="enhance">
+            Enhance after generation
+          </label>
+        </div>
+        <div class="form-group">
+          <label for="img-enhance-softness">Softness</label>
+          <input type="number" id="img-enhance-softness" name="enhance_softness" value="0.5" step="0.1" min="0" max="1">
+        </div>
+      </div>
+    </div>
+  </details>
+'''
+
+
 def _build_interactive_action_bar(run_id: str) -> str:
     """Build the action bar with generate/enhance all buttons."""
     return f'''
@@ -475,10 +546,21 @@ def _build_interactive_js(run_id: str) -> str:
 
   if (btnGenerateAll) {{
     btnGenerateAll.addEventListener('click', async () => {{
-      await apiPost(`/api/gallery/${{RUN_ID}}/generate-all`, {{
-        images_per_prompt: 1,
-        resume: true
-      }});
+      // Collect image settings from form
+      const data = {{
+        images_per_prompt: parseInt(document.getElementById('img-images-per-prompt')?.value) || 1,
+        resume: true,
+        model: document.getElementById('img-model')?.value || null,
+        width: parseInt(document.getElementById('img-width')?.value) || null,
+        height: parseInt(document.getElementById('img-height')?.value) || null,
+        steps: document.getElementById('img-steps')?.value ? parseInt(document.getElementById('img-steps').value) : null,
+        quantize: parseInt(document.getElementById('img-quantize')?.value) || null,
+        seed: document.getElementById('img-seed')?.value ? parseInt(document.getElementById('img-seed').value) : null,
+        max_prompts: document.getElementById('img-max-prompts')?.value ? parseInt(document.getElementById('img-max-prompts').value) : null,
+        enhance: document.getElementById('img-enhance')?.checked || false,
+        enhance_softness: parseFloat(document.getElementById('img-enhance-softness')?.value) || 0.5,
+      }};
+      await apiPost(`/api/gallery/${{RUN_ID}}/generate-all`, data);
       progressBar.classList.remove('hidden');
       progressMessage.textContent = 'Queued image generation...';
     }});
@@ -486,8 +568,9 @@ def _build_interactive_js(run_id: str) -> str:
 
   if (btnEnhanceAll) {{
     btnEnhanceAll.addEventListener('click', async () => {{
+      const softness = parseFloat(document.getElementById('img-enhance-softness')?.value) || 0.5;
       await apiPost(`/api/gallery/${{RUN_ID}}/enhance-all`, {{
-        softness: 0.5
+        softness: softness
       }});
       progressBar.classList.remove('hidden');
       progressMessage.textContent = 'Queued enhancement...';
@@ -527,9 +610,10 @@ def _build_interactive_js(run_id: str) -> str:
   }};
 
   window.enhanceImage = async function(promptIdx, imageIdx) {{
+    const softness = parseFloat(document.getElementById('img-enhance-softness')?.value) || 0.5;
     await apiPost(`/api/gallery/${{RUN_ID}}/image/${{promptIdx}}/enhance`, {{
       image_idx: imageIdx,
-      softness: 0.5
+      softness: softness
     }});
     progressBar.classList.remove('hidden');
     progressMessage.textContent = `Enhancing image ${{promptIdx}}_${{imageIdx}}...`;
@@ -555,6 +639,21 @@ def _build_interactive_styles() -> str:
 
     /* Adjust body padding */
     body { padding-bottom: 80px; }
+
+    /* Image settings form */
+    .settings-section { margin-bottom: 16px; background: #2a2a2a; border-radius: 8px; }
+    .settings-section summary { padding: 12px 16px; cursor: pointer; color: #888; font-size: 14px; }
+    .settings-section summary:hover { color: #aaa; }
+    .settings-form { padding: 16px; }
+    .form-row { display: flex; gap: 16px; margin-bottom: 12px; flex-wrap: wrap; }
+    .form-row:last-child { margin-bottom: 0; }
+    .form-group { display: flex; flex-direction: column; min-width: 120px; }
+    .form-group label { font-size: 12px; color: #888; margin-bottom: 4px; }
+    .form-group input, .form-group select { padding: 8px; background: #333; border: 1px solid #444; border-radius: 4px; color: #fff; font-size: 14px; }
+    .form-group input:focus, .form-group select:focus { border-color: #4a9eff; outline: none; }
+    .checkbox-group { flex-direction: row; align-items: center; }
+    .checkbox-group label { display: flex; align-items: center; gap: 8px; font-size: 14px; color: #ddd; margin-bottom: 0; }
+    .checkbox-group input[type="checkbox"] { width: 16px; height: 16px; }
 ''' +
         LogPanel.css()
     )
@@ -602,6 +701,7 @@ def _build_gallery_html(
 
     # Build interactive sections
     nav_header = _build_nav_header() if interactive else ""
+    image_settings = _build_image_settings_section() if interactive and run_id else ""
     action_bar = _build_interactive_action_bar(run_id) if interactive and run_id else ""
     log_panel = _build_log_panel() if interactive else ""
     progress_bar = _build_interactive_progress_bar() if interactive else ""
@@ -636,7 +736,7 @@ def _build_gallery_html(
   </style>
 </head>
 <body>{nav_header}
-  <h1>Gallery: {prefix}</h1>{header_section}{grammar_section}{action_bar}{log_panel}
+  <h1>Gallery: {prefix}</h1>{header_section}{grammar_section}{image_settings}{action_bar}{log_panel}
   <p class="status">Generated: {completed} / {total} images</p>
   <div class="grid">
 {cards_joined}

@@ -465,15 +465,34 @@ async def generate_all_images(
     except GalleryNotFoundError:
         raise HTTPException(status_code=404, detail="Gallery not found")
 
+    # Build params dict with all settings
+    params = {
+        "run_id": run_id,
+        "images_per_prompt": req.images_per_prompt if req else 1,
+        "resume": req.resume if req else True,
+    }
+
+    # Add optional image settings (only if provided)
+    if req:
+        if req.model is not None:
+            params["model"] = req.model
+        if req.width is not None:
+            params["width"] = req.width
+        if req.height is not None:
+            params["height"] = req.height
+        if req.steps is not None:
+            params["steps"] = req.steps
+        if req.quantize is not None:
+            params["quantize"] = req.quantize
+        if req.seed is not None:
+            params["seed"] = req.seed
+        if req.max_prompts is not None:
+            params["max_prompts"] = req.max_prompts
+        params["enhance"] = req.enhance
+        params["enhance_softness"] = req.enhance_softness
+
     qm = get_queue_manager()
-    task = qm.add_task(
-        TaskType.GENERATE_ALL_IMAGES,
-        {
-            "run_id": run_id,
-            "images_per_prompt": req.images_per_prompt if req else 1,
-            "resume": req.resume if req else True,
-        },
-    )
+    task = qm.add_task(TaskType.GENERATE_ALL_IMAGES, params)
 
     return TaskResponse(
         task_id=task.id,
