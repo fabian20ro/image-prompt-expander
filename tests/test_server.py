@@ -454,3 +454,227 @@ class TestGalleryIndexInteractive:
             # Check that form is NOT present
             assert "generate-form" not in content
             assert "queue-status" not in content
+
+
+class TestConfig:
+    """Tests for centralized configuration."""
+
+    def test_default_settings(self):
+        """Test that default settings are loaded correctly."""
+        from config import Settings, LMStudioConfig, ImageGenerationConfig
+
+        settings = Settings()
+
+        assert settings.lm_studio.base_url == "http://localhost:1234/v1"
+        assert settings.lm_studio.api_key == "lm-studio"
+        assert settings.image_generation.default_width == 864
+        assert settings.image_generation.default_height == 1152
+        assert settings.image_generation.default_model == "z-image-turbo"
+        assert settings.server.sse_queue_size == 100
+        assert settings.enhancement.default_softness == 0.5
+
+    def test_settings_from_env(self):
+        """Test that settings can be loaded from environment variables."""
+        import os
+        from config import Settings
+
+        # Save original env vars
+        original = os.environ.get("PROMPT_GEN_LM_STUDIO_URL")
+
+        try:
+            os.environ["PROMPT_GEN_LM_STUDIO_URL"] = "http://test:5000/v1"
+            settings = Settings.from_env()
+            assert settings.lm_studio.base_url == "http://test:5000/v1"
+        finally:
+            # Restore original
+            if original is not None:
+                os.environ["PROMPT_GEN_LM_STUDIO_URL"] = original
+            else:
+                os.environ.pop("PROMPT_GEN_LM_STUDIO_URL", None)
+
+    def test_immutable_config(self):
+        """Test that config dataclasses are immutable."""
+        from config import LMStudioConfig
+
+        config = LMStudioConfig()
+        with pytest.raises(Exception):  # FrozenInstanceError
+            config.base_url = "http://changed"
+
+
+class TestUtils:
+    """Tests for utility functions."""
+
+    def test_load_run_metadata(self):
+        """Test loading metadata from a run directory."""
+        from utils import load_run_metadata
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmpdir = Path(tmpdir)
+            (tmpdir / "test_metadata.json").write_text(json.dumps({
+                "prefix": "test",
+                "count": 10,
+                "user_prompt": "a dragon",
+            }))
+
+            metadata = load_run_metadata(tmpdir)
+            assert metadata["prefix"] == "test"
+            assert metadata["count"] == 10
+
+    def test_load_run_metadata_not_found(self):
+        """Test that ValueError is raised when no metadata found."""
+        from utils import load_run_metadata
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with pytest.raises(ValueError, match="No metadata file found"):
+                load_run_metadata(Path(tmpdir))
+
+    def test_get_prefix_from_metadata(self):
+        """Test getting prefix from metadata."""
+        from utils import get_prefix_from_metadata
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmpdir = Path(tmpdir)
+            (tmpdir / "cat_metadata.json").write_text(json.dumps({
+                "prefix": "cat",
+            }))
+
+            prefix = get_prefix_from_metadata(tmpdir)
+            assert prefix == "cat"
+
+    def test_get_prefix_from_metadata_default(self):
+        """Test that default prefix is returned when metadata missing."""
+        from utils import get_prefix_from_metadata
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            prefix = get_prefix_from_metadata(Path(tmpdir))
+            assert prefix == "image"
+
+    def test_count_images_in_run(self):
+        """Test counting images in a run directory."""
+        from utils import count_images_in_run
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmpdir = Path(tmpdir)
+            (tmpdir / "test_metadata.json").write_text(json.dumps({"prefix": "test"}))
+            (tmpdir / "test_0_0.png").write_text("fake image")
+            (tmpdir / "test_0_1.png").write_text("fake image")
+            (tmpdir / "test_1_0.png").write_text("fake image")
+
+            count = count_images_in_run(tmpdir)
+            assert count == 3
+
+    def test_get_prompts_from_run(self):
+        """Test loading prompts from a run directory."""
+        from utils import get_prompts_from_run
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmpdir = Path(tmpdir)
+            (tmpdir / "test_metadata.json").write_text(json.dumps({"prefix": "test"}))
+            (tmpdir / "test_0.txt").write_text("First prompt")
+            (tmpdir / "test_1.txt").write_text("Second prompt")
+            (tmpdir / "test_2.txt").write_text("Third prompt")
+
+            prompts = get_prompts_from_run(tmpdir)
+            assert len(prompts) == 3
+            assert prompts[0] == "First prompt"
+            assert prompts[2] == "Third prompt"
+
+
+class TestInputValidation:
+    """Tests for Pydantic model input validation."""
+
+    def test_generate_request_prompt_required(self):
+        """Test that prompt is required."""
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError):
+            GenerateRequest()  # Missing required prompt
+
+    def test_generate_request_prompt_not_empty(self):
+        """Test that prompt cannot be empty."""
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError):
+            GenerateRequest(prompt="")
+
+    def test_generate_request_count_bounds(self):
+        """Test that count must be within bounds."""
+        from pydantic import ValidationError
+
+        # Too low
+        with pytest.raises(ValidationError):
+            GenerateRequest(prompt="test", count=0)
+
+        # Too high
+        with pytest.raises(ValidationError):
+            GenerateRequest(prompt="test", count=10001)
+
+        # Just right
+        req = GenerateRequest(prompt="test", count=100)
+        assert req.count == 100
+
+    def test_generate_request_dimensions_bounds(self):
+        """Test that width/height must be within bounds."""
+        from pydantic import ValidationError
+
+        # Too small
+        with pytest.raises(ValidationError):
+            GenerateRequest(prompt="test", width=32)
+
+        # Too large
+        with pytest.raises(ValidationError):
+            GenerateRequest(prompt="test", height=5000)
+
+        # Just right
+        req = GenerateRequest(prompt="test", width=512, height=768)
+        assert req.width == 512
+        assert req.height == 768
+
+    def test_generate_request_temperature_bounds(self):
+        """Test that temperature must be within bounds."""
+        from pydantic import ValidationError
+
+        # Too low
+        with pytest.raises(ValidationError):
+            GenerateRequest(prompt="test", temperature=-0.1)
+
+        # Too high
+        with pytest.raises(ValidationError):
+            GenerateRequest(prompt="test", temperature=2.5)
+
+        # Just right
+        req = GenerateRequest(prompt="test", temperature=1.5)
+        assert req.temperature == 1.5
+
+    def test_generate_request_prefix_pattern(self):
+        """Test that prefix must match allowed pattern."""
+        from pydantic import ValidationError
+
+        # Valid prefixes
+        GenerateRequest(prompt="test", prefix="image")
+        GenerateRequest(prompt="test", prefix="my-prefix")
+        GenerateRequest(prompt="test", prefix="prefix_123")
+
+        # Invalid prefixes
+        with pytest.raises(ValidationError):
+            GenerateRequest(prompt="test", prefix="prefix with spaces")
+
+        with pytest.raises(ValidationError):
+            GenerateRequest(prompt="test", prefix="prefix.with.dots")
+
+    def test_enhance_softness_bounds(self):
+        """Test that softness must be within 0-1."""
+        from pydantic import ValidationError
+        from server.models import EnhanceImageRequest
+
+        # Too low
+        with pytest.raises(ValidationError):
+            EnhanceImageRequest(softness=-0.1)
+
+        # Too high
+        with pytest.raises(ValidationError):
+            EnhanceImageRequest(softness=1.5)
+
+        # Just right
+        req = EnhanceImageRequest(softness=0.7)
+        assert req.softness == 0.7

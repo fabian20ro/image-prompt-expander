@@ -73,18 +73,13 @@ def _extract_run_info(run_dir: Path) -> dict | None:
     if not gallery_file.exists():
         return None
 
-    # Find first image for thumbnail
+    # Find first image for thumbnail using glob (more efficient)
     thumbnail = None
     thumbnail_file = None
-    for i in range(100):  # Check first 100 potential images
-        for j in range(10):  # Check first 10 images per prompt
-            img_path = run_dir / f"{prefix}_{i}_{j}.png"
-            if img_path.exists():
-                thumbnail = img_path.relative_to(run_dir.parent.parent)
-                thumbnail_file = img_path.name
-                break
-        if thumbnail:
-            break
+    images = sorted(run_dir.glob(f"{prefix}_*_*.png"))
+    if images:
+        thumbnail = images[0].relative_to(run_dir.parent.parent)
+        thumbnail_file = images[0].name
 
     # Extract timestamp from directory name
     dir_parts = run_dir.name.split("_")
@@ -709,7 +704,7 @@ def _build_index_html(runs: list[dict], interactive: bool = False) -> str:
     .thumbnail img {{ width: 100%; height: 100%; object-fit: cover; }}
     .no-thumbnail {{ width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; color: #666; }}
     .info {{ padding: 16px; }}
-    .prompt {{ font-size: 14px; color: #ddd; margin-bottom: 12px; line-height: 1.4; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }}
+    .prompt {{ font-size: 14px; color: #ddd; margin-bottom: 12px; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }}
     .meta {{ display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: #888; }}
     .meta .time {{ color: #6af; }}
     .meta .stats {{ color: #aaa; }}

@@ -435,10 +435,33 @@ def run_regenerate_prompts(params: dict):
     metadata["regenerated_at"] = datetime.now().isoformat()
     meta_files[0].write_text(json.dumps(metadata, indent=2))
 
+    # Regenerate the gallery HTML with updated prompts
+    emit_progress("updating_gallery", 0, 1, "Updating gallery...")
+
+    # Load grammar for gallery
+    grammar_content = grammar
+    raw_response_file = None
+    raw_file = output_dir / f"{prefix}_raw_response.txt"
+    if raw_file.exists():
+        raw_response_file = f"{prefix}_raw_response.txt"
+
+    # Get images_per_prompt from metadata
+    images_per_prompt = metadata.get("image_generation", {}).get("images_per_prompt", 1)
+    if not metadata.get("image_generation", {}).get("enabled", False):
+        images_per_prompt = 0
+
+    gallery_path = create_gallery(
+        output_dir, prefix, outputs, images_per_prompt,
+        grammar=grammar_content, raw_response_file=raw_response_file,
+        interactive=True, run_id=run_id
+    )
+
+    emit_progress("updating_gallery", 1, 1, "Gallery updated")
     emit_progress("expanding_prompts", count, count, f"Generated {len(outputs)} prompts")
     emit_result(True, data={
         "run_id": run_id,
         "prompt_count": len(outputs),
+        "task_type": "regenerate_prompts",
     })
 
 

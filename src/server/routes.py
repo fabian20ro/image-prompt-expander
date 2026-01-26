@@ -11,7 +11,7 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import HTMLResponse, FileResponse
 from sse_starlette.sse import EventSourceResponse
 
-from .app import get_queue_manager, get_worker, GENERATED_DIR
+from .app import get_queue_manager, get_worker, get_shutdown_event, GENERATED_DIR
 from .models import (
     GenerateRequest,
     RegeneratePromptsApiRequest,
@@ -94,6 +94,11 @@ async def sse_events(request: Request):
 
     async def event_generator() -> AsyncGenerator:
         try:
+            shutdown = get_shutdown_event()
+        except RuntimeError:
+            shutdown = None
+
+        try:
             # Send initial status AFTER registering listener (atomic snapshot)
             state = qm.get_state()
             yield {
@@ -105,12 +110,16 @@ async def sse_events(request: Request):
             }
 
             while True:
+                # Check if server is shutting down
+                if shutdown and shutdown.is_set():
+                    break
+
                 # Check if client disconnected
                 if await request.is_disconnected():
                     break
 
                 try:
-                    msg = await asyncio.wait_for(queue.get(), timeout=30)
+                    msg = await asyncio.wait_for(queue.get(), timeout=5)  # Shorter timeout for faster shutdown
                     yield {
                         "event": msg["event"],
                         "data": json.dumps(serialize(msg["data"])),
@@ -243,18 +252,25 @@ async def get_gallery_info(run_id: str) -> GalleryDetailResponse:
     prompt_files = [f for f in prompt_files if f.stem.count('_') == 1]
     prompts = [f.read_text() for f in prompt_files]
 
-    # List images
+    # List images using glob (more efficient than loop-based checking)
     images = []
-    for prompt_idx, prompt_text in enumerate(prompts):
-        for image_idx in range(10):  # Check first 10 images per prompt
-            img_path = run_dir / f"{prefix}_{prompt_idx}_{image_idx}.png"
-            if img_path.exists():
+    image_files = sorted(run_dir.glob(f"{prefix}_*_*.png"))
+    for img_path in image_files:
+        # Parse prompt_idx and image_idx from filename: prefix_promptIdx_imageIdx.png
+        parts = img_path.stem.split('_')
+        if len(parts) >= 3:
+            try:
+                prompt_idx = int(parts[-2])
+                image_idx = int(parts[-1])
+                prompt_text = prompts[prompt_idx] if prompt_idx < len(prompts) else ""
                 images.append({
                     "prompt_idx": prompt_idx,
                     "image_idx": image_idx,
                     "filename": img_path.name,
                     "prompt": prompt_text,
                 })
+            except (ValueError, IndexError):
+                pass
 
     return GalleryDetailResponse(
         info=GalleryInfo(

@@ -22,6 +22,7 @@ QUEUE_PATH = GENERATED_DIR / "queue.json"
 # Global instances
 queue_manager: QueueManager | None = None
 worker: Worker | None = None
+shutdown_event: asyncio.Event | None = None
 
 
 def get_queue_manager() -> QueueManager:
@@ -40,15 +41,26 @@ def get_worker() -> Worker:
     return worker
 
 
+def get_shutdown_event() -> asyncio.Event:
+    """Get the shutdown event."""
+    global shutdown_event
+    if shutdown_event is None:
+        raise RuntimeError("Shutdown event not initialized")
+    return shutdown_event
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Handle app startup and shutdown."""
-    global queue_manager, worker
+    global queue_manager, worker, shutdown_event
 
     # Ensure generated directory exists
     GENERATED_DIR.mkdir(parents=True, exist_ok=True)
     (GENERATED_DIR / "prompts").mkdir(exist_ok=True)
     (GENERATED_DIR / "grammars").mkdir(exist_ok=True)
+
+    # Initialize shutdown event
+    shutdown_event = asyncio.Event()
 
     # Initialize queue manager
     queue_manager = QueueManager(QUEUE_PATH)
@@ -59,7 +71,11 @@ async def lifespan(app: FastAPI):
 
     yield
 
-    # Shutdown
+    # Shutdown: signal SSE connections to close
+    shutdown_event.set()
+    await asyncio.sleep(0.5)  # Grace period for SSE connections to close
+
+    # Stop worker
     worker.stop()
     worker_task.cancel()
     try:

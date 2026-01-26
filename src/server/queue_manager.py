@@ -35,9 +35,12 @@ class QueueManager:
         return QueueState()
 
     def _save_state(self, state: QueueState) -> None:
-        """Save queue state to disk."""
+        """Save queue state to disk atomically."""
         self.queue_path.parent.mkdir(parents=True, exist_ok=True)
-        self.queue_path.write_text(state.model_dump_json(indent=2))
+        # Write to temp file first, then atomic rename (POSIX rename is atomic)
+        tmp_path = self.queue_path.with_suffix('.tmp')
+        tmp_path.write_text(state.model_dump_json(indent=2))
+        tmp_path.rename(self.queue_path)
 
     def _notify(self, event: str, data: dict) -> None:
         """Notify all listeners of an event."""

@@ -15,11 +15,17 @@ User prompt → LLM generates Tracery grammar → Tracery produces N prompts →
 - macOS with Apple Silicon (M1/M2/M3/M4) for image generation
 - [LM Studio](https://lmstudio.ai/) running locally
 
+**Recommended Hardware:**
+- **M4 Max with 36GB+ unified memory** for concurrent generation + enhancement
+- M1/M2/M3 with 16GB+ works but may require `--enhance-after` for large batches
+- Generation speed: ~2-4 images/minute (z-image-turbo, 864x1152)
+
 **Python Dependencies:**
 - `openai` - LM Studio API client
 - `click` - CLI framework
 - `tracery` - Grammar expansion
 - `mflux` - Image generation (optional, Apple Silicon only)
+- `fastapi` + `sse-starlette` - Web UI server
 
 ## Installation
 
@@ -30,6 +36,11 @@ cd image-prompt-expander
 python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
+```
+
+**Important:** Activate the virtual environment each new terminal session:
+```bash
+source venv/bin/activate
 ```
 
 Then install [LM Studio](https://lmstudio.ai/), download a model (e.g., Qwen 2.5 7B, Llama 3.1 8B), and start the local server.
@@ -247,6 +258,19 @@ Pre-quantized 4-bit versions are used automatically when available.
 - **Suggest variation dimensions**: "a cat in various cozy indoor settings"
 - **Use FLUX-friendly language**: lighting ("golden hour"), atmosphere ("epic", "serene")
 - **Front-load important elements** (FLUX prioritizes earlier content)
+
+## Configuration
+
+Settings can be overridden via environment variables with `PROMPT_GEN_` prefix:
+
+```bash
+# Use different LM Studio instance
+export PROMPT_GEN_LM_STUDIO_URL="http://192.168.1.100:1234/v1"
+
+# Change default image dimensions
+export PROMPT_GEN_DEFAULT_WIDTH=1024
+export PROMPT_GEN_DEFAULT_HEIGHT=768
+```
 
 ## Troubleshooting
 

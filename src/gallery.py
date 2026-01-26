@@ -416,8 +416,12 @@ def _build_interactive_js(run_id: str) -> str:
     }});
 
     eventSource.addEventListener('task_completed', (e) => {{
+      const data = JSON.parse(e.data);
       progressMessage.textContent = 'Completed';
-      // Don't hide immediately - queue_updated will handle visibility
+      // Reload page if this was a regenerate_prompts task for this gallery
+      if (data.result && data.result.task_type === 'regenerate_prompts' && data.result.run_id === RUN_ID) {{
+        setTimeout(() => window.location.reload(), 500);
+      }}
     }});
 
     eventSource.addEventListener('task_failed', (e) => {{

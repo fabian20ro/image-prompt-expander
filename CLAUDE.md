@@ -6,6 +6,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **image-prompt-expander** - A procedural image prompt generator that creates varied prompts for FLUX.2 image models, with optional local image generation using mflux.
 
+**Target Hardware:** Apple Silicon Mac (developed/tested on M4 Max with 36GB unified memory)
+
 **Pipeline:**
 ```
 Full pipeline:     User prompt → LLM → Grammar → Tracery → Prompts → Images → (Enhancement)
@@ -17,10 +19,15 @@ Full pipeline:     User prompt → LLM → Grammar → Tracery → Prompts → I
 
 ## Commands
 
+**Important:** Always activate the virtual environment before running any commands:
+
 ```bash
-# Setup
+# Setup (first time only)
 python3 -m venv venv && source venv/bin/activate
 pip install -r requirements.txt
+
+# Activate venv (required every new terminal session)
+source venv/bin/activate
 
 # Start web UI (recommended for interactive use)
 python src/cli.py --serve
@@ -131,6 +138,8 @@ FastAPI-based web interface for the generation pipeline:
 ### Key Files
 
 - `src/cli.py` - Click-based CLI, orchestrates the pipeline
+- `src/config.py` - Centralized configuration (LM Studio URL, defaults, timeouts)
+- `src/utils.py` - Shared utility functions (metadata loading, image counting)
 - `src/server/` - Web UI server package (FastAPI + SSE)
 - `src/image_enhancer.py` - SeedVR2 image enhancement module
 - `src/gallery.py` - HTML gallery generation with live updates
@@ -155,9 +164,12 @@ Files use prefix naming:
 
 ## Testing
 
-Run tests after making changes to verify functionality:
+**Important:** Always activate the virtual environment before running tests:
 
 ```bash
+# Activate venv first (required every new terminal session)
+source venv/bin/activate
+
 # Run all tests
 pytest
 
@@ -167,11 +179,36 @@ pytest -v
 # Run specific test file
 pytest tests/test_grammar_generator.py
 
-# Run tests with coverage (if pytest-cov installed)
+# Run tests with coverage
 pytest --cov=src
+
+# Quick validation after changes
+pytest -v --tb=short
 ```
+
+**Test coverage includes:**
+- Grammar generation and cleaning (`tests/test_grammar_generator.py`)
+- Server models, queue manager, galleries (`tests/test_server.py`)
+- Configuration and utilities (`tests/test_server.py` - TestConfig, TestUtils)
+- Input validation (`tests/test_server.py` - TestInputValidation)
+
+## Configuration
+
+Settings can be overridden via environment variables with `PROMPT_GEN_` prefix:
+
+```bash
+# Example: Use different LM Studio instance
+export PROMPT_GEN_LM_STUDIO_URL="http://192.168.1.100:1234/v1"
+
+# Example: Change default image dimensions
+export PROMPT_GEN_DEFAULT_WIDTH=1024
+export PROMPT_GEN_DEFAULT_HEIGHT=768
+```
+
+See `src/config.py` for all available settings.
 
 ## Dependencies
 
 - LM Studio must be running locally at `http://localhost:1234` for grammar generation
 - mflux requires macOS with Apple Silicon (M1/M2/M3/M4) for image generation
+- Recommended: M4 Max with 36GB+ unified memory for concurrent generation + enhancement
