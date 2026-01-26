@@ -7,7 +7,7 @@ import mimetypes
 from pathlib import Path
 from typing import AsyncGenerator
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import HTMLResponse, FileResponse
 from sse_starlette.sse import EventSourceResponse
 
@@ -36,16 +36,17 @@ from utils import backup_run, is_backup_run
 from services.gallery_service import GalleryService, GalleryNotFoundError, MetadataNotFoundError
 
 
-# Global gallery service instance
-_gallery_service = None
+from functools import lru_cache
 
 
+@lru_cache(maxsize=1)
 def get_gallery_service() -> GalleryService:
-    """Get the global GalleryService instance."""
-    global _gallery_service
-    if _gallery_service is None:
-        _gallery_service = GalleryService(paths.prompts_dir, paths.saved_dir)
-    return _gallery_service
+    """FastAPI dependency to get the GalleryService singleton.
+
+    Uses lru_cache for singleton behavior while being compatible
+    with FastAPI's Depends() mechanism.
+    """
+    return GalleryService(paths.prompts_dir, paths.saved_dir)
 
 
 router = APIRouter()
@@ -309,9 +310,11 @@ async def get_gallery_file(run_id: str, filename: str):
 
 
 @router.get("/api/gallery/{run_id}")
-async def get_gallery_info(run_id: str) -> GalleryDetailResponse:
+async def get_gallery_info(
+    run_id: str,
+    service: GalleryService = Depends(get_gallery_service),
+) -> GalleryDetailResponse:
     """Get gallery details including grammar and prompts."""
-    service = get_gallery_service()
 
     try:
         run_dir = service.get_run_directory(run_id)
@@ -367,9 +370,11 @@ async def get_gallery_info(run_id: str) -> GalleryDetailResponse:
 
 
 @router.get("/api/gallery/{run_id}/grammar")
-async def get_grammar(run_id: str):
+async def get_grammar(
+    run_id: str,
+    service: GalleryService = Depends(get_gallery_service),
+):
     """Get the grammar JSON for a gallery."""
-    service = get_gallery_service()
 
     try:
         run_dir = service.get_run_directory(run_id)
@@ -384,9 +389,12 @@ async def get_grammar(run_id: str):
 
 
 @router.put("/api/gallery/{run_id}/grammar", response_model=TaskResponse)
-async def update_grammar(run_id: str, req: GrammarUpdateRequest):
+async def update_grammar(
+    run_id: str,
+    req: GrammarUpdateRequest,
+    service: GalleryService = Depends(get_gallery_service),
+):
     """Update the grammar for a gallery."""
-    service = get_gallery_service()
 
     try:
         run_dir = service.get_run_directory(run_id)
@@ -407,9 +415,12 @@ async def update_grammar(run_id: str, req: GrammarUpdateRequest):
 
 
 @router.post("/api/gallery/{run_id}/regenerate", response_model=TaskResponse)
-async def regenerate_prompts(run_id: str, req: RegeneratePromptsApiRequest | None = None):
+async def regenerate_prompts(
+    run_id: str,
+    service: GalleryService = Depends(get_gallery_service),
+    req: RegeneratePromptsApiRequest | None = None,
+):
     """Regenerate prompts from the current grammar."""
-    service = get_gallery_service()
 
     try:
         run_dir = service.get_run_directory(run_id)
@@ -442,9 +453,12 @@ async def regenerate_prompts(run_id: str, req: RegeneratePromptsApiRequest | Non
 
 
 @router.post("/api/gallery/{run_id}/generate-all", response_model=TaskResponse)
-async def generate_all_images(run_id: str, req: GenerateAllImagesRequest | None = None):
+async def generate_all_images(
+    run_id: str,
+    service: GalleryService = Depends(get_gallery_service),
+    req: GenerateAllImagesRequest | None = None,
+):
     """Queue generation of all images for a gallery."""
-    service = get_gallery_service()
 
     try:
         service.get_run_directory(run_id)
@@ -468,9 +482,12 @@ async def generate_all_images(run_id: str, req: GenerateAllImagesRequest | None 
 
 
 @router.post("/api/gallery/{run_id}/enhance-all", response_model=TaskResponse)
-async def enhance_all_images(run_id: str, req: EnhanceAllImagesRequest | None = None):
+async def enhance_all_images(
+    run_id: str,
+    service: GalleryService = Depends(get_gallery_service),
+    req: EnhanceAllImagesRequest | None = None,
+):
     """Queue enhancement of all images for a gallery."""
-    service = get_gallery_service()
 
     try:
         service.get_run_directory(run_id)
@@ -496,10 +513,10 @@ async def enhance_all_images(run_id: str, req: EnhanceAllImagesRequest | None = 
 async def generate_single_image(
     run_id: str,
     prompt_idx: int,
+    service: GalleryService = Depends(get_gallery_service),
     req: GenerateImageRequest | None = None,
 ):
     """Queue generation of a single image."""
-    service = get_gallery_service()
 
     try:
         service.get_run_directory(run_id)
@@ -526,10 +543,10 @@ async def generate_single_image(
 async def enhance_single_image(
     run_id: str,
     prompt_idx: int,
+    service: GalleryService = Depends(get_gallery_service),
     req: EnhanceImageRequest | None = None,
 ):
     """Queue enhancement of a single image."""
-    service = get_gallery_service()
 
     try:
         service.get_run_directory(run_id)
@@ -554,7 +571,11 @@ async def enhance_single_image(
 
 
 @router.get("/api/gallery/{run_id}/logs")
-async def get_gallery_logs(run_id: str, tail: int = 100):
+async def get_gallery_logs(
+    run_id: str,
+    service: GalleryService = Depends(get_gallery_service),
+    tail: int = 100,
+):
     """Get the worker log file for a gallery.
 
     Args:
@@ -564,7 +585,6 @@ async def get_gallery_logs(run_id: str, tail: int = 100):
     Returns:
         Log file contents
     """
-    service = get_gallery_service()
 
     try:
         run_dir = service.get_run_directory(run_id)
@@ -587,9 +607,11 @@ async def get_gallery_logs(run_id: str, tail: int = 100):
 
 
 @router.post("/api/gallery/{run_id}/archive", response_model=TaskResponse)
-async def archive_gallery(run_id: str):
+async def archive_gallery(
+    run_id: str,
+    service: GalleryService = Depends(get_gallery_service),
+):
     """Archive a gallery to the saved folder as flat files with embedded metadata."""
-    service = get_gallery_service()
 
     try:
         run_dir = service.get_run_directory(run_id)
@@ -612,13 +634,15 @@ async def archive_gallery(run_id: str):
 
 
 @router.delete("/api/gallery/{run_id}", response_model=TaskResponse)
-async def delete_gallery(run_id: str):
+async def delete_gallery(
+    run_id: str,
+    service: GalleryService = Depends(get_gallery_service),
+):
     """Delete a gallery and all its contents.
 
     Only active galleries in prompts/ can be deleted.
     Archives in saved/ are protected and cannot be deleted.
     """
-    service = get_gallery_service()
 
     try:
         run_dir = service.get_run_directory(run_id)

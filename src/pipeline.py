@@ -5,10 +5,13 @@ used by both the CLI and web UI. Uses callback-based progress reporting.
 """
 
 import json
+import logging
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 from typing import Callable, Protocol
+
+logger = logging.getLogger(__name__)
 
 from config import paths
 from grammar_generator import generate_grammar, hash_prompt
@@ -66,6 +69,136 @@ class PipelineResult:
     skipped_count: int = 0
     error: str | None = None
     data: dict = field(default_factory=dict)
+
+
+@dataclass
+class ImageGenerationConfig:
+    """Configuration for image generation settings.
+
+    Groups all image-related parameters to reduce function signature complexity.
+    """
+
+    enabled: bool = False
+    images_per_prompt: int = 1
+    width: int = 864
+    height: int = 1152
+    steps: int | None = None  # Uses model default if None
+    quantize: int = 8
+    seed: int | None = None
+    max_prompts: int | None = None  # Limit prompts to render
+    tiled_vae: bool = True
+    resume: bool = False  # Skip existing images
+
+    def to_dict(self) -> dict:
+        """Convert to dictionary for metadata storage."""
+        result = {
+            "enabled": self.enabled,
+            "images_per_prompt": self.images_per_prompt,
+            "width": self.width,
+            "height": self.height,
+            "quantize": self.quantize,
+            "tiled_vae": self.tiled_vae,
+        }
+        if self.steps is not None:
+            result["steps"] = self.steps
+        if self.seed is not None:
+            result["seed"] = self.seed
+        if self.max_prompts is not None:
+            result["max_prompts"] = self.max_prompts
+        return result
+
+
+@dataclass
+class EnhancementConfig:
+    """Configuration for image enhancement settings."""
+
+    enabled: bool = False
+    softness: float = 0.5
+    batch_after: bool = False  # Enhance all images after generation completes
+
+    def to_dict(self) -> dict:
+        """Convert to dictionary for metadata storage."""
+        return {
+            "enabled": self.enabled,
+            "softness": self.softness,
+            "batch_after": self.batch_after,
+        }
+
+
+@dataclass
+class PipelineConfig:
+    """Complete configuration for pipeline execution.
+
+    This class groups all pipeline parameters into logical categories,
+    reducing function signature complexity from 20+ parameters to a single config.
+
+    Example:
+        config = PipelineConfig(
+            prompt="a dragon flying",
+            count=50,
+            image=ImageGenerationConfig(enabled=True, width=1024, height=1024),
+            enhancement=EnhancementConfig(enabled=True, softness=0.3),
+        )
+        result = executor.run_with_config(config)
+    """
+
+    # Required
+    prompt: str = ""
+
+    # Grammar/Prompt settings
+    count: int = 50
+    prefix: str = "image"
+    model: str = "z-image-turbo"  # Used for both grammar gen and image gen
+    temperature: float = 0.7
+    no_cache: bool = False
+
+    # Image generation settings
+    image: ImageGenerationConfig = field(default_factory=ImageGenerationConfig)
+
+    # Enhancement settings
+    enhancement: EnhancementConfig = field(default_factory=EnhancementConfig)
+
+    # Output settings
+    output_dir: Path | None = None
+
+    @classmethod
+    def from_kwargs(cls, **kwargs) -> "PipelineConfig":
+        """Create config from flat kwargs (for backwards compatibility).
+
+        Maps old-style parameters to the new config structure.
+        """
+        # Extract image config params
+        image_config = ImageGenerationConfig(
+            enabled=kwargs.pop("generate_images", False),
+            images_per_prompt=kwargs.pop("images_per_prompt", 1),
+            width=kwargs.pop("width", 864),
+            height=kwargs.pop("height", 1152),
+            steps=kwargs.pop("steps", None),
+            quantize=kwargs.pop("quantize", 8),
+            seed=kwargs.pop("seed", None),
+            max_prompts=kwargs.pop("max_prompts", None),
+            tiled_vae=kwargs.pop("tiled_vae", True),
+            resume=kwargs.pop("resume", False),
+        )
+
+        # Extract enhancement config params
+        enhancement_config = EnhancementConfig(
+            enabled=kwargs.pop("enhance", False),
+            softness=kwargs.pop("enhance_softness", 0.5),
+            batch_after=kwargs.pop("enhance_after", False),
+        )
+
+        return cls(
+            prompt=kwargs.pop("prompt", ""),
+            count=kwargs.pop("count", 50),
+            prefix=kwargs.pop("prefix", "image"),
+            model=kwargs.pop("model", "z-image-turbo"),
+            temperature=kwargs.pop("temperature", 0.7),
+            no_cache=kwargs.pop("no_cache", False),
+            image=image_config,
+            enhancement=enhancement_config,
+            output_dir=kwargs.pop("output_dir", None),
+        )
 
 
 def _null_progress(stage: str, current: int = 0, total: int = 0, message: str = "") -> None:
@@ -614,8 +747,8 @@ class PipelineExecutor:
             self.on_progress("backup", 0, 1, "Creating backup before regenerating...")
             try:
                 backup_run(output_dir, paths.saved_dir, reason="pre_regenerate")
-            except Exception:
-                pass  # Best effort backup
+            except Exception as e:
+                logger.warning(f"Failed to create backup before regenerating: {e}")
 
         self.on_progress("expanding_prompts", 0, count, f"Regenerating {count} prompts...")
 
@@ -939,8 +1072,8 @@ class PipelineExecutor:
                 backup_run(output_dir, paths.saved_dir, reason="pre_enhance")
                 metadata["_enhancement_backup_created"] = datetime.now().isoformat()
                 meta_files[0].write_text(json.dumps(metadata, indent=2))
-            except Exception:
-                pass  # Best effort
+            except Exception as e:
+                logger.warning(f"Failed to create backup before enhancement: {e}")
 
         self.on_progress("enhancing_images", 0, len(images), "Starting enhancement...")
 

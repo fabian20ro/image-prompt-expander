@@ -1,6 +1,7 @@
 """Shared utility functions for the image-prompt-expander application."""
 
 import json
+import logging
 import re
 import shutil
 from datetime import datetime
@@ -8,6 +9,8 @@ from pathlib import Path
 
 from PIL import Image
 from PIL.PngImagePlugin import PngInfo
+
+logger = logging.getLogger(__name__)
 
 
 def format_run_timestamp(timestamp: str) -> str:
@@ -296,7 +299,8 @@ def get_flat_archive_metadata(image_path: Path) -> dict:
         if hasattr(img, 'text'):
             metadata = dict(img.text)
         return metadata
-    except Exception:
+    except Exception as e:
+        logger.debug(f"Failed to read metadata from {image_path}: {e}")
         return {}
 
 

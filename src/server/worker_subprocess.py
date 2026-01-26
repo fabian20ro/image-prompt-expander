@@ -23,6 +23,7 @@ from config import paths
 from pipeline import PipelineExecutor, PipelineResult
 from utils import delete_run
 from gallery_index import generate_master_index
+from metadata_manager import MetadataManager, MetadataError, MetadataNotFoundError
 
 # Global log file handle (set when we know the output directory)
 _log_file = None
@@ -205,13 +206,20 @@ def run_regenerate_prompts(params: dict):
 
     output_dir = paths.prompts_dir / run_id
 
-    # Load metadata for prefix
-    meta_files = list(output_dir.glob("*_metadata.json"))
-    if meta_files:
-        metadata = json.loads(meta_files[0].read_text())
-        prefix = metadata.get("prefix", "image")
+    if not output_dir.exists():
+        emit_result(False, error=f"Gallery not found: {run_id}")
+        return
+
+    # Load metadata for prefix using MetadataManager for proper error handling
+    try:
+        metadata = MetadataManager.load(output_dir)
+        prefix = metadata.prefix
         set_log_file(output_dir / f"{prefix}_worker.log")
         log_to_file(f"Regenerating prompts: count={count}")
+    except MetadataError as e:
+        log_to_file(f"Warning: Could not load metadata: {e}")
+        prefix = "image"
+        set_log_file(output_dir / f"{prefix}_worker.log")
 
     executor = create_executor()
 
@@ -240,13 +248,20 @@ def run_generate_image(params: dict):
 
     output_dir = paths.prompts_dir / run_id
 
-    # Load metadata for logging
-    meta_files = list(output_dir.glob("*_metadata.json"))
-    if meta_files:
-        metadata = json.loads(meta_files[0].read_text())
-        prefix = metadata.get("prefix", "image")
+    if not output_dir.exists():
+        emit_result(False, error=f"Gallery not found: {run_id}")
+        return
+
+    # Load metadata for logging using MetadataManager for proper error handling
+    try:
+        metadata = MetadataManager.load(output_dir)
+        prefix = metadata.prefix
         set_log_file(output_dir / f"{prefix}_worker.log")
         log_to_file(f"Generating single image: prompt_idx={prompt_idx}, image_idx={image_idx}")
+    except MetadataError as e:
+        log_to_file(f"Warning: Could not load metadata: {e}")
+        prefix = "image"
+        set_log_file(output_dir / f"{prefix}_worker.log")
 
     executor = create_executor()
 
@@ -275,13 +290,20 @@ def run_enhance_image(params: dict):
 
     output_dir = paths.prompts_dir / run_id
 
-    # Load metadata for logging
-    meta_files = list(output_dir.glob("*_metadata.json"))
-    if meta_files:
-        metadata = json.loads(meta_files[0].read_text())
-        prefix = metadata.get("prefix", "image")
+    if not output_dir.exists():
+        emit_result(False, error=f"Gallery not found: {run_id}")
+        return
+
+    # Load metadata for logging using MetadataManager for proper error handling
+    try:
+        metadata = MetadataManager.load(output_dir)
+        prefix = metadata.prefix
         set_log_file(output_dir / f"{prefix}_worker.log")
         log_to_file(f"Enhancing single image: prompt_idx={prompt_idx}, image_idx={image_idx}")
+    except MetadataError as e:
+        log_to_file(f"Warning: Could not load metadata: {e}")
+        prefix = "image"
+        set_log_file(output_dir / f"{prefix}_worker.log")
 
     executor = create_executor()
 
@@ -310,13 +332,20 @@ def run_generate_all_images(params: dict):
 
     output_dir = paths.prompts_dir / run_id
 
-    # Load metadata for logging
-    meta_files = list(output_dir.glob("*_metadata.json"))
-    if meta_files:
-        metadata = json.loads(meta_files[0].read_text())
-        prefix = metadata.get("prefix", "image")
+    if not output_dir.exists():
+        emit_result(False, error=f"Gallery not found: {run_id}")
+        return
+
+    # Load metadata for logging using MetadataManager for proper error handling
+    try:
+        metadata = MetadataManager.load(output_dir)
+        prefix = metadata.prefix
         set_log_file(output_dir / f"{prefix}_worker.log")
         log_to_file(f"Generating all images: images_per_prompt={images_per_prompt}, resume={resume}")
+    except MetadataError as e:
+        log_to_file(f"Warning: Could not load metadata: {e}")
+        prefix = "image"
+        set_log_file(output_dir / f"{prefix}_worker.log")
 
     executor = create_executor()
 
@@ -344,13 +373,20 @@ def run_enhance_all_images(params: dict):
 
     output_dir = paths.prompts_dir / run_id
 
-    # Load metadata for logging
-    meta_files = list(output_dir.glob("*_metadata.json"))
-    if meta_files:
-        metadata = json.loads(meta_files[0].read_text())
-        prefix = metadata.get("prefix", "image")
+    if not output_dir.exists():
+        emit_result(False, error=f"Gallery not found: {run_id}")
+        return
+
+    # Load metadata for logging using MetadataManager for proper error handling
+    try:
+        metadata = MetadataManager.load(output_dir)
+        prefix = metadata.prefix
         set_log_file(output_dir / f"{prefix}_worker.log")
         log_to_file(f"Enhancing all images: softness={softness}")
+    except MetadataError as e:
+        log_to_file(f"Warning: Could not load metadata: {e}")
+        prefix = "image"
+        set_log_file(output_dir / f"{prefix}_worker.log")
 
     executor = create_executor()
 
@@ -374,13 +410,28 @@ def run_delete_gallery(params: dict):
     run_id = params["run_id"]
     output_dir = paths.prompts_dir / run_id
 
+    if not output_dir.exists():
+        emit_result(False, error=f"Gallery not found: {run_id}")
+        return
+
     emit_progress("deleting", 0, 1, f"Deleting gallery: {run_id}")
 
-    # Delete the directory
-    delete_run(output_dir, paths.prompts_dir)
+    try:
+        # Delete the directory
+        delete_run(output_dir, paths.prompts_dir)
+    except ValueError as e:
+        # delete_run raises ValueError for validation errors (not in prompts_dir, is archive, etc.)
+        emit_result(False, error=str(e))
+        return
+    except OSError as e:
+        emit_result(False, error=f"Failed to delete gallery: {e}")
+        return
 
-    # Regenerate master index
-    generate_master_index(paths.generated_dir)
+    # Regenerate master index - best effort, don't fail if this fails
+    try:
+        generate_master_index(paths.generated_dir)
+    except Exception as e:
+        log_to_file(f"Warning: Failed to regenerate master index: {e}")
 
     emit_result(True, data={"run_id": run_id, "deleted": True})
 

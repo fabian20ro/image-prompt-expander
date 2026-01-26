@@ -50,8 +50,8 @@ class Worker:
         if self._current_process:
             try:
                 self._current_process.terminate()
-            except Exception:
-                pass
+            except Exception as e:
+                logging.debug(f"Failed to terminate process during stop: {e}")
 
     async def kill_current(self) -> bool:
         """Kill the currently running task.
@@ -82,9 +82,9 @@ class Worker:
                 self._current_process.kill()
                 await self._current_process.wait()
 
-        except Exception:
+        except Exception as e:
             # Process might already be dead
-            pass
+            logging.debug(f"Process cleanup during kill_current: {e}")
 
         # Mark task as cancelled
         if task_id:
@@ -228,7 +228,7 @@ class Worker:
             # Clean up temp file
             try:
                 os.unlink(task_file)
-            except Exception:
-                pass
+            except Exception as e:
+                logging.debug(f"Failed to clean up task file {task_file}: {e}")
 
             self._current_process = None

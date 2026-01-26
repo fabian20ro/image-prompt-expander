@@ -62,13 +62,21 @@ def client(temp_dir, mock_queue_manager, mock_worker):
             routes_module.paths.saved_dir = saved_dir
             routes_module.paths.generated_dir = temp_dir
 
-            # Reset the global gallery service to use temp_dir paths
-            routes_module._gallery_service = GalleryService(prompts_dir, saved_dir)
+            # Clear the lru_cache and create test service
+            routes_module.get_gallery_service.cache_clear()
+            test_service = GalleryService(prompts_dir, saved_dir)
+
+            # Use FastAPI dependency override
+            app.dependency_overrides[routes_module.get_gallery_service] = lambda: test_service
 
             app.include_router(routes_module.router)
 
             with TestClient(app) as client:
                 yield client
+
+            # Clean up
+            app.dependency_overrides.clear()
+            routes_module.get_gallery_service.cache_clear()
 
 
 class TestGenerateEndpoint:
