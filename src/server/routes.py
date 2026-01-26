@@ -14,7 +14,7 @@ from sse_starlette.sse import EventSourceResponse
 from .app import get_queue_manager, get_worker, GENERATED_DIR
 from .models import (
     GenerateRequest,
-    RegeneratePromptsRequest,
+    RegeneratePromptsApiRequest,
     GrammarUpdateRequest,
     GenerateImageRequest,
     EnhanceImageRequest,
@@ -326,7 +326,7 @@ async def update_grammar(run_id: str, req: GrammarUpdateRequest):
 
 
 @router.post("/api/gallery/{run_id}/regenerate", response_model=TaskResponse)
-async def regenerate_prompts(run_id: str, req: RegeneratePromptsRequest | None = None):
+async def regenerate_prompts(run_id: str, req: RegeneratePromptsApiRequest | None = None):
     """Regenerate prompts from the current grammar."""
     prompts_dir = GENERATED_DIR / "prompts"
     run_dir = prompts_dir / run_id
@@ -470,3 +470,35 @@ async def enhance_single_image(
         task_id=task.id,
         message=f"Enhancement queued (task {task.id[:8]})",
     )
+
+
+@router.get("/api/gallery/{run_id}/logs")
+async def get_gallery_logs(run_id: str, tail: int = 100):
+    """Get the worker log file for a gallery.
+
+    Args:
+        run_id: The gallery run ID
+        tail: Number of lines from the end to return (default 100, 0 for all)
+
+    Returns:
+        Log file contents
+    """
+    prompts_dir = GENERATED_DIR / "prompts"
+    run_dir = prompts_dir / run_id
+
+    if not run_dir.exists():
+        raise HTTPException(status_code=404, detail="Gallery not found")
+
+    # Find the log file
+    log_files = list(run_dir.glob("*_worker.log"))
+    if not log_files:
+        return {"logs": "", "message": "No log file found"}
+
+    log_file = log_files[0]
+    content = log_file.read_text()
+
+    if tail > 0:
+        lines = content.split('\n')
+        content = '\n'.join(lines[-tail:])
+
+    return {"logs": content, "filename": log_file.name}

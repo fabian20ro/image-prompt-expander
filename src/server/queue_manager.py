@@ -295,3 +295,16 @@ class QueueManager:
             "run_id": run_id,
             "path": path,
         })
+
+    def emit_log(self, task_id: str, message: str) -> None:
+        """Emit a log line from the worker subprocess.
+
+        Args:
+            task_id: ID of the task
+            message: Log message to emit
+        """
+        self._notify("task_log", {
+            "task_id": task_id,
+            "message": message,
+            "timestamp": datetime.now().isoformat(),
+        })

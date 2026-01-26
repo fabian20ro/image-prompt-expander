@@ -81,9 +81,14 @@ class GenerateRequest(BaseModel):
 
 
 class RegeneratePromptsRequest(BaseModel):
-    """Request to regenerate prompts from edited grammar."""
+    """Request to regenerate prompts from edited grammar (internal queue task)."""
     run_id: str
     grammar: str
+    count: int | None = None
+
+
+class RegeneratePromptsApiRequest(BaseModel):
+    """API request to regenerate prompts (run_id and grammar from URL/file)."""
     count: int | None = None
 
 

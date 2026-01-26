@@ -12,6 +12,9 @@ Usage:
 import json
 import os
 import sys
+import threading
+import time
+import traceback
 from datetime import datetime
 from pathlib import Path
 
@@ -29,6 +32,37 @@ from gallery_index import generate_master_index
 
 GENERATED_DIR = ROOT_DIR / "generated"
 
+# Global log file handle (set when we know the output directory)
+_log_file = None
+
+
+def set_log_file(log_path: Path) -> None:
+    """Set the log file path for this task."""
+    global _log_file
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    _log_file = open(log_path, 'a', buffering=1)  # Line-buffered
+    _log_file.write(f"\n{'='*60}\n")
+    _log_file.write(f"Task started at {datetime.now().isoformat()}\n")
+    _log_file.write(f"{'='*60}\n")
+
+
+def close_log_file() -> None:
+    """Close the log file."""
+    global _log_file
+    if _log_file:
+        _log_file.write(f"\n{'='*60}\n")
+        _log_file.write(f"Task ended at {datetime.now().isoformat()}\n")
+        _log_file.write(f"{'='*60}\n")
+        _log_file.close()
+        _log_file = None
+
+
+def log_to_file(message: str) -> None:
+    """Write a message to the log file if set."""
+    if _log_file:
+        timestamp = datetime.now().strftime("%H:%M:%S")
+        _log_file.write(f"[{timestamp}] {message}\n")
+
 
 def emit_progress(stage: str, current: int = 0, total: int = 0, message: str = ""):
     """Emit progress update to stdout."""
@@ -40,6 +74,8 @@ def emit_progress(stage: str, current: int = 0, total: int = 0, message: str = "
         "message": message,
     }
     print(json.dumps(data), flush=True)
+    if message:
+        log_to_file(message)
 
 
 def emit_result(success: bool, data: dict | None = None, error: str | None = None):
@@ -51,6 +87,10 @@ def emit_result(success: bool, data: dict | None = None, error: str | None = Non
         "error": error,
     }
     print(json.dumps(result), flush=True)
+    if success:
+        log_to_file(f"Task completed successfully: {data}")
+    else:
+        log_to_file(f"Task failed: {error}")
 
 
 def emit_image_ready(run_id: str, path: str):
@@ -72,6 +112,40 @@ def sync_file(path: Path) -> None:
     with open(path, 'r+b') as f:
         f.flush()
         os.fsync(f.fileno())
+
+
+class Heartbeat:
+    """Context manager for emitting periodic heartbeats during long operations."""
+
+    def __init__(self, message: str = "Working...", interval: int = 30):
+        """Initialize heartbeat.
+
+        Args:
+            message: Message to emit with heartbeat
+            interval: Seconds between heartbeats
+        """
+        self.message = message
+        self.interval = interval
+        self._stop_event = threading.Event()
+        self._thread = None
+
+    def _heartbeat_loop(self):
+        """Emit heartbeat every interval seconds until stopped."""
+        while not self._stop_event.wait(timeout=self.interval):
+            emit_progress("heartbeat", 0, 0, self.message)
+
+    def __enter__(self):
+        """Start the heartbeat thread."""
+        self._thread = threading.Thread(target=self._heartbeat_loop, daemon=True)
+        self._thread.start()
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """Stop the heartbeat thread."""
+        self._stop_event.set()
+        if self._thread:
+            self._thread.join(timeout=1)
+        return False
 
 
 def run_generate_pipeline(params: dict):
@@ -129,6 +203,10 @@ def run_generate_pipeline(params: dict):
     output_dir = GENERATED_DIR / "prompts" / f"{timestamp}_{prompt_hash}"
     output_dir.mkdir(parents=True, exist_ok=True)
     run_id = output_dir.name
+
+    # Set up per-task log file
+    set_log_file(output_dir / f"{prefix}_worker.log")
+    log_to_file(f"Starting generation pipeline for: {prompt[:100]}...")
 
     # Save prompts
     for i, text in enumerate(outputs):
@@ -206,19 +284,22 @@ def run_generate_pipeline(params: dict):
                 )
 
                 try:
-                    generate_image(
-                        prompt=prompt_text,
-                        output_path=output_path,
-                        model=model,
-                        seed=current_seed,
-                        steps=steps,
-                        width=width,
-                        height=height,
-                        quantize=quantize,
-                        tiled_vae=tiled_vae,
-                    )
+                    with Heartbeat(f"Generating {output_path.name}..."):
+                        generate_image(
+                            prompt=prompt_text,
+                            output_path=output_path,
+                            model=model,
+                            seed=current_seed,
+                            steps=steps,
+                            width=width,
+                            height=height,
+                            quantize=quantize,
+                            tiled_vae=tiled_vae,
+                        )
                 except Exception as e:
-                    emit_result(False, error=f"Image generation failed: {e}")
+                    context = f"model={model}, prompt_idx={prompt_idx}, image_idx={image_idx}"
+                    emit_progress("error_detail", 0, 0, traceback.format_exc())
+                    emit_result(False, error=f"Image generation failed ({context}): {e}")
                     return
 
                 # Sync file to disk before notifying
@@ -239,16 +320,19 @@ def run_generate_pipeline(params: dict):
                         f"Enhancing {output_path.name}..."
                     )
                     try:
-                        enhance_image(
-                            image_path=output_path,
-                            output_path=output_path,
-                            softness=enhance_softness,
-                            seed=current_seed,
-                            quantize=quantize,
-                            tiled_vae=tiled_vae,
-                        )
+                        with Heartbeat(f"Enhancing {output_path.name}..."):
+                            enhance_image(
+                                image_path=output_path,
+                                output_path=output_path,
+                                softness=enhance_softness,
+                                seed=current_seed,
+                                quantize=quantize,
+                                tiled_vae=tiled_vae,
+                            )
                     except Exception as e:
-                        emit_result(False, error=f"Enhancement failed: {e}")
+                        context = f"prompt_idx={prompt_idx}, image_idx={image_idx}"
+                        emit_progress("error_detail", 0, 0, traceback.format_exc())
+                        emit_result(False, error=f"Enhancement failed ({context}): {e}")
                         return
 
                     sync_file(output_path)
@@ -272,16 +356,18 @@ def run_generate_pipeline(params: dict):
                     f"Enhancing {image_path.name}..."
                 )
                 try:
-                    enhance_image(
-                        image_path=image_path,
-                        output_path=image_path,
-                        softness=enhance_softness,
-                        seed=image_seed,
-                        quantize=quantize,
-                        tiled_vae=tiled_vae,
-                    )
+                    with Heartbeat(f"Enhancing {image_path.name}..."):
+                        enhance_image(
+                            image_path=image_path,
+                            output_path=image_path,
+                            softness=enhance_softness,
+                            seed=image_seed,
+                            quantize=quantize,
+                            tiled_vae=tiled_vae,
+                        )
                 except Exception as e:
-                    emit_result(False, error=f"Enhancement failed: {e}")
+                    emit_progress("error_detail", 0, 0, traceback.format_exc())
+                    emit_result(False, error=f"Enhancement failed ({image_path.name}): {e}")
                     return
 
                 sync_file(image_path)
@@ -314,6 +400,10 @@ def run_regenerate_prompts(params: dict):
 
     metadata = json.loads(meta_files[0].read_text())
     prefix = metadata.get("prefix", "image")
+
+    # Set up per-task log file
+    set_log_file(output_dir / f"{prefix}_worker.log")
+    log_to_file(f"Regenerating prompts: count={count}")
 
     if count is None:
         count = metadata.get("count", 50)
@@ -374,6 +464,10 @@ def run_generate_image(params: dict):
     prefix = metadata.get("prefix", "image")
     image_settings = metadata.get("image_generation", {})
 
+    # Set up per-task log file
+    set_log_file(output_dir / f"{prefix}_worker.log")
+    log_to_file(f"Generating single image: prompt_idx={prompt_idx}, image_idx={image_idx}")
+
     # Load prompt
     prompt_file = output_dir / f"{prefix}_{prompt_idx}.txt"
     if not prompt_file.exists():
@@ -385,20 +479,24 @@ def run_generate_image(params: dict):
 
     emit_progress("generating_image", 0, 1, f"Generating {output_path.name}...")
 
+    model = image_settings.get("model", "z-image-turbo")
     try:
-        generate_image(
-            prompt=prompt_text,
-            output_path=output_path,
-            model=image_settings.get("model", "z-image-turbo"),
-            seed=image_settings.get("seed"),
-            steps=image_settings.get("steps"),
-            width=image_settings.get("width", 864),
-            height=image_settings.get("height", 1152),
-            quantize=image_settings.get("quantize", 8),
-            tiled_vae=True,
-        )
+        with Heartbeat(f"Generating {output_path.name}..."):
+            generate_image(
+                prompt=prompt_text,
+                output_path=output_path,
+                model=model,
+                seed=image_settings.get("seed"),
+                steps=image_settings.get("steps"),
+                width=image_settings.get("width", 864),
+                height=image_settings.get("height", 1152),
+                quantize=image_settings.get("quantize", 8),
+                tiled_vae=True,
+            )
     except Exception as e:
-        emit_result(False, error=f"Image generation failed: {e}")
+        context = f"model={model}, run_id={run_id}, prompt_idx={prompt_idx}, image_idx={image_idx}"
+        emit_progress("error_detail", 0, 0, traceback.format_exc())
+        emit_result(False, error=f"Image generation failed ({context}): {e}")
         return
 
     sync_file(output_path)
@@ -433,6 +531,10 @@ def run_enhance_image(params: dict):
     prefix = metadata.get("prefix", "image")
     image_settings = metadata.get("image_generation", {})
 
+    # Set up per-task log file
+    set_log_file(output_dir / f"{prefix}_worker.log")
+    log_to_file(f"Enhancing single image: prompt_idx={prompt_idx}, image_idx={image_idx}")
+
     image_path = output_dir / f"{prefix}_{prompt_idx}_{image_idx}.png"
     if not image_path.exists():
         emit_result(False, error=f"Image not found: {image_path.name}")
@@ -441,15 +543,18 @@ def run_enhance_image(params: dict):
     emit_progress("enhancing_image", 0, 1, f"Enhancing {image_path.name}...")
 
     try:
-        enhance_image(
-            image_path=image_path,
-            output_path=image_path,
-            softness=softness,
-            quantize=image_settings.get("quantize", 8),
-            tiled_vae=True,
-        )
+        with Heartbeat(f"Enhancing {image_path.name}..."):
+            enhance_image(
+                image_path=image_path,
+                output_path=image_path,
+                softness=softness,
+                quantize=image_settings.get("quantize", 8),
+                tiled_vae=True,
+            )
     except Exception as e:
-        emit_result(False, error=f"Enhancement failed: {e}")
+        context = f"run_id={run_id}, prompt_idx={prompt_idx}, image_idx={image_idx}"
+        emit_progress("error_detail", 0, 0, traceback.format_exc())
+        emit_result(False, error=f"Enhancement failed ({context}): {e}")
         return
 
     sync_file(image_path)
@@ -482,6 +587,10 @@ def run_generate_all_images(params: dict):
     metadata = json.loads(meta_files[0].read_text())
     prefix = metadata.get("prefix", "image")
     image_settings = metadata.get("image_generation", {})
+
+    # Set up per-task log file
+    set_log_file(output_dir / f"{prefix}_worker.log")
+    log_to_file(f"Generating all images: images_per_prompt={images_per_prompt}, resume={resume}")
 
     # Load prompts
     prompt_files = sorted(output_dir.glob(f"{prefix}_*.txt"))
@@ -519,20 +628,24 @@ def run_generate_all_images(params: dict):
                 f"Generating {output_path.name}..."
             )
 
+            model = image_settings.get("model", "z-image-turbo")
             try:
-                generate_image(
-                    prompt=prompt_text,
-                    output_path=output_path,
-                    model=image_settings.get("model", "z-image-turbo"),
-                    seed=current_seed,
-                    steps=image_settings.get("steps"),
-                    width=image_settings.get("width", 864),
-                    height=image_settings.get("height", 1152),
-                    quantize=image_settings.get("quantize", 8),
-                    tiled_vae=True,
-                )
+                with Heartbeat(f"Generating {output_path.name}..."):
+                    generate_image(
+                        prompt=prompt_text,
+                        output_path=output_path,
+                        model=model,
+                        seed=current_seed,
+                        steps=image_settings.get("steps"),
+                        width=image_settings.get("width", 864),
+                        height=image_settings.get("height", 1152),
+                        quantize=image_settings.get("quantize", 8),
+                        tiled_vae=True,
+                    )
             except Exception as e:
-                emit_result(False, error=f"Image generation failed: {e}")
+                context = f"model={model}, run_id={run_id}, prompt_idx={prompt_idx}, image_idx={image_idx}"
+                emit_progress("error_detail", 0, 0, traceback.format_exc())
+                emit_result(False, error=f"Image generation failed ({context}): {e}")
                 return
 
             sync_file(output_path)
@@ -570,6 +683,10 @@ def run_enhance_all_images(params: dict):
     prefix = metadata.get("prefix", "image")
     image_settings = metadata.get("image_generation", {})
 
+    # Set up per-task log file
+    set_log_file(output_dir / f"{prefix}_worker.log")
+    log_to_file(f"Enhancing all images: softness={softness}")
+
     # Find all images
     images = sorted(output_dir.glob(f"{prefix}_*_*.png"))
     if not images:
@@ -587,15 +704,17 @@ def run_enhance_all_images(params: dict):
         )
 
         try:
-            enhance_image(
-                image_path=image_path,
-                output_path=image_path,
-                softness=softness,
-                quantize=image_settings.get("quantize", 8),
-                tiled_vae=True,
-            )
+            with Heartbeat(f"Enhancing {image_path.name}..."):
+                enhance_image(
+                    image_path=image_path,
+                    output_path=image_path,
+                    softness=softness,
+                    quantize=image_settings.get("quantize", 8),
+                    tiled_vae=True,
+                )
         except Exception as e:
-            emit_result(False, error=f"Enhancement failed: {e}")
+            emit_progress("error_detail", 0, 0, traceback.format_exc())
+            emit_result(False, error=f"Enhancement failed ({image_path.name}): {e}")
             return
 
         sync_file(image_path)
@@ -644,8 +763,11 @@ def main():
     try:
         handler(params)
     except Exception as e:
+        log_to_file(f"Unhandled exception: {traceback.format_exc()}")
         emit_result(False, error=str(e))
         sys.exit(1)
+    finally:
+        close_log_file()
 
 
 if __name__ == "__main__":

@@ -93,21 +93,28 @@ class Worker:
         self._current_process = None
         return True
 
-    async def _read_stderr(self, process) -> list[str]:
-        """Read stderr from process concurrently.
+    async def _read_stderr(self, process, task_id: str) -> list[str]:
+        """Read stderr from process and stream to queue manager.
 
         Args:
             process: The subprocess to read stderr from
+            task_id: Task ID for logging context
 
         Returns:
-            List of stderr lines
+            List of all stderr lines (for final error reporting)
         """
         stderr_lines = []
         while True:
             line = await process.stderr.readline()
             if not line:
                 break
-            stderr_lines.append(line.decode().strip())
+            text = line.decode().strip()
+            if text:
+                stderr_lines.append(text)
+                # Emit as SSE event for real-time display
+                self.queue_manager.emit_log(task_id, text)
+                # Also log to server logs
+                logging.info(f"[worker:{task_id[:8]}] {text}")
         return stderr_lines
 
     async def _execute_task(self, task):
@@ -143,7 +150,7 @@ class Worker:
             self.queue_manager.update_task_pid(task.id, self._current_process.pid)
 
             # Start stderr reader concurrently
-            stderr_task = asyncio.create_task(self._read_stderr(self._current_process))
+            stderr_task = asyncio.create_task(self._read_stderr(self._current_process, task.id))
 
             # Read output line by line
             result_data = None
@@ -153,7 +160,7 @@ class Worker:
                 try:
                     line = await asyncio.wait_for(
                         self._current_process.stdout.readline(),
-                        timeout=60.0  # 1 minute between output lines
+                        timeout=300.0  # 5 minutes between output lines (image gen can be slow)
                     )
                 except asyncio.TimeoutError:
                     if self._current_process.returncode is not None:
@@ -193,10 +200,8 @@ class Worker:
             # Wait for process to complete
             await self._current_process.wait()
 
-            # Collect stderr
+            # Collect stderr (already streamed to log events, keep for error reporting)
             stderr_lines = await stderr_task
-            if stderr_lines:
-                logging.warning(f"Worker stderr: {'; '.join(stderr_lines[:5])}")
 
             # Check exit code
             if self._current_process.returncode != 0 and error_message is None:

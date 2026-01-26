@@ -268,6 +268,20 @@ def _build_interactive_progress_bar() -> str:
 '''
 
 
+def _build_log_panel() -> str:
+    """Build the collapsible log panel HTML."""
+    return '''
+  <details id="log-panel" class="log-panel">
+    <summary>
+      <span class="log-title">Generation Logs</span>
+      <span id="log-count" class="log-count">0</span>
+      <button id="btn-clear-logs" class="btn-small btn-secondary" onclick="event.preventDefault(); clearLogs();">Clear</button>
+    </summary>
+    <div id="log-content" class="log-content"></div>
+  </details>
+'''
+
+
 def _build_interactive_js(run_id: str) -> str:
     """Build JavaScript for interactive gallery features."""
     return f'''
@@ -285,17 +299,91 @@ def _build_interactive_js(run_id: str) -> str:
   const progressMessage = document.getElementById('progress-message');
   const progressFill = document.getElementById('progress-fill');
   const progressText = document.getElementById('progress-text');
+  const logPanel = document.getElementById('log-panel');
+  const logContent = document.getElementById('log-content');
+  const logCount = document.getElementById('log-count');
 
   let eventSource = null;
+  let logLineCount = 0;
+  const MAX_LOG_LINES = 500;
 
-  // Connect to SSE
+  // Log panel functions
+  function appendLog(timestamp, message) {{
+    if (!logContent) return;
+
+    const line = document.createElement('div');
+    line.className = 'log-line';
+    if (message.toLowerCase().includes('error')) line.className += ' error';
+    else if (message.toLowerCase().includes('warning')) line.className += ' warning';
+
+    const time = timestamp ? new Date(timestamp).toLocaleTimeString() : '';
+    line.innerHTML = `<span class="timestamp">${{time}}</span>${{escapeHtml(message)}}`;
+
+    logContent.appendChild(line);
+    logLineCount++;
+    logCount.textContent = logLineCount;
+
+    // Auto-scroll to bottom
+    logContent.scrollTop = logContent.scrollHeight;
+
+    // Trim old lines if too many
+    while (logContent.children.length > MAX_LOG_LINES) {{
+      logContent.removeChild(logContent.firstChild);
+      logLineCount--;
+    }}
+  }}
+
+  function escapeHtml(text) {{
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+  }}
+
+  window.clearLogs = function() {{
+    if (logContent) {{
+      logContent.innerHTML = '';
+      logLineCount = 0;
+      logCount.textContent = '0';
+    }}
+  }};
+
+  // Connect to SSE with backoff
+  let sseRetryCount = 0;
+  const MAX_SSE_RETRIES = 10;
+
   function connectSSE() {{
-    eventSource = new EventSource('/api/events');
+    if (eventSource) {{
+      eventSource.close();
+      eventSource = null;
+    }}
 
-    eventSource.onopen = () => console.log('SSE connected');
+    if (sseRetryCount >= MAX_SSE_RETRIES) {{
+      console.warn('SSE: Max retries reached, giving up');
+      return;
+    }}
+
+    try {{
+      eventSource = new EventSource('/api/events');
+    }} catch (e) {{
+      console.error('SSE: Failed to create EventSource', e);
+      return;
+    }}
+
+    eventSource.onopen = () => {{
+      console.log('SSE connected');
+      sseRetryCount = 0;
+    }};
+
     eventSource.onerror = (e) => {{
       console.error('SSE error', e);
-      setTimeout(connectSSE, 3000);
+      if (eventSource) {{
+        eventSource.close();
+        eventSource = null;
+      }}
+      sseRetryCount++;
+      const delay = Math.min(3000 * Math.pow(2, sseRetryCount - 1), 30000);
+      console.log(`SSE: Retry ${{sseRetryCount}}/${{MAX_SSE_RETRIES}} in ${{delay}}ms`);
+      setTimeout(connectSSE, delay);
     }};
 
     eventSource.addEventListener('status', (e) => {{
@@ -371,6 +459,15 @@ def _build_interactive_js(run_id: str) -> str:
       const data = JSON.parse(e.data);
       if (data.run_id === RUN_ID) {{
         updateImage(data.path);
+      }}
+    }});
+
+    eventSource.addEventListener('task_log', (e) => {{
+      const data = JSON.parse(e.data);
+      appendLog(data.timestamp, data.message);
+      // Auto-open log panel when logs arrive
+      if (logPanel && !logPanel.open) {{
+        logPanel.open = true;
       }}
     }});
 
@@ -547,6 +644,18 @@ def _build_interactive_styles() -> str:
 
     /* Adjust body padding */
     body { padding-bottom: 80px; }
+
+    /* Log panel */
+    .log-panel { background: #2a2a2a; border-radius: 8px; margin-bottom: 20px; }
+    .log-panel summary { padding: 12px 16px; cursor: pointer; display: flex; align-items: center; gap: 12px; list-style: none; }
+    .log-panel summary::-webkit-details-marker { display: none; }
+    .log-title { color: #888; font-size: 14px; }
+    .log-count { background: #444; color: #ddd; font-size: 11px; padding: 2px 8px; border-radius: 10px; }
+    .log-content { max-height: 300px; overflow-y: auto; padding: 0 16px 16px; font-family: monospace; font-size: 12px; line-height: 1.6; }
+    .log-line { color: #aaa; white-space: pre-wrap; word-break: break-all; }
+    .log-line .timestamp { color: #6af; margin-right: 8px; }
+    .log-line.error { color: #f88; }
+    .log-line.warning { color: #fa0; }
 '''
 
 
@@ -592,6 +701,7 @@ def _build_gallery_html(
 
     # Build interactive sections
     action_bar = _build_interactive_action_bar(run_id) if interactive and run_id else ""
+    log_panel = _build_log_panel() if interactive else ""
     progress_bar = _build_interactive_progress_bar() if interactive else ""
     interactive_js = _build_interactive_js(run_id) if interactive and run_id else ""
     extra_styles = _build_interactive_styles() if interactive else ""
@@ -624,7 +734,7 @@ def _build_gallery_html(
   </style>
 </head>
 <body>
-  <h1>Gallery: {prefix}</h1>{header_section}{grammar_section}{action_bar}
+  <h1>Gallery: {prefix}</h1>{header_section}{grammar_section}{action_bar}{log_panel}
   <p class="status">Generated: {completed} / {total} images</p>
   <div class="grid">
 {cards_joined}
