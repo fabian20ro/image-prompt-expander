@@ -79,3 +79,30 @@ class TestGalleryInteractive:
         assert "grammar-editor" not in content
         assert "btn-generate-all" not in content
         assert "generateImage(" not in content
+
+    def test_gallery_interactive_uses_toasts_modal_and_busy_button_handlers(self, temp_dir):
+        """Interactive gallery should use non-blocking notifications and button context."""
+        run_dir = temp_dir
+        metadata = {
+            "prefix": "test",
+            "count": 1,
+            "user_prompt": "test prompt",
+            "image_generation": {"images_per_prompt": 1},
+        }
+        create_run_files(run_dir, num_prompts=1, metadata=metadata)
+
+        gallery_path = generate_gallery_for_directory(run_dir, interactive=True)
+        content = gallery_path.read_text()
+
+        assert "toast-region" in content
+        assert "confirm-modal" in content
+        assert "showToast(" in content
+        assert "confirmAction(" in content
+        assert "withButtonBusy(" in content
+        assert "queue_cleared" in content
+        assert "generateImage(this," in content
+        assert "enhanceImage(this," in content
+
+        # Guard against regressions back to blocking browser dialogs.
+        assert "alert(" not in content
+        assert "confirm(" not in content

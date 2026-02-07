@@ -263,6 +263,10 @@ class QueueManager:
 
             if count > 0:
                 self._notify("queue_cleared", {"count": count})
+                self._notify("queue_updated", {
+                    "pending_count": len(state.pending),
+                    "current": state.current_task.model_dump(mode='json') if state.current_task else None,
+                })
 
             return count
 

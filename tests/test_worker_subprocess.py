@@ -192,6 +192,68 @@ class TestRunGeneratePipeline:
         assert result["success"] is True
         assert result["data"]["run_id"] == "test-run"
 
+    def test_run_generate_pipeline_prepares_log_path_and_output_dir(self, capsys):
+        """Pipeline generation should prepare log file and pass output_dir to executor."""
+        from pipeline import PipelineResult
+
+        expected_output_dir = Path("/tmp/generated/prompts/20260207_140000_abc123")
+
+        with (
+            patch("server.worker_subprocess.create_executor") as mock_exec,
+            patch("server.worker_subprocess.set_log_file") as mock_set_log,
+            patch("server.worker_subprocess.log_to_file") as mock_log_to_file,
+            patch("server.worker_subprocess.hash_prompt", return_value="abc123"),
+            patch("server.worker_subprocess.paths") as mock_paths,
+            patch("server.worker_subprocess.datetime") as mock_datetime,
+            patch("server.worker_subprocess.Heartbeat") as mock_heartbeat,
+        ):
+            mock_paths.prompts_dir = Path("/tmp/generated/prompts")
+
+            mock_now = MagicMock()
+            mock_now.strftime.return_value = "20260207_140000"
+            mock_datetime.now.return_value = mock_now
+
+            heartbeat_ctx = MagicMock()
+            heartbeat_ctx.__enter__.return_value = None
+            heartbeat_ctx.__exit__.return_value = False
+            mock_heartbeat.return_value = heartbeat_ctx
+
+            mock_executor = MagicMock()
+
+            def run_full_pipeline_side_effect(**kwargs):
+                # Ensure logging was configured before execution starts.
+                assert mock_set_log.called
+                assert kwargs["output_dir"] == expected_output_dir
+                return PipelineResult(
+                    success=True,
+                    run_id="test-run",
+                    output_dir=kwargs["output_dir"],
+                    prompt_count=3,
+                )
+
+            mock_executor.run_full_pipeline.side_effect = run_full_pipeline_side_effect
+            mock_exec.return_value = mock_executor
+
+            run_generate_pipeline({
+                "prompt": "test prompt",
+                "count": 3,
+                "prefix": "test",
+            })
+
+            mock_set_log.assert_called_once_with(expected_output_dir / "test_worker.log")
+            assert mock_log_to_file.call_count >= 1
+            first_log_message = mock_log_to_file.call_args_list[0].args[0]
+            assert "Starting generation pipeline" in first_log_message
+
+            called_kwargs = mock_executor.run_full_pipeline.call_args.kwargs
+            assert called_kwargs["output_dir"] == expected_output_dir
+
+        captured = capsys.readouterr()
+        lines = [line for line in captured.out.strip().split("\n") if line]
+        result = json.loads(lines[-1])
+        assert result["success"] is True
+        assert result["data"]["output_dir"] == str(expected_output_dir)
+
     @patch("server.worker_subprocess.create_executor")
     def test_run_generate_pipeline_failure(self, mock_exec, capsys):
         """Test pipeline generation failure."""

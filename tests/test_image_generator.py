@@ -1,8 +1,10 @@
 """Tests for image_generator.py - mflux wrapper for Apple Silicon."""
 
 import random
+import sys
+from types import ModuleType
 from pathlib import Path
-from unittest.mock import MagicMock, patch, PropertyMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -89,21 +91,32 @@ class TestGetModel:
         assert result is mock_model
 
     @patch("image_generator._model_cache", {})
-    @patch("mflux.models.z_image.ZImageTurbo")
-    @patch("mflux.models.common.config.model_config.ModelConfig")
-    @patch("mflux.models.common.vae.tiling_config.TilingConfig")
-    def test_get_model_z_image_turbo_creation(
-        self, mock_tiling, mock_config, mock_z_image
-    ):
+    def test_get_model_z_image_turbo_creation(self):
         """Test z-image-turbo model creation."""
         mock_instance = MagicMock()
-        mock_z_image.return_value = mock_instance
-        mock_config.z_image_turbo.return_value = MagicMock()
+        mock_tiling_instance = MagicMock()
 
-        result = _get_model("z-image-turbo", quantize=8, tiled_vae=True)
+        # Build lightweight fake mflux module tree so importing does not
+        # initialize native MLX/Metal components in tests.
+        module_model_config = ModuleType("mflux.models.common.config.model_config")
+        module_model_config.ModelConfig = MagicMock()
+        module_model_config.ModelConfig.z_image_turbo.return_value = MagicMock()
 
-        mock_z_image.assert_called_once()
-        mock_tiling.assert_called_once()
+        module_z_image = ModuleType("mflux.models.z_image")
+        module_z_image.ZImageTurbo = MagicMock(return_value=mock_instance)
+
+        module_tiling = ModuleType("mflux.models.common.vae.tiling_config")
+        module_tiling.TilingConfig = MagicMock(return_value=mock_tiling_instance)
+
+        with patch.dict(sys.modules, {
+            "mflux.models.common.config.model_config": module_model_config,
+            "mflux.models.z_image": module_z_image,
+            "mflux.models.common.vae.tiling_config": module_tiling,
+        }):
+            result = _get_model("z-image-turbo", quantize=8, tiled_vae=True)
+
+        module_z_image.ZImageTurbo.assert_called_once()
+        module_tiling.TilingConfig.assert_called_once()
         assert result is mock_instance
 
 

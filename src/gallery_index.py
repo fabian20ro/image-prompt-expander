@@ -13,6 +13,7 @@ from html_components import (
     FormStyles,
     IndexStyles,
     SSEClient,
+    Notifications,
 )
 
 
@@ -271,16 +272,20 @@ def _build_log_panel() -> str:
     return LogPanel.html()
 
 
+def _build_notifications() -> str:
+    """Build toast + confirm dialog markup."""
+    return Notifications.html()
+
+
 def _build_interactive_js() -> str:
     """Build the JavaScript for form submission and SSE."""
     log_js = LogPanel.js()
     sse_js = SSEClient.js()
+    notify_js = Notifications.js()
 
     return f'''
 <script>
 document.addEventListener('DOMContentLoaded', function() {{
-  console.log('DOM loaded, initializing...');
-
   const form = document.getElementById('generate-form');
   const queueStatus = document.getElementById('queue-status');
   const queueText = document.getElementById('queue-text');
@@ -290,18 +295,34 @@ document.addEventListener('DOMContentLoaded', function() {{
   const btnKill = document.getElementById('btn-kill');
   const btnClear = document.getElementById('btn-clear');
   const logPanel = document.getElementById('log-panel');
+  const submitBtn = form ? form.querySelector('button[type="submit"]') : null;
 
   if (!form) {{
-    console.error('Form not found!');
     return;
   }}
-  console.log('Form found:', form);
+
+  // Shared notification helpers
+{notify_js}
 
   // Shared log panel functions
 {log_js}
 
   // Shared SSE connection logic
 {sse_js}
+
+  async function withButtonBusy(btn, busyText, fn) {{
+    if (!btn) return fn();
+    const original = btn.dataset.originalText || btn.textContent;
+    btn.dataset.originalText = original;
+    btn.disabled = true;
+    btn.textContent = busyText;
+    try {{
+      return await fn();
+    }} finally {{
+      btn.disabled = false;
+      btn.textContent = original;
+    }}
+  }}
 
   function initSSE() {{
     const es = connectSSE();
@@ -315,6 +336,12 @@ document.addEventListener('DOMContentLoaded', function() {{
     es.addEventListener('queue_updated', (e) => {{
       const data = JSON.parse(e.data);
       updateStatus(data);
+    }});
+
+    es.addEventListener('queue_cleared', (_e) => {{
+      btnClear.classList.add('hidden');
+      queueStatus.classList.add('hidden');
+      showToast('Queue cleared', 'success');
     }});
 
     es.addEventListener('task_started', (e) => {{
@@ -398,13 +425,12 @@ document.addEventListener('DOMContentLoaded', function() {{
   // Form submission
   form.addEventListener('submit', async function(e) {{
     e.preventDefault();
-    console.log('Form submitted');
 
     const formData = new FormData(form);
     const promptValue = formData.get('prompt');
 
     if (!promptValue || !promptValue.trim()) {{
-      alert('Please enter a prompt');
+      showToast('Please enter a prompt', 'error');
       return;
     }}
 
@@ -418,57 +444,62 @@ document.addEventListener('DOMContentLoaded', function() {{
       tiled_vae: form.querySelector('#tiled_vae')?.checked ?? false,
     }};
 
-    console.log('Sending data:', data);
-
     // Show status immediately
     queueStatus.classList.remove('hidden');
     queueText.textContent = 'Submitting...';
+    await withButtonBusy(submitBtn, 'Submitting...', async () => {{
+      try {{
+        const resp = await fetch('/api/generate', {{
+          method: 'POST',
+          headers: {{'Content-Type': 'application/json'}},
+          body: JSON.stringify(data),
+        }});
 
-    try {{
-      const resp = await fetch('/api/generate', {{
-        method: 'POST',
-        headers: {{'Content-Type': 'application/json'}},
-        body: JSON.stringify(data),
-      }});
+        if (!resp.ok) {{
+          let detail = 'Unknown error';
+          try {{
+            const err = await resp.json();
+            detail = err.detail || detail;
+          }} catch (_e) {{}}
+          showToast('Error: ' + detail, 'error', 4200);
+          queueStatus.classList.add('hidden');
+          return;
+        }}
 
-      console.log('Response status:', resp.status);
-
-      if (!resp.ok) {{
-        const err = await resp.json();
-        console.error('Error response:', err);
-        alert('Error: ' + (err.detail || 'Unknown error'));
+        const result = await resp.json();
+        queueText.textContent = result.message;
+        showToast(result.message || 'Generation queued', 'success');
+      }} catch (err) {{
+        showToast('Error: ' + err.message, 'error', 4200);
         queueStatus.classList.add('hidden');
-        return;
       }}
-
-      const result = await resp.json();
-      console.log('Success:', result);
-      queueText.textContent = result.message;
-    }} catch (err) {{
-      console.error('Fetch error:', err);
-      alert('Error: ' + err.message);
-      queueStatus.classList.add('hidden');
-    }}
+    }});
   }});
 
   // Kill button
   btnKill.addEventListener('click', async () => {{
-    try {{
-      await fetch('/api/worker/kill', {{method: 'POST'}});
-    }} catch (err) {{
-      console.error('Kill failed', err);
-    }}
+    await withButtonBusy(btnKill, 'Killing...', async () => {{
+      try {{
+        await fetch('/api/worker/kill', {{method: 'POST'}});
+        showToast('Kill signal sent', 'success');
+      }} catch (err) {{
+        showToast('Kill failed: ' + err.message, 'error', 4200);
+      }}
+    }});
   }});
 
   // Clear queue button
   btnClear.addEventListener('click', async () => {{
-    try {{
-      await fetch('/api/queue/clear', {{method: 'POST'}});
-      btnClear.classList.add('hidden');
-      queueStatus.classList.add('hidden');
-    }} catch (err) {{
-      console.error('Clear failed', err);
-    }}
+    await withButtonBusy(btnClear, 'Clearing...', async () => {{
+      try {{
+        await fetch('/api/queue/clear', {{method: 'POST'}});
+        btnClear.classList.add('hidden');
+        queueStatus.classList.add('hidden');
+        showToast('Queue clear requested', 'success');
+      }} catch (err) {{
+        showToast('Clear failed: ' + err.message, 'error', 4200);
+      }}
+    }});
   }});
 
   // Start SSE connection
@@ -477,21 +508,30 @@ document.addEventListener('DOMContentLoaded', function() {{
 
 // Delete gallery function (global so onclick can access it)
 window.deleteGallery = async function(runId) {{
-  if (!confirm('Delete this gallery and all its images? This cannot be undone.')) {{
+  const confirmed = await confirmAction('Delete this gallery and all its images? This cannot be undone.', {{
+    confirmText: 'Delete',
+    cancelText: 'Cancel'
+  }});
+  if (!confirmed) {{
     return;
   }}
 
   try {{
     const resp = await fetch(`/api/gallery/${{runId}}`, {{ method: 'DELETE' }});
     if (!resp.ok) {{
-      const err = await resp.json();
-      alert('Delete failed: ' + (err.detail || 'Unknown error'));
+      let detail = 'Unknown error';
+      try {{
+        const err = await resp.json();
+        detail = err.detail || detail;
+      }} catch (_e) {{}}
+      showToast('Delete failed: ' + detail, 'error', 4200);
       return;
     }}
+    showToast('Delete queued', 'success');
     // Reload page to reflect deletion
     location.reload();
   }} catch (err) {{
-    alert('Delete failed: ' + err.message);
+    showToast('Delete failed: ' + err.message, 'error', 4200);
   }}
 }};
 </script>
@@ -503,6 +543,7 @@ def _build_interactive_styles() -> str:
     return (
         FormStyles.css() +
         Buttons.css() +
+        Notifications.css() +
         QueueStatusBar.css() +
         '''
     /* Adjust container padding for status bar */
@@ -669,6 +710,7 @@ def _build_index_html(
     # Build interactive sections
     form_html = _build_generation_form() if interactive else ""
     log_panel_html = _build_log_panel() if interactive else ""
+    notifications_html = _build_notifications() if interactive else ""
     queue_html = _build_queue_status_bar() if interactive else ""
     js_html = _build_interactive_js() if interactive else ""
     extra_styles = _build_interactive_styles() if interactive else ""
@@ -706,6 +748,7 @@ def _build_index_html(
   </style>
 </head>
 <body>
+{notifications_html}
   <div class="container">
     <h1>Image Prompt Generator</h1>
     <p class="subtitle">{run_count} generation runs</p>

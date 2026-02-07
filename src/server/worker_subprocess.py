@@ -21,6 +21,7 @@ sys.path.insert(0, str(SRC_DIR))
 
 from config import paths
 from pipeline import PipelineExecutor, PipelineResult
+from grammar_generator import hash_prompt
 from utils import delete_run
 from gallery_index import generate_master_index
 from metadata_manager import MetadataManager, MetadataError, MetadataNotFoundError
@@ -159,6 +160,12 @@ def run_generate_pipeline(params: dict):
     enhance_softness = params.get("enhance_softness", 0.5)
     enhance_after = params.get("enhance_after", False)
 
+    # Precompute output directory so logs include full pipeline execution.
+    run_timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    run_output_dir = paths.prompts_dir / f"{run_timestamp}_{hash_prompt(prompt)}"
+    set_log_file(run_output_dir / f"{prefix}_worker.log")
+    log_to_file(f"Starting generation pipeline for: {prompt[:100]}...")
+
     executor = create_executor()
 
     with Heartbeat(f"Generating pipeline for: {prompt[:30]}..."):
@@ -181,12 +188,8 @@ def run_generate_pipeline(params: dict):
             enhance=enhance,
             enhance_softness=enhance_softness,
             enhance_after=enhance_after,
+            output_dir=run_output_dir,
         )
-
-    # Set up log file after we know the output directory
-    if result.output_dir:
-        set_log_file(result.output_dir / f"{prefix}_worker.log")
-        log_to_file(f"Starting generation pipeline for: {prompt[:100]}...")
 
     if result.success:
         emit_result(True, data={

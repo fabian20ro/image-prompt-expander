@@ -34,6 +34,9 @@ def clear_model_cache():
 
 def _get_model(model: str, quantize: int, tiled_vae: bool = False):
     """Get or create a cached model instance."""
+    if model not in SUPPORTED_MODELS:
+        raise ValueError(f"Unsupported model: {model}. Choose from: {SUPPORTED_MODELS}")
+
     cache_key = (model, quantize, tiled_vae)
     if cache_key in _model_cache:
         return _model_cache[cache_key]
@@ -71,9 +74,6 @@ def _get_model(model: str, quantize: int, tiled_vae: bool = False):
             model_path=model_path,
             model_config=ModelConfig.flux2_klein_9b(),
         )
-    else:
-        raise ValueError(f"Unsupported model: {model}. Choose from: {SUPPORTED_MODELS}")
-
     # Enable tiled VAE decoding for reduced memory usage
     if tiled_vae:
         from mflux.models.common.vae.tiling_config import TilingConfig
@@ -106,7 +106,7 @@ def generate_image(
         width: Image width in pixels (default 1024)
         height: Image height in pixels (default 1024)
         quantize: Quantization level (3, 4, 5, 6, or 8)
-        tiled_vae: Enable tiled VAE decoding to reduce memory (default: True)
+        tiled_vae: Enable tiled VAE decoding to reduce memory (default: False)
 
     Returns:
         Path to the generated image file

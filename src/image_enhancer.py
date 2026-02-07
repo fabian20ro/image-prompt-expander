@@ -58,7 +58,7 @@ def enhance_image(
         softness: Enhancement softness (0.0-1.0, default 0.5)
         seed: Random seed for reproducibility (None for random)
         quantize: Quantization level (3, 4, 5, 6, or 8)
-        tiled_vae: Enable tiled VAE decoding to reduce memory (default: True)
+        tiled_vae: Enable tiled VAE decoding to reduce memory (default: False)
 
     Returns:
         Path to the enhanced image file

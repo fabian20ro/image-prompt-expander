@@ -116,15 +116,21 @@ class QueueStatusBar:
         """CSS for queue status bar."""
         return '''
     /* Queue status bar */
-    .queue-status { position: fixed; bottom: 0; left: 0; right: 0; background: #2a2a2a; border-top: 1px solid #444; padding: 12px 20px; display: flex; align-items: center; gap: 16px; z-index: 1000; }
+    .queue-status { position: fixed; bottom: 0; left: 0; right: 0; background: #2a2a2a; border-top: 1px solid #444; padding: 12px 20px; display: flex; align-items: center; gap: 16px; z-index: 1000; flex-wrap: wrap; }
     .queue-status.hidden { display: none; }
     .queue-info { flex: 1; font-size: 14px; color: #ddd; }
     .progress-container { display: flex; align-items: center; gap: 12px; }
     .progress-container.hidden { display: none; }
-    .progress-bar { width: 200px; height: 8px; background: #444; border-radius: 4px; overflow: hidden; }
+    .progress-bar { width: min(38vw, 240px); min-width: 140px; height: 8px; background: #444; border-radius: 4px; overflow: hidden; }
     .progress-fill { height: 100%; background: #4a9eff; transition: width 0.3s; }
     .queue-actions { display: flex; gap: 8px; }
-    .queue-actions .hidden { display: none; }'''
+    .queue-actions .hidden { display: none; }
+    @media (max-width: 720px) {
+      .queue-status { padding: 10px 12px; gap: 10px; }
+      .queue-info { width: 100%; flex: 1 0 100%; }
+      .progress-container { flex: 1; min-width: 0; }
+      .queue-actions { width: 100%; justify-content: flex-end; }
+    }'''
 
 
 class ProgressBar:
@@ -151,10 +157,110 @@ class ProgressBar:
         """CSS for progress bar."""
         return '''
     /* Progress bar */
-    .progress-bar-fixed { position: fixed; bottom: 0; left: 0; right: 0; background: #2a2a2a; border-top: 1px solid #444; padding: 12px 20px; display: flex; align-items: center; gap: 16px; z-index: 1000; }
+    .progress-bar-fixed { position: fixed; bottom: 0; left: 0; right: 0; background: #2a2a2a; border-top: 1px solid #444; padding: 12px 20px; display: flex; align-items: center; gap: 16px; z-index: 1000; flex-wrap: wrap; }
     .progress-bar-fixed.hidden { display: none; }
     .progress-info { flex: 1; font-size: 14px; color: #ddd; }
-    .progress-track { width: 200px; height: 8px; background: #444; border-radius: 4px; overflow: hidden; }'''
+    .progress-track { width: min(38vw, 240px); min-width: 140px; height: 8px; background: #444; border-radius: 4px; overflow: hidden; }
+    @media (max-width: 720px) {
+      .progress-bar-fixed { padding: 10px 12px; gap: 10px; }
+      .progress-info { width: 100%; flex: 1 0 100%; }
+    }'''
+
+
+class Notifications:
+    """Toast and modal helpers for non-blocking UI feedback."""
+
+    @staticmethod
+    def html() -> str:
+        """Build toast region + confirm modal markup."""
+        return '''
+  <div id="toast-region" class="toast-region" aria-live="polite" aria-atomic="true"></div>
+  <div id="confirm-modal" class="confirm-modal hidden" role="dialog" aria-modal="true" aria-labelledby="confirm-title">
+    <div class="confirm-card">
+      <h3 id="confirm-title">Confirm Action</h3>
+      <p id="confirm-message"></p>
+      <div class="confirm-actions">
+        <button id="confirm-cancel" type="button" class="btn-secondary">Cancel</button>
+        <button id="confirm-ok" type="button" class="btn-danger">Confirm</button>
+      </div>
+    </div>
+  </div>'''
+
+    @staticmethod
+    def css() -> str:
+        """CSS for toast and confirm dialog."""
+        return '''
+    .toast-region { position: fixed; top: 12px; right: 12px; z-index: 2500; display: flex; flex-direction: column; gap: 8px; max-width: min(92vw, 360px); }
+    .toast { border-radius: 8px; padding: 10px 12px; font-size: 14px; color: #fff; background: #2f3a48; border: 1px solid #44556b; box-shadow: 0 4px 14px rgba(0,0,0,0.25); }
+    .toast.success { background: #1f4b2f; border-color: #2f7244; }
+    .toast.error { background: #562727; border-color: #8f3d3d; }
+    .confirm-modal { position: fixed; inset: 0; z-index: 2600; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.45); padding: 16px; }
+    .confirm-modal.hidden { display: none; }
+    .confirm-card { background: #222; border: 1px solid #444; border-radius: 10px; padding: 16px; width: min(92vw, 420px); }
+    .confirm-card h3 { margin: 0 0 8px; font-size: 18px; color: #eee; }
+    .confirm-card p { margin: 0 0 14px; color: #bbb; font-size: 14px; line-height: 1.5; }
+    .confirm-actions { display: flex; justify-content: flex-end; gap: 10px; }'''
+
+    @staticmethod
+    def js() -> str:
+        """JavaScript for toast and modal behavior."""
+        return '''
+  function showToast(message, type = 'info', timeoutMs = 3200) {
+    const region = document.getElementById('toast-region');
+    if (!region) return;
+    const el = document.createElement('div');
+    el.className = `toast ${type}`;
+    el.textContent = message;
+    region.appendChild(el);
+    setTimeout(() => {
+      el.remove();
+    }, timeoutMs);
+  }
+
+  function confirmAction(message, opts = {}) {
+    const modal = document.getElementById('confirm-modal');
+    const msg = document.getElementById('confirm-message');
+    const ok = document.getElementById('confirm-ok');
+    const cancel = document.getElementById('confirm-cancel');
+    if (!modal || !msg || !ok || !cancel) return Promise.resolve(false);
+
+    msg.textContent = message;
+    ok.textContent = opts.confirmText || 'Confirm';
+    cancel.textContent = opts.cancelText || 'Cancel';
+
+    return new Promise((resolve) => {
+      const cleanup = () => {
+        ok.onclick = null;
+        cancel.onclick = null;
+        modal.onclick = null;
+        document.removeEventListener('keydown', onEsc);
+        modal.classList.add('hidden');
+      };
+      const onEsc = (e) => {
+        if (e.key === 'Escape') {
+          cleanup();
+          resolve(false);
+        }
+      };
+      ok.onclick = () => {
+        cleanup();
+        resolve(true);
+      };
+      cancel.onclick = () => {
+        cleanup();
+        resolve(false);
+      };
+      modal.onclick = (e) => {
+        if (e.target === modal) {
+          cleanup();
+          resolve(false);
+        }
+      };
+      document.addEventListener('keydown', onEsc);
+      modal.classList.remove('hidden');
+      ok.focus();
+    });
+  }'''
 
 
 class SSEClient:
@@ -217,13 +323,17 @@ class Buttons:
         """CSS for button styles."""
         return '''
     /* Buttons */
-    .btn-primary { background: #4a9eff; color: #fff; border: none; border-radius: 6px; padding: 10px 20px; font-size: 14px; cursor: pointer; font-weight: 500; }
+    .btn-primary { background: #4a9eff; color: #fff; border: none; border-radius: 6px; padding: 10px 20px; font-size: 14px; cursor: pointer; font-weight: 500; min-height: 40px; }
     .btn-primary:hover { background: #3d8be0; }
-    .btn-secondary { background: #444; color: #fff; border: none; border-radius: 6px; padding: 10px 20px; font-size: 14px; cursor: pointer; }
+    .btn-secondary { background: #444; color: #fff; border: none; border-radius: 6px; padding: 10px 20px; font-size: 14px; cursor: pointer; min-height: 40px; }
     .btn-secondary:hover { background: #555; }
-    .btn-danger { background: #d44; color: #fff; border: none; border-radius: 6px; padding: 10px 20px; font-size: 14px; cursor: pointer; }
+    .btn-danger { background: #d44; color: #fff; border: none; border-radius: 6px; padding: 10px 20px; font-size: 14px; cursor: pointer; min-height: 40px; }
     .btn-danger:hover { background: #c33; }
-    .btn-small { padding: 6px 12px; font-size: 12px; }'''
+    .btn-small { padding: 6px 12px; font-size: 12px; min-height: 32px; }
+    .btn-primary:disabled, .btn-secondary:disabled, .btn-danger:disabled { opacity: 0.55; cursor: not-allowed; }
+    @media (pointer: coarse) {
+      .btn-primary, .btn-secondary, .btn-danger, .btn-small { min-height: 44px; padding: 10px 14px; }
+    }'''
 
 
 class NavHeader:
@@ -327,4 +437,8 @@ class IndexStyles:
     /* Delete button on cards */
     .btn-delete { position: absolute; top: 8px; right: 8px; background: rgba(200, 50, 50, 0.85); color: #fff; border: none; border-radius: 6px; padding: 6px 8px; cursor: pointer; opacity: 0; transition: opacity 0.2s, background 0.2s; z-index: 10; }
     .btn-delete:hover { background: rgba(220, 60, 60, 1); }
-    .card:hover .btn-delete { opacity: 1; }'''
+    .card:hover .btn-delete { opacity: 1; }
+    .card:focus-within .btn-delete { opacity: 1; }
+    @media (hover: none), (pointer: coarse) {
+      .btn-delete { opacity: 1; min-width: 44px; min-height: 44px; }
+    }'''

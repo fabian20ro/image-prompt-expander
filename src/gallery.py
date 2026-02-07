@@ -13,6 +13,7 @@ from html_components import (
     NavHeader,
     GalleryStyles,
     SSEClient,
+    Notifications,
 )
 
 
@@ -102,8 +103,8 @@ def _build_card_html(
     if interactive:
         action_buttons = f'''
       <div class="card-actions">
-        <button class="btn-small btn-primary" onclick="generateImage({prompt_idx}, {image_idx})">Generate</button>
-        <button class="btn-small btn-secondary" onclick="enhanceImage({prompt_idx}, {image_idx})">Enhance</button>
+        <button class="btn-small btn-primary" onclick="generateImage(this, {prompt_idx}, {image_idx})">Generate</button>
+        <button class="btn-small btn-secondary" onclick="enhanceImage(this, {prompt_idx}, {image_idx})">Enhance</button>
       </div>'''
 
     if exists:
@@ -343,6 +344,7 @@ def _build_interactive_js(run_id: str) -> str:
     """Build JavaScript for interactive gallery features."""
     log_js = LogPanel.js()
     sse_js = SSEClient.js()
+    notify_js = Notifications.js()
 
     return f'''
 <script>
@@ -361,11 +363,28 @@ def _build_interactive_js(run_id: str) -> str:
   const progressText = document.getElementById('progress-text');
   const logPanel = document.getElementById('log-panel');
 
+  // Shared notification helpers
+{notify_js}
+
   // Shared log panel functions
 {log_js}
 
   // Shared SSE connection logic
 {sse_js}
+
+  async function withButtonBusy(btn, busyText, fn) {{
+    if (!btn) return fn();
+    const original = btn.dataset.originalText || btn.textContent;
+    btn.dataset.originalText = original;
+    btn.disabled = true;
+    btn.textContent = busyText;
+    try {{
+      return await fn();
+    }} finally {{
+      btn.disabled = false;
+      btn.textContent = original;
+    }}
+  }}
 
   function initSSE() {{
     const es = connectSSE();
@@ -416,6 +435,13 @@ def _build_interactive_js(run_id: str) -> str:
 
     es.addEventListener('task_cancelled', (e) => {{
       progressMessage.textContent = 'Cancelled';
+    }});
+
+    es.addEventListener('queue_cleared', (e) => {{
+      progressBar.classList.add('hidden');
+      progressFill.style.width = '0%';
+      progressText.textContent = '';
+      showToast('Queue cleared', 'success');
     }});
 
     es.addEventListener('queue_updated', (e) => {{
@@ -490,12 +516,16 @@ def _build_interactive_js(run_id: str) -> str:
         body: JSON.stringify(body),
       }});
       if (!resp.ok) {{
-        const err = await resp.json();
-        throw new Error(err.detail || 'Request failed');
+        let detail = 'Request failed';
+        try {{
+          const err = await resp.json();
+          detail = err.detail || detail;
+        }} catch (_e) {{}}
+        throw new Error(detail);
       }}
       return await resp.json();
     }} catch (err) {{
-      alert('Error: ' + err.message);
+      showToast('Error: ' + err.message, 'error', 4200);
       throw err;
     }}
   }}
@@ -508,12 +538,16 @@ def _build_interactive_js(run_id: str) -> str:
         body: JSON.stringify(body),
       }});
       if (!resp.ok) {{
-        const err = await resp.json();
-        throw new Error(err.detail || 'Request failed');
+        let detail = 'Request failed';
+        try {{
+          const err = await resp.json();
+          detail = err.detail || detail;
+        }} catch (_e) {{}}
+        throw new Error(detail);
       }}
       return await resp.json();
     }} catch (err) {{
-      alert('Error: ' + err.message);
+      showToast('Error: ' + err.message, 'error', 4200);
       throw err;
     }}
   }}
@@ -521,24 +555,28 @@ def _build_interactive_js(run_id: str) -> str:
   // Button handlers
   if (btnSaveGrammar) {{
     btnSaveGrammar.addEventListener('click', async () => {{
-      await apiPut(`/api/gallery/${{RUN_ID}}/grammar`, {{
-        grammar: grammarEditor.value
+      await withButtonBusy(btnSaveGrammar, 'Saving...', async () => {{
+        await apiPut(`/api/gallery/${{RUN_ID}}/grammar`, {{
+          grammar: grammarEditor.value
+        }});
       }});
-      alert('Grammar saved');
+      showToast('Grammar saved', 'success');
     }});
   }}
 
   if (btnRegenerate) {{
     btnRegenerate.addEventListener('click', async () => {{
-      await apiPost(`/api/gallery/${{RUN_ID}}/regenerate`);
+      await withButtonBusy(btnRegenerate, 'Queueing...', async () => {{
+        await apiPost(`/api/gallery/${{RUN_ID}}/regenerate`);
+      }});
       progressBar.classList.remove('hidden');
       progressMessage.textContent = 'Regenerating prompts...';
+      showToast('Prompt regeneration queued', 'success');
     }});
   }}
 
   if (btnGenerateAll) {{
     btnGenerateAll.addEventListener('click', async () => {{
-      // Collect image settings from form
       const data = {{
         images_per_prompt: parseInt(document.getElementById('img-images-per-prompt')?.value) || 2,
         resume: true,
@@ -551,63 +589,85 @@ def _build_interactive_js(run_id: str) -> str:
         enhance: document.getElementById('img-enhance')?.checked || false,
         enhance_softness: parseFloat(document.getElementById('img-enhance-softness')?.value) || 0.5,
       }};
-      await apiPost(`/api/gallery/${{RUN_ID}}/generate-all`, data);
+      await withButtonBusy(btnGenerateAll, 'Queueing...', async () => {{
+        await apiPost(`/api/gallery/${{RUN_ID}}/generate-all`, data);
+      }});
       progressBar.classList.remove('hidden');
       progressMessage.textContent = 'Queued image generation...';
+      showToast('Image generation queued', 'success');
     }});
   }}
 
   if (btnEnhanceAll) {{
     btnEnhanceAll.addEventListener('click', async () => {{
       const softness = parseFloat(document.getElementById('img-enhance-softness')?.value) || 0.5;
-      await apiPost(`/api/gallery/${{RUN_ID}}/enhance-all`, {{
-        softness: softness
+      await withButtonBusy(btnEnhanceAll, 'Queueing...', async () => {{
+        await apiPost(`/api/gallery/${{RUN_ID}}/enhance-all`, {{
+          softness: softness
+        }});
       }});
       progressBar.classList.remove('hidden');
       progressMessage.textContent = 'Queued enhancement...';
+      showToast('Enhancement queued', 'success');
     }});
   }}
 
   if (btnClearQueue) {{
     btnClearQueue.addEventListener('click', async () => {{
-      await apiPost('/api/queue/clear');
+      await withButtonBusy(btnClearQueue, 'Clearing...', async () => {{
+        await apiPost('/api/queue/clear');
+      }});
+      showToast('Queue clear requested', 'success');
     }});
   }}
 
   if (btnKill) {{
     btnKill.addEventListener('click', async () => {{
-      await apiPost('/api/worker/kill');
+      await withButtonBusy(btnKill, 'Killing...', async () => {{
+        await apiPost('/api/worker/kill');
+      }});
+      showToast('Kill signal sent', 'success');
     }});
   }}
 
   const btnArchive = document.getElementById('btn-archive');
   if (btnArchive) {{
     btnArchive.addEventListener('click', async () => {{
-      if (!confirm('Save this gallery to archive?')) return;
-      try {{
+      const confirmed = await confirmAction('Save this gallery to archive?', {{
+        confirmText: 'Archive',
+        cancelText: 'Cancel'
+      }});
+      if (!confirmed) return;
+      await withButtonBusy(btnArchive, 'Archiving...', async () => {{
         const resp = await apiPost(`/api/gallery/${{RUN_ID}}/archive`);
-        alert(resp.message || 'Archived successfully');
-      }} catch (err) {{ /* error shown by apiPost */ }}
+        showToast(resp.message || 'Archived successfully', 'success');
+      }});
     }});
   }}
 
   // Global functions for per-image buttons
-  window.generateImage = async function(promptIdx, imageIdx) {{
-    await apiPost(`/api/gallery/${{RUN_ID}}/image/${{promptIdx}}/generate`, {{
-      image_idx: imageIdx
+  window.generateImage = async function(btn, promptIdx, imageIdx) {{
+    await withButtonBusy(btn, 'Queueing...', async () => {{
+      await apiPost(`/api/gallery/${{RUN_ID}}/image/${{promptIdx}}/generate`, {{
+        image_idx: imageIdx
+      }});
     }});
     progressBar.classList.remove('hidden');
     progressMessage.textContent = `Generating image ${{promptIdx}}_${{imageIdx}}...`;
+    showToast(`Queued image ${{promptIdx}}_${{imageIdx}}`, 'success');
   }};
 
-  window.enhanceImage = async function(promptIdx, imageIdx) {{
+  window.enhanceImage = async function(btn, promptIdx, imageIdx) {{
     const softness = parseFloat(document.getElementById('img-enhance-softness')?.value) || 0.5;
-    await apiPost(`/api/gallery/${{RUN_ID}}/image/${{promptIdx}}/enhance`, {{
-      image_idx: imageIdx,
-      softness: softness
+    await withButtonBusy(btn, 'Queueing...', async () => {{
+      await apiPost(`/api/gallery/${{RUN_ID}}/image/${{promptIdx}}/enhance`, {{
+        image_idx: imageIdx,
+        softness: softness
+      }});
     }});
     progressBar.classList.remove('hidden');
     progressMessage.textContent = `Enhancing image ${{promptIdx}}_${{imageIdx}}...`;
+    showToast(`Queued enhancement for ${{promptIdx}}_${{imageIdx}}`, 'success');
   }};
 
   // Start SSE
@@ -623,6 +683,7 @@ def _build_interactive_styles() -> str:
         NavHeader.css() +
         GalleryStyles.css() +
         Buttons.css() +
+        Notifications.css() +
         ProgressBar.css() +
         '''
     .progress-container { display: flex; align-items: center; gap: 12px; }
@@ -699,6 +760,7 @@ def _build_gallery_html(
 
     # Build interactive sections
     nav_header = _build_nav_header() if interactive else ""
+    notifications = Notifications.html() if interactive else ""
     image_settings = _build_image_settings_section() if interactive and run_id else ""
     action_bar = _build_interactive_action_bar(run_id) if interactive and run_id else ""
     log_panel = _build_log_panel() if interactive else ""
@@ -734,7 +796,7 @@ def _build_gallery_html(
 {extra_styles}
   </style>
 </head>
-<body>{nav_header}
+<body>{notifications}{nav_header}
   <h1>Gallery: {prefix}</h1>{prompt_display}{header_section}{grammar_section}{image_settings}{action_bar}{log_panel}
   <p class="status">Generated: {completed} / {total} images</p>
   <div class="grid">

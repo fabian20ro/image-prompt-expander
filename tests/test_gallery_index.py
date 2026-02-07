@@ -39,6 +39,24 @@ class TestGalleryIndexInteractive:
         assert "generate-form" not in content
         assert "queue-status" not in content
 
+    def test_index_interactive_uses_toasts_modal_and_no_blocking_dialogs(self, temp_dir):
+        """Interactive index should use shared toast/modal helpers instead of alert/confirm."""
+        (temp_dir / "prompts").mkdir()
+
+        index_path = generate_master_index(temp_dir, interactive=True)
+        content = index_path.read_text()
+
+        assert "toast-region" in content
+        assert "confirm-modal" in content
+        assert "showToast(" in content
+        assert "confirmAction(" in content
+        assert "withButtonBusy(" in content
+        assert "queue_cleared" in content
+
+        # Guard against regressions to blocking browser dialogs.
+        assert "alert(" not in content
+        assert "confirm(" not in content
+
     def test_index_with_archived_runs(self, temp_dir):
         """Test that index shows archived runs separately."""
         # Create active run

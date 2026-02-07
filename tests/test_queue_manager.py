@@ -170,6 +170,30 @@ class TestQueueManager:
         state = qm.get_state()
         assert len(state.pending) == 0
 
+    def test_clear_pending_emits_queue_cleared_and_queue_updated(self, queue_path):
+        """Clearing pending tasks should emit both clear and updated queue events."""
+        qm = QueueManager(queue_path)
+        events = []
+
+        def listener(event, data):
+            events.append((event, data))
+
+        qm.add_listener(listener)
+        qm.add_task(TaskType.GENERATE_IMAGE, {"run_id": "test1"})
+        qm.add_task(TaskType.GENERATE_IMAGE, {"run_id": "test2"})
+
+        # Ignore add_task notifications and inspect clear behavior only.
+        events.clear()
+        count = qm.clear_pending()
+
+        assert count == 2
+        assert len(events) == 2
+        assert events[0][0] == "queue_cleared"
+        assert events[0][1]["count"] == 2
+        assert events[1][0] == "queue_updated"
+        assert events[1][1]["pending_count"] == 0
+        assert events[1][1]["current"] is None
+
     def test_persistence(self, queue_path):
         """Test that queue state is persisted to disk."""
         # Create queue and add task

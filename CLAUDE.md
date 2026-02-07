@@ -1,66 +1,43 @@
 # CLAUDE.md
 
-## Quick Reference
+## Quick Start
 
 ```bash
-# Activate venv (required before all commands)
+# Activate venv (required in each shell session)
 source venv/bin/activate
 
-# Run tests (ALWAYS run after code changes)
-pytest -v --tb=short
+# Run all tests
+./venv/bin/pytest -v --tb=short
 
-# Run single test
-pytest tests/test_file.py::test_name -v
-
-# Start web server
+# Start web UI
 python src/cli.py --serve
 
-# Generate prompts + images
+# Generate prompts + images (CLI)
 python src/cli.py -p "prompt" -n 5 --generate-images --prefix name
 ```
 
-## External Dependencies
+## Core Rules
 
-- **LM Studio** must be running at `localhost:1234` for grammar generation
-- **mflux** only works on Apple Silicon (M1/M2/M3/M4)
-- Mock these services in tests - never call real APIs
+- Run tests after code changes.
+- Mock external services in tests (LM Studio, mflux).
+- Use `pathlib.Path` and typed interfaces (`dataclass`/Pydantic) for structured code.
+- Prefer `MetadataManager` for metadata operations.
+- Keep commits focused and explain the "why" in commit messages.
 
-## Code Patterns
+## Mandatory Session Checklist
 
-- Use `MetadataManager` for all run metadata operations (not raw JSON loading)
-- Use `PipelineConfig` dataclasses for complex parameter passing
-- Prefer pathlib over os.path for all file operations
-- Use dataclasses or Pydantic models for structured data
-- Type hints required for all function signatures
+1. Review and update `LESSONS_LEARNED.md` during every session.
+2. Add at least one brief, concrete lesson when you find behavior that did not work as expected.
 
-## Testing
+## External Runtime Dependencies
 
-- **IMPORTANT**: Run `pytest -v --tb=short` after any code changes
-- New features require tests before merge
-- Mock external services (LM Studio, mflux) - see existing test patterns
-- Use `temp_dir` fixture for file system tests
-- Tests use pytest-asyncio for async code
+- LM Studio at `http://localhost:1234/v1` for grammar generation.
+- `mflux` for image generation/enhancement (Apple Silicon).
 
-## Gotchas
+## Project Maps And Deeper Docs
 
-- Image enhancement replaces originals in-place (creates backup first)
-- Queue state persists in `generated/queue.json` - delete to reset
-- SSE connections require proper cleanup in error handlers
-- Tiled VAE is enabled by default (disable with `--no-tiled-vae`)
-- `routes.py` uses FastAPI `Depends()` with `lru_cache` for singletons
-
-## Git Conventions
-
-- Commit messages: imperative mood, explain the "why"
-- Keep commits focused on single logical changes
-- Run tests before committing
-
-## Architecture Notes
-
-Key modules:
-- `pipeline.py` - Core orchestration (use `PipelineExecutor`)
-- `metadata_manager.py` - Centralized metadata operations
-- `server/routes.py` - FastAPI endpoints with dependency injection
-- `server/worker.py` + `worker_subprocess.py` - Background task processing
-
-See @README.md for full project overview.
+- Full usage + feature docs: `README.md`
+- Code map index: `docs/codemaps/README.md`
+- Pipeline map: `docs/codemaps/pipeline.md`
+- Server + UI map: `docs/codemaps/server-ui.md`
+- Tests + coverage map: `docs/codemaps/testing.md`
