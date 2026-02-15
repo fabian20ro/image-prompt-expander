@@ -25,7 +25,7 @@ User prompt → LLM generates Tracery grammar → Tracery produces N prompts →
 - `click` - CLI framework
 - `tracery` - Grammar expansion
 - `mflux` - Image generation (optional, Apple Silicon only)
-- `fastapi` + `sse-starlette` - Web UI server
+- `fastapi` + `uvicorn` + `sse-starlette` - Web UI server
 
 ## Installation
 
@@ -56,10 +56,13 @@ python src/cli.py --serve
 ```
 
 This opens `http://localhost:8000` with:
-- **New Generation Form**: Enter prompts and configure all generation parameters
+- **New Generation Form**: Queue grammar + prompt generation (`prompt`, `prefix`, `count`, `model`, `temperature`, cache, tiled VAE)
 - **Gallery Browser**: View and manage all existing galleries
-- **Live Progress**: Real-time updates via SSE as images generate
-- **Queue Management**: Queue multiple operations, kill running tasks
+- **Live Progress + Logs**: Real-time status and worker log streaming via SSE
+- **Queue Management**: Queue multiple operations, clear pending queue, kill running tasks
+- **Gallery Deletion**: Queue deletion for active galleries from the index page
+
+Image generation and enhancement settings are configured per-gallery (not from the index form).
 
 Gallery pages include:
 - **Edit Grammar**: Modify Tracery grammar and regenerate prompts
@@ -74,7 +77,7 @@ Gallery pages include:
 ### CLI: Basic (Text Prompts Only)
 
 ```bash
-# Generate 500 prompt variations
+# Generate 50 prompt variations (default)
 python src/cli.py -p "a dragon flying over mountains"
 
 # Generate fewer variations
@@ -187,7 +190,7 @@ python src/cli.py --clean
 | Option | Description |
 |--------|-------------|
 | `-p, --prompt TEXT` | Image description to generate variations for |
-| `-n, --count INT` | Number of variations (default: 500) |
+| `-n, --count INT` | Number of variations (default: 50) |
 | `-o, --output PATH` | Custom output directory |
 | `--prefix TEXT` | Output file prefix (default: "image") |
 | `--dry-run` | Preview grammar only |
@@ -200,7 +203,7 @@ python src/cli.py --clean
 | `-i, --generate-images` | Enable mflux image generation |
 | `--images-per-prompt INT` | Images per prompt (default: 1) |
 | `--max-prompts INT` | Limit prompts to render |
-| `-m, --model` | `z-image-turbo`, `flux2-klein-4b`, `flux2-klein-9b` |
+| `-m, --model` | `z-image-turbo`, `flux2-klein-4b`, `flux2-klein-9b` (default: `flux2-klein-4b`) |
 | `--steps INT` | Inference steps |
 | `--width INT` | Image width (default: 864) |
 | `--height INT` | Image height (default: 1152) |
@@ -211,7 +214,7 @@ python src/cli.py --clean
 | `--enhance-after` | Defer enhancement to after all images generated (saves memory) |
 | `--enhance-images PATH` | Enhance existing images in-place (file, folder, or glob) |
 | `--resume` | Skip already-generated images when resuming interrupted runs |
-| `--no-tiled-vae` | Disable tiled VAE decoding (more memory, faster) |
+| `--no-tiled-vae` | Disable tiled VAE decoding (uses more memory, may be faster) |
 | `--serve` | Start interactive web UI at http://localhost:8000 |
 | `--port INT` | Port for web UI server (default: 8000) |
 
@@ -254,8 +257,8 @@ The master index at `generated/index.html` provides a unified entry point to bro
 
 | Model | Parameters | Default Steps | Notes |
 |-------|------------|---------------|-------|
-| z-image-turbo | 6B | 9 | Fast, good quality (default) |
-| flux2-klein-4b | 4B | 4 | Very fast, lighter |
+| z-image-turbo | 6B | 9 | Fast, good quality |
+| flux2-klein-4b | 4B | 4 | Very fast, lighter (CLI/API default) |
 | flux2-klein-9b | 9B | 4 | Best quality |
 
 Pre-quantized 4-bit versions are used automatically when available.
@@ -321,7 +324,7 @@ pytest tests/test_pipeline.py -v
 pytest --cov=src --cov-report=html
 ```
 
-The test suite includes 267 tests covering:
+The test suite currently collects 271 tests covering:
 - Pipeline orchestration (`test_pipeline.py`)
 - Image generation (`test_image_generator.py`)
 - Grammar expansion (`test_tracery_runner.py`)
@@ -372,7 +375,7 @@ Key patterns:
 - [Fifty Shades Generator](https://github.com/lisawray/fiftyshades) by Lisa Wray - original inspiration
 - [Tracery](https://github.com/galaxykate/tracery) by Kate Compton - grammar expansion library
 - [mflux](https://github.com/filipstrand/mflux) by Filip Strand - MLX-based image generation for Apple Silicon, including pre-quantized model weights
-- [Z-Image-Turbo](https://huggingface.co/Tongyi-MAI/Z-Image-Turbo) by Tongyi-MAI - default image model (6B parameters)
+- [Z-Image-Turbo](https://huggingface.co/Tongyi-MAI/Z-Image-Turbo) by Tongyi-MAI - supported image model (6B parameters)
 - [FLUX models](https://blackforestlabs.ai/) by Black Forest Labs - flux2-klein image models
 
 ## License

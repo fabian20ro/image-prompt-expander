@@ -95,16 +95,13 @@ def create_app() -> FastAPI:
     from .routes import router
     app.include_router(router)
 
-    # Mount static files for generated content
-    # This must be done after routes to not shadow API endpoints
-    @app.on_event("startup")
-    async def mount_static():
-        if paths.generated_dir.exists():
-            app.mount(
-                "/generated",
-                StaticFiles(directory=str(paths.generated_dir)),
-                name="generated",
-            )
+    # Mount static files for generated content.
+    # Keep this after API routes to avoid route shadowing.
+    app.mount(
+        "/generated",
+        StaticFiles(directory=str(paths.generated_dir), check_dir=False),
+        name="generated",
+    )
 
     # Redirect root to index
     @app.get("/", include_in_schema=False)
