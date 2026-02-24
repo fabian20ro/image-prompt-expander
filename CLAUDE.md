@@ -1,1 +1,1 @@
-Read AGENTS.md asap for system instructions.
+Read AGENTS.md

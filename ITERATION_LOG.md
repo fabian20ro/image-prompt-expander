@@ -20,6 +20,16 @@ Each entry should follow this structure:
 
 ---
 
+### [2026-02-24] AI Agent Configuration Restructuring
+
+**Context:** Applied standardized AI agent config guide (informed by "Evaluating AGENTS.md" and "SkillsBench" research) to restructure all agent configuration files.
+**What happened:** Rewrote AGENTS.md to remove discoverable content (Quick Start, Project Maps, general coding rules), keeping only non-discoverable constraints (LM Studio, mflux, venv). Migrated two project-specific patterns ("mock external services", "prefer MetadataManager") from AGENTS.md Core Rules to LESSONS_LEARNED.md. Created four sub-agent files in `.claude/agents/` (architect, planner, agent-creator, ux-expert). Simplified CLAUDE.md pointer. Added SETUP_AI_AGENT_CONFIG.md for periodic maintenance.
+**Outcome:** Success — AGENTS.md is now lean bootstrap context (~40 lines vs ~70), sub-agents are defined, learning system references are consolidated.
+**Insight:** Keeping AGENTS.md small and non-discoverable makes it age better; discoverable instructions drift as code changes but non-discoverable constraints (external services, venv) remain stable.
+**Promoted to Lessons Learned:** No
+
+---
+
 ### [2026-02-15] Merged CLAUDE instructions into AGENTS and reversed link direction
 
 **Context:** User requested AGENTS as the single instruction source, with CLAUDE reduced to a pointer.

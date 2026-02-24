@@ -32,12 +32,14 @@ move it to the Archive section at the bottom with a date and reason.
 ## Code Patterns & Pitfalls
 
 **[2026-02-07]** Validate model names before importing `mflux` - Importing `mflux` before rejecting unsupported models can trigger native MLX aborts in unsupported test paths.
-**[2026-02-07]** Keep docs and signatures aligned - Drift between documented defaults and implementation defaults (`tiled_vae`) causes repeated operator mistakes.
+**[2026-02-07]** Keep docs and signatures aligned - Drift between documented defaults and implementation defaults (`tiled_vae`) causes repeated operator mistake
+**[2026-02-24]** Prefer MetadataManager for metadata operations — Direct JSON manipulation of run metadata bypasses validation and path logic; use MetadataManager consistently.s.
 
 ## Testing & Quality
 
 **[2026-02-07]** Prefer intent assertions for worker logs - Worker success/failure paths emit variable extra lines, so tests should assert sequencing/intent rather than exact call counts.
 **[2026-02-07]** Use module fakes for MLX-heavy imports - Patching deep `mflux.*` paths can still initialize native MLX/Metal; prefer `patch.dict(sys.modules, ...)` with fake modules.
+**[2026-02-24]** Mock external services in tests — Always mock LM Studio and mflux; requiring live GPU or inference server makes tests environment-dependent and fragile.
 
 ## Performance & Infrastructure
 
