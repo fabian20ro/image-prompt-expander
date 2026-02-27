@@ -144,7 +144,7 @@ def run_generate_pipeline(params: dict):
     prompt = params["prompt"]
     count = params.get("count", 50)
     prefix = params.get("prefix", "image")
-    model = params.get("model", "z-image-turbo")
+    model = params.get("model", "flux2-klein-4b")
     temperature = params.get("temperature", 0.7)
     no_cache = params.get("no_cache", False)
     generate_images = params.get("generate_images", False)

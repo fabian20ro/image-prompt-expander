@@ -103,63 +103,6 @@ def enhance_image(
     return output_path
 
 
-def enhance_images(
-    image_paths: list[Path],
-    output_dir: Path | None = None,
-    softness: float = 0.5,
-    seed: int | None = None,
-    quantize: int = 8,
-    in_place: bool = True,
-    on_progress: callable = None,
-) -> list[Path]:
-    """
-    Enhance multiple images using SeedVR2.
-
-    Args:
-        image_paths: List of image paths to enhance
-        output_dir: Output directory (None = same directory as source)
-        softness: Enhancement softness (0.0-1.0, default 0.5)
-        seed: Base random seed (incremented for each image)
-        quantize: Quantization level
-        in_place: If True, replace original files (default). If False, use output_dir.
-        on_progress: Callback function(current, total)
-
-    Returns:
-        List of paths to enhanced images
-    """
-    enhanced_paths = []
-    current_seed = seed
-    total = len(image_paths)
-
-    for idx, image_path in enumerate(image_paths):
-        # Determine output path
-        if in_place:
-            output_path = image_path
-        elif output_dir is not None:
-            output_path = output_dir / image_path.name
-        else:
-            output_path = image_path
-
-        if on_progress:
-            on_progress(idx + 1, total)
-
-        enhance_image(
-            image_path=image_path,
-            output_path=output_path,
-            softness=softness,
-            seed=current_seed,
-            quantize=quantize,
-        )
-
-        enhanced_paths.append(output_path)
-
-        # Increment seed for next image (if seed was specified)
-        if current_seed is not None:
-            current_seed += 1
-
-    return enhanced_paths
-
-
 def collect_images(path_spec: str) -> list[Path]:
     """
     Collect image paths from a file, directory, or glob pattern.

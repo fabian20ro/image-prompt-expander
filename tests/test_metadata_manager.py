@@ -41,7 +41,7 @@ class TestRunMetadata:
 
         assert metadata.prefix == "image"
         assert metadata.count == 0
-        assert metadata.model == "z-image-turbo"
+        assert metadata.model == "flux2-klein-4b"
 
     def test_from_dict_with_image_generation(self):
         """Test preserving image_generation settings."""

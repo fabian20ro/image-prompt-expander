@@ -242,6 +242,11 @@ def clean_grammar_output(grammar: str) -> str:
         # Try to extract JSON object from the text
         json_match = re.search(r'\{[\s\S]*\}', grammar)
         if json_match:
-            grammar = json_match.group(0)
+            extracted = json_match.group(0)
+            try:
+                json.loads(extracted)
+                grammar = extracted
+            except json.JSONDecodeError:
+                pass  # Return stripped text; caller handles invalid JSON
 
     return grammar

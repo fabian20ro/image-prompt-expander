@@ -30,8 +30,10 @@ class QueueManager:
             try:
                 data = json.loads(self.queue_path.read_text())
                 return QueueState.model_validate(data)
-            except (json.JSONDecodeError, Exception):
-                pass
+            except json.JSONDecodeError as e:
+                logging.warning(f"Corrupted queue file, resetting: {e}")
+            except Exception as e:
+                logging.error(f"Failed to load queue state: {e}")
         return QueueState()
 
     def _save_state(self, state: QueueState) -> None:
@@ -43,21 +45,27 @@ class QueueManager:
         tmp_path.rename(self.queue_path)
 
     def _notify(self, event: str, data: dict) -> None:
-        """Notify all listeners of an event."""
-        for listener in self._listeners:
+        """Notify all listeners of an event.
+
+        Called under self._lock. Iterates a snapshot to allow
+        concurrent add/remove operations.
+        """
+        for listener in list(self._listeners):
             try:
                 listener(event, data)
             except Exception as e:
                 logging.exception(f"Error in queue listener for event {event}: {e}")
 
     def add_listener(self, listener: Callable[[str, dict], None]) -> None:
-        """Add an event listener."""
-        self._listeners.append(listener)
+        """Add an event listener (thread-safe)."""
+        with self._lock:
+            self._listeners.append(listener)
 
     def remove_listener(self, listener: Callable[[str, dict], None]) -> None:
-        """Remove an event listener."""
-        if listener in self._listeners:
-            self._listeners.remove(listener)
+        """Remove an event listener (thread-safe)."""
+        with self._lock:
+            if listener in self._listeners:
+                self._listeners.remove(listener)
 
     def add_task(
         self,

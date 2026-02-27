@@ -236,3 +236,19 @@ class TestQueueManager:
 
         assert len(events) == 3
         assert events[2][0] == "task_completed"
+
+    def test_listener_add_remove_thread_safety(self, queue_path):
+        """Test that listeners can be added/removed safely during notification."""
+        qm = QueueManager(queue_path)
+        events = []
+
+        def listener(event, data):
+            events.append(event)
+
+        qm.add_listener(listener)
+        task = qm.add_task("generate_pipeline", {"prompt": "test"})
+        assert len(events) == 1  # queue_updated
+
+        qm.remove_listener(listener)
+        qm.add_task("generate_pipeline", {"prompt": "test2"})
+        assert len(events) == 1  # No new events after removal

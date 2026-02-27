@@ -13,13 +13,14 @@ from typing import Callable, Protocol
 
 logger = logging.getLogger(__name__)
 
-from config import paths
+from config import paths, settings
 from grammar_generator import generate_grammar, hash_prompt
 from tracery_runner import run_tracery, TraceryError
 from image_generator import generate_image, clear_model_cache, MODEL_DEFAULTS
 from image_enhancer import enhance_image
 from gallery import create_gallery, update_gallery
 from gallery_index import generate_master_index
+from metadata_manager import MetadataManager, MetadataNotFoundError, MetadataError
 from utils import backup_run, run_has_images
 
 
@@ -148,7 +149,7 @@ class PipelineConfig:
     # Grammar/Prompt settings
     count: int = 50
     prefix: str = "image"
-    model: str = "z-image-turbo"  # Used for both grammar gen and image gen
+    model: str = "flux2-klein-4b"  # Must match config.ImageGenerationConfig.default_model
     temperature: float = 0.7
     no_cache: bool = False
 
@@ -192,7 +193,7 @@ class PipelineConfig:
             prompt=kwargs.pop("prompt", ""),
             count=kwargs.pop("count", 50),
             prefix=kwargs.pop("prefix", "image"),
-            model=kwargs.pop("model", "z-image-turbo"),
+            model=kwargs.pop("model", "flux2-klein-4b"),
             temperature=kwargs.pop("temperature", 0.7),
             no_cache=kwargs.pop("no_cache", False),
             image=image_config,
@@ -233,7 +234,7 @@ class PipelineExecutor:
         prompt: str,
         count: int = 50,
         prefix: str = "image",
-        model: str = "z-image-turbo",
+        model: str = "flux2-klein-4b",
         temperature: float = 0.7,
         no_cache: bool = False,
         generate_images: bool = False,
@@ -415,7 +416,7 @@ class PipelineExecutor:
         grammar_path: Path,
         count: int = 50,
         prefix: str = "image",
-        model: str = "z-image-turbo",
+        model: str = "flux2-klein-4b",
         generate_images: bool = False,
         images_per_prompt: int = 1,
         width: int = 864,
@@ -624,16 +625,16 @@ class PipelineExecutor:
             PipelineResult with operation results
         """
         # Load metadata
-        meta_files = list(prompts_dir.glob("*_metadata.json"))
-        if not meta_files:
+        try:
+            meta = MetadataManager.load(prompts_dir)
+        except MetadataNotFoundError:
             return PipelineResult(success=False, error=f"No metadata file found in {prompts_dir}")
 
-        metadata = json.loads(meta_files[0].read_text())
-        prefix = metadata.get("prefix", "image")
-        existing_settings = metadata.get("image_generation", {})
+        prefix = meta.prefix
+        existing_settings = meta.image_generation
 
         # Use existing settings as defaults
-        model = model or existing_settings.get("model", "z-image-turbo")
+        model = model or existing_settings.get("model", "flux2-klein-4b")
         width = width or existing_settings.get("width", 864)
         height = height or existing_settings.get("height", 1152)
         steps = steps or existing_settings.get("steps")
@@ -653,7 +654,7 @@ class PipelineExecutor:
 
         # Update metadata
         effective_steps = steps if steps is not None else MODEL_DEFAULTS[model]["steps"]
-        metadata["image_generation"] = {
+        new_image_settings = {
             "enabled": True,
             "model": model,
             "steps": effective_steps,
@@ -667,8 +668,9 @@ class PipelineExecutor:
             "original_settings": existing_settings if existing_settings else None,
             "enhance": enhance,
             "enhance_softness": enhance_softness if enhance else None,
+            "tiled_vae": tiled_vae,
         }
-        meta_files[0].write_text(json.dumps(metadata, indent=2))
+        MetadataManager.update(prompts_dir, image_generation=new_image_settings)
 
         # Load grammar for gallery
         grammar = None
@@ -732,15 +734,15 @@ class PipelineExecutor:
             return PipelineResult(success=False, error=f"Run directory not found: {run_id}")
 
         # Load metadata
-        meta_files = list(output_dir.glob("*_metadata.json"))
-        if not meta_files:
+        try:
+            meta = MetadataManager.load(output_dir)
+        except MetadataNotFoundError:
             return PipelineResult(success=False, error="No metadata file found")
 
-        metadata = json.loads(meta_files[0].read_text())
-        prefix = metadata.get("prefix", "image")
+        prefix = meta.prefix
 
         if count is None:
-            count = metadata.get("count", 50)
+            count = meta.count or 50
 
         # Create backup if there are images
         if run_has_images(output_dir):
@@ -772,9 +774,11 @@ class PipelineExecutor:
         grammar_file.write_text(grammar)
 
         # Update metadata
-        metadata["count"] = len(outputs)
-        metadata["regenerated_at"] = datetime.now().isoformat()
-        meta_files[0].write_text(json.dumps(metadata, indent=2))
+        MetadataManager.update(
+            output_dir,
+            count=len(outputs),
+            regenerated_at=datetime.now().isoformat(),
+        )
 
         # Regenerate gallery
         self.on_progress("updating_gallery", 0, 1, "Updating gallery...")
@@ -784,8 +788,8 @@ class PipelineExecutor:
         if raw_file.exists():
             raw_response_file = f"{prefix}_raw_response.txt"
 
-        images_per_prompt = metadata.get("image_generation", {}).get("images_per_prompt", 1)
-        if not metadata.get("image_generation", {}).get("enabled", False):
+        images_per_prompt = meta.image_generation.get("images_per_prompt", 1)
+        if not meta.image_generation.get("enabled", False):
             images_per_prompt = 0
 
         create_gallery(
@@ -827,13 +831,13 @@ class PipelineExecutor:
             return PipelineResult(success=False, error=f"Run directory not found: {run_id}")
 
         # Load metadata
-        meta_files = list(output_dir.glob("*_metadata.json"))
-        if not meta_files:
+        try:
+            meta = MetadataManager.load(output_dir)
+        except MetadataNotFoundError:
             return PipelineResult(success=False, error="No metadata file found")
 
-        metadata = json.loads(meta_files[0].read_text())
-        prefix = metadata.get("prefix", "image")
-        image_settings = metadata.get("image_generation", {})
+        prefix = meta.prefix
+        image_settings = meta.image_generation
 
         # Load prompt
         prompt_file = output_dir / f"{prefix}_{prompt_idx}.txt"
@@ -845,7 +849,7 @@ class PipelineExecutor:
 
         self.on_progress("generating_image", 0, 1, f"Generating {output_path.name}...")
 
-        model = image_settings.get("model", "z-image-turbo")
+        model = image_settings.get("model", "flux2-klein-4b")
         try:
             generate_image(
                 prompt=prompt_text,
@@ -856,7 +860,7 @@ class PipelineExecutor:
                 width=image_settings.get("width", 864),
                 height=image_settings.get("height", 1152),
                 quantize=image_settings.get("quantize", 8),
-                tiled_vae=True,
+                tiled_vae=image_settings.get("tiled_vae", True),
             )
         except Exception as e:
             return PipelineResult(success=False, error=f"Image generation failed: {e}")
@@ -896,13 +900,13 @@ class PipelineExecutor:
             return PipelineResult(success=False, error=f"Run directory not found: {run_id}")
 
         # Load metadata
-        meta_files = list(output_dir.glob("*_metadata.json"))
-        if not meta_files:
+        try:
+            meta = MetadataManager.load(output_dir)
+        except MetadataNotFoundError:
             return PipelineResult(success=False, error="No metadata file found")
 
-        metadata = json.loads(meta_files[0].read_text())
-        prefix = metadata.get("prefix", "image")
-        image_settings = metadata.get("image_generation", {})
+        prefix = meta.prefix
+        image_settings = meta.image_generation
 
         image_path = output_dir / f"{prefix}_{prompt_idx}_{image_idx}.png"
         if not image_path.exists():
@@ -916,7 +920,7 @@ class PipelineExecutor:
                 output_path=image_path,
                 softness=softness,
                 quantize=image_settings.get("quantize", 8),
-                tiled_vae=True,
+                tiled_vae=image_settings.get("tiled_vae", True),
             )
         except Exception as e:
             return PipelineResult(success=False, error=f"Enhancement failed: {e}")
@@ -972,21 +976,22 @@ class PipelineExecutor:
             return PipelineResult(success=False, error=f"Run directory not found: {run_id}")
 
         # Load metadata
-        meta_files = list(output_dir.glob("*_metadata.json"))
-        if not meta_files:
+        try:
+            meta = MetadataManager.load(output_dir)
+        except MetadataNotFoundError:
             return PipelineResult(success=False, error="No metadata file found")
 
-        metadata = json.loads(meta_files[0].read_text())
-        prefix = metadata.get("prefix", "image")
-        image_settings = metadata.get("image_generation", {})
+        prefix = meta.prefix
+        image_settings = meta.image_generation
 
         # Use passed settings or fall back to metadata defaults
-        effective_model = model or image_settings.get("model") or metadata.get("model", "z-image-turbo")
+        effective_model = model or image_settings.get("model") or meta.model
         effective_width = width or image_settings.get("width", 864)
         effective_height = height or image_settings.get("height", 1152)
         effective_steps = steps or image_settings.get("steps")
         effective_quantize = quantize or image_settings.get("quantize", 8)
         effective_seed = seed if seed is not None else image_settings.get("seed")
+        effective_tiled_vae = image_settings.get("tiled_vae", True)
 
         # Load prompts
         prompt_files = sorted(output_dir.glob(f"{prefix}_*.txt"))
@@ -1001,10 +1006,8 @@ class PipelineExecutor:
         if max_prompts is not None:
             prompts = prompts[:max_prompts]
 
-        total_images = len(prompts) * images_per_prompt
-
         # Update metadata with effective settings
-        metadata["image_generation"] = {
+        new_image_settings = {
             "enabled": True,
             "model": effective_model,
             "width": effective_width,
@@ -1016,8 +1019,9 @@ class PipelineExecutor:
             "max_prompts": max_prompts,
             "enhance": enhance,
             "enhance_softness": enhance_softness if enhance else None,
+            "tiled_vae": effective_tiled_vae,
         }
-        meta_files[0].write_text(json.dumps(metadata, indent=2))
+        MetadataManager.update(output_dir, image_generation=new_image_settings)
 
         # Check if gallery needs regeneration (settings changed)
         old_ipp = image_settings.get("images_per_prompt", 1)
@@ -1035,109 +1039,35 @@ class PipelineExecutor:
             if raw_file.exists():
                 raw_response_file = f"{prefix}_raw_response.txt"
 
-            # Load user_prompt for gallery
-            user_prompt = metadata.get("user_prompt", "")
-
             # Regenerate gallery with new settings
             create_gallery(
                 output_dir, prefix, prompts, images_per_prompt,
                 grammar=grammar, raw_response_file=raw_response_file,
-                interactive=True, run_id=run_id, user_prompt=user_prompt
+                interactive=True, run_id=run_id, user_prompt=meta.user_prompt
             )
 
-        self.on_progress("generating_images", 0, total_images, "Starting image generation...")
+        # Delegate to shared image generation method
+        # Create a dummy gallery_path since generate_all_images doesn't update gallery inline
+        gallery_path = output_dir / f"{prefix}_gallery.html"
 
-        current_seed = effective_seed
-        generated_count = 0
-        skipped_count = 0
-        images_to_enhance = []
-
-        for prompt_idx, prompt_text in enumerate(prompts):
-            for image_idx in range(images_per_prompt):
-                output_path = output_dir / f"{prefix}_{prompt_idx}_{image_idx}.png"
-
-                if resume and output_path.exists():
-                    skipped_count += 1
-                    generated_count += 1
-                    if current_seed is not None:
-                        current_seed += 1
-                    continue
-
-                generated_count += 1
-                self.on_progress(
-                    "generating_images",
-                    generated_count,
-                    total_images,
-                    f"Generating {output_path.name}..."
-                )
-
-                try:
-                    generate_image(
-                        prompt=prompt_text,
-                        output_path=output_path,
-                        model=effective_model,
-                        seed=current_seed,
-                        steps=effective_steps,
-                        width=effective_width,
-                        height=effective_height,
-                        quantize=effective_quantize,
-                        tiled_vae=True,
-                    )
-                except Exception as e:
-                    return PipelineResult(
-                        success=False,
-                        error=f"Image generation failed ({output_path.name}): {e}"
-                    )
-
-                self._sync_file(output_path)
-                self.on_image_ready(run_id, output_path.name)
-
-                if enhance:
-                    images_to_enhance.append((output_path, current_seed))
-
-                if current_seed is not None:
-                    current_seed += 1
-
-        actual_generated = generated_count - skipped_count
-
-        # Enhancement pass after all images generated
-        if enhance and images_to_enhance:
-            clear_model_cache()
-            self.on_progress(
-                "enhancing_images", 0, len(images_to_enhance),
-                "Starting enhancement..."
-            )
-
-            for idx, (image_path, image_seed) in enumerate(images_to_enhance, 1):
-                self.on_progress(
-                    "enhancing_images",
-                    idx,
-                    len(images_to_enhance),
-                    f"Enhancing {image_path.name}..."
-                )
-                try:
-                    enhance_image(
-                        image_path=image_path,
-                        output_path=image_path,
-                        softness=enhance_softness,
-                        seed=image_seed,
-                        quantize=effective_quantize,
-                        tiled_vae=True,
-                    )
-                except Exception as e:
-                    return PipelineResult(
-                        success=False,
-                        error=f"Enhancement failed ({image_path.name}): {e}"
-                    )
-
-                self._sync_file(image_path)
-                self.on_image_ready(run_id, image_path.name)
-
-        return PipelineResult(
-            success=True,
+        return self._generate_images(
+            output_dir=output_dir,
             run_id=run_id,
-            image_count=actual_generated,
-            skipped_count=skipped_count,
+            prefix=prefix,
+            prompts=prompts,
+            images_per_prompt=images_per_prompt,
+            model=effective_model,
+            steps=effective_steps,
+            width=effective_width,
+            height=effective_height,
+            quantize=effective_quantize,
+            seed=effective_seed,
+            tiled_vae=effective_tiled_vae,
+            enhance=enhance,
+            enhance_softness=enhance_softness,
+            enhance_after=True,  # Always batch enhance in generate_all_images
+            resume=resume,
+            gallery_path=gallery_path,
         )
 
     def enhance_all_images(
@@ -1160,13 +1090,13 @@ class PipelineExecutor:
             return PipelineResult(success=False, error=f"Run directory not found: {run_id}")
 
         # Load metadata
-        meta_files = list(output_dir.glob("*_metadata.json"))
-        if not meta_files:
+        try:
+            meta = MetadataManager.load(output_dir)
+        except MetadataNotFoundError:
             return PipelineResult(success=False, error="No metadata file found")
 
-        metadata = json.loads(meta_files[0].read_text())
-        prefix = metadata.get("prefix", "image")
-        image_settings = metadata.get("image_generation", {})
+        prefix = meta.prefix
+        image_settings = meta.image_generation
 
         # Find all images
         images = sorted(output_dir.glob(f"{prefix}_*_*.png"))
@@ -1174,12 +1104,14 @@ class PipelineExecutor:
             return PipelineResult(success=False, error="No images found")
 
         # Create backup if not already done
-        if not metadata.get("_enhancement_backup_created"):
+        if not meta.get("_enhancement_backup_created"):
             self.on_progress("backup", 0, 1, "Creating backup before enhancement...")
             try:
                 backup_run(output_dir, paths.saved_dir, reason="pre_enhance")
-                metadata["_enhancement_backup_created"] = datetime.now().isoformat()
-                meta_files[0].write_text(json.dumps(metadata, indent=2))
+                MetadataManager.update(
+                    output_dir,
+                    _enhancement_backup_created=datetime.now().isoformat(),
+                )
             except Exception as e:
                 logger.warning(f"Failed to create backup before enhancement: {e}")
 
@@ -1199,7 +1131,7 @@ class PipelineExecutor:
                     output_path=image_path,
                     softness=softness,
                     quantize=image_settings.get("quantize", 8),
-                    tiled_vae=True,
+                    tiled_vae=image_settings.get("tiled_vae", True),
                 )
             except Exception as e:
                 return PipelineResult(
