@@ -132,7 +132,7 @@ class TestPipelineConfig:
         assert config.prompt == ""
         assert config.count == 50
         assert config.prefix == "image"
-        assert config.model == "z-image-turbo"
+        assert config.model == "flux2-klein-4b"
         assert config.temperature == 0.7
         assert config.no_cache is False
         assert isinstance(config.image, ImageGenerationConfig)

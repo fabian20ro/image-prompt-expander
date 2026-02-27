@@ -35,6 +35,8 @@ def format_run_timestamp(timestamp: str) -> str:
 def load_run_metadata(run_dir: Path) -> dict:
     """Load metadata from a run directory.
 
+    Delegates to MetadataManager for consistent behavior.
+
     Args:
         run_dir: Path to a run directory containing *_metadata.json
 
@@ -45,14 +47,19 @@ def load_run_metadata(run_dir: Path) -> dict:
         ValueError: If no metadata file found
         json.JSONDecodeError: If metadata file is invalid JSON
     """
-    meta_files = list(run_dir.glob("*_metadata.json"))
-    if not meta_files:
-        raise ValueError(f"No metadata file found in {run_dir}")
-    return json.loads(meta_files[0].read_text())
+    from metadata_manager import MetadataManager, MetadataNotFoundError, MetadataError
+    try:
+        return MetadataManager.load_raw(run_dir)
+    except MetadataNotFoundError as e:
+        raise ValueError(str(e))
+    except MetadataError as e:
+        raise json.JSONDecodeError(str(e), "", 0)
 
 
 def get_prefix_from_metadata(run_dir: Path) -> str:
     """Get the prefix from a run directory's metadata.
+
+    Delegates to MetadataManager for consistent behavior.
 
     Args:
         run_dir: Path to a run directory
@@ -60,15 +67,14 @@ def get_prefix_from_metadata(run_dir: Path) -> str:
     Returns:
         The prefix string (defaults to "image" if not found)
     """
-    try:
-        metadata = load_run_metadata(run_dir)
-        return metadata.get("prefix", "image")
-    except (ValueError, json.JSONDecodeError):
-        return "image"
+    from metadata_manager import MetadataManager
+    return MetadataManager.get_prefix(run_dir)
 
 
 def find_metadata_file(run_dir: Path) -> Path | None:
     """Find the metadata file in a run directory.
+
+    Delegates to MetadataManager for consistent behavior.
 
     Args:
         run_dir: Path to a run directory
@@ -76,8 +82,8 @@ def find_metadata_file(run_dir: Path) -> Path | None:
     Returns:
         Path to the metadata file, or None if not found
     """
-    meta_files = list(run_dir.glob("*_metadata.json"))
-    return meta_files[0] if meta_files else None
+    from metadata_manager import MetadataManager
+    return MetadataManager.find_metadata_file(run_dir)
 
 
 def count_images_in_run(run_dir: Path, prefix: str | None = None) -> int:
