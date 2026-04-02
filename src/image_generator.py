@@ -46,7 +46,7 @@ def _get_model(model: str, quantize: int, tiled_vae: bool = False):
     except ImportError as e:
         raise ImportError(
             "mflux is required for image generation. "
-            "Install with: pip install mflux\n"
+            "Install with: uv sync --extra images\n"
             "Note: mflux requires macOS with Apple Silicon (M1/M2/M3/M4)."
         ) from e
 

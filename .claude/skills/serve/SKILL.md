@@ -2,8 +2,8 @@
 name: serve
 description: Start the web UI server
 allowed-tools:
-  - Bash(python src/cli.py --serve:*)
-  - Bash(source venv/bin/activate:*)
+  - Bash(uv run python src/cli.py --serve:*)
+  - Bash(uv sync:*)
 ---
 
 # Web Server
@@ -16,8 +16,8 @@ Start the image-prompt-expander web server.
 
 ## Steps
 
-1. Activate venv: `source venv/bin/activate`
-2. Start server: `python src/cli.py --serve`
+1. Sync deps if needed: `uv sync`
+2. Start server: `uv run python src/cli.py --serve`
 3. Report server URL: http://localhost:8000
 
 ## Notes

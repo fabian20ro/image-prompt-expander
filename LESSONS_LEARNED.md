@@ -49,6 +49,7 @@ move it to the Archive section at the bottom with a date and reason.
 
 <!-- Version constraints, API quirks, integration lessons -->
 <!-- Format: **[YYYY-MM-DD]** Brief title — Explanation -->
+**[2026-04-03]** Use `tool.uv.package = false` for this repo’s flat imports — The code and tests rely on `src/` being executed directly (`uv run python src/cli.py`, pytest path injection). During `uv` migration, keep the repo non-packaged instead of switching to module entrypoints unless imports are refactored first.
 
 ## Process & Workflow
 

@@ -9,7 +9,7 @@
 <!-- Non-obvious things the model needs to know BEFORE exploring.
      Keep this section as short as possible. Every line costs context on every request. -->
 
-- **Virtual environment:** Always `source venv/bin/activate` before running any Python command.
+- **Python environment:** Use `uv run ...`; sync deps with `uv sync --group dev`, add `--extra images` for mflux.
 - **LM Studio** must be running at `http://localhost:1234/v1` for grammar generation.
 - **mflux** is required for image generation/enhancement (Apple Silicon only).
 

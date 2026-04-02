@@ -225,27 +225,27 @@ def main(
     Generate FLUX.2 Klein image prompt variations using LLM-powered Tracery grammars.
 
     Example:
-        python cli.py -p "a dragon flying over mountains" -n 50
-        python cli.py --clean  # Remove all generated files
+        uv run python src/cli.py -p "a dragon flying over mountains" -n 50
+        uv run python src/cli.py --clean  # Remove all generated files
 
     With image generation:
-        python cli.py -p "a dragon flying over mountains" -n 5 \\
+        uv run python src/cli.py -p "a dragon flying over mountains" -n 5 \\
             --generate-images --images-per-prompt 3 --prefix dragon
 
     With image generation + SeedVR2 2x enhancement:
-        python cli.py -p "a cat" -n 1 --generate-images --enhance --prefix test
+        uv run python src/cli.py -p "a cat" -n 1 --generate-images --enhance --prefix test
 
     Resume from existing grammar:
-        python cli.py --from-grammar generated/grammars/abc123.tracery.json -n 100
+        uv run python src/cli.py --from-grammar generated/grammars/abc123.tracery.json -n 100
 
     Resume from existing prompts (images only):
-        python cli.py --from-prompts generated/prompts/abc123_20260124_122208 \\
+        uv run python src/cli.py --from-prompts generated/prompts/abc123_20260124_122208 \\
             --generate-images --images-per-prompt 2
 
     Standalone enhancement (no image generation):
-        python cli.py --enhance-images path/to/image.png
-        python cli.py --enhance-images path/to/folder/
-        python cli.py --enhance-images "generated/prompts/*/test_*.png"
+        uv run python src/cli.py --enhance-images path/to/image.png
+        uv run python src/cli.py --enhance-images path/to/folder/
+        uv run python src/cli.py --enhance-images "generated/prompts/*/test_*.png"
     """
     # Handle --clean
     if clean:
@@ -274,7 +274,7 @@ def main(
             from server.app import app
             uvicorn.run(app, host="0.0.0.0", port=port, log_level="info")
         except ImportError:
-            click.echo("Error: Missing dependencies for web UI. Install with: pip install fastapi uvicorn sse-starlette", err=True)
+            click.echo("Error: Missing dependencies for web UI. Install with: uv sync", err=True)
             sys.exit(1)
         return
 

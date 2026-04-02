@@ -16,8 +16,8 @@ This folder is a fast navigation layer for the codebase.
 
 ## Runtime Modes
 
-1. CLI mode (`python src/cli.py ...`)
-2. Web mode (`python src/cli.py --serve`)
+1. CLI mode (`uv run python src/cli.py ...`)
+2. Web mode (`uv run python src/cli.py --serve`)
 3. Worker subprocess mode (`src/server/worker_subprocess.py`)
 
 ## Data Roots

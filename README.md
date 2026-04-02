@@ -33,14 +33,21 @@ User prompt → LLM generates Tracery grammar → Tracery produces N prompts →
 git clone https://github.com/fabian20ro/image-prompt-expander.git
 cd image-prompt-expander
 
-python3 -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
+uv sync
+
+# Optional: image generation / enhancement support on Apple Silicon
+uv sync --extra images
 ```
 
-**Important:** Activate the virtual environment each new terminal session:
+**Important:** Use `uv run ...` for project commands. No manual activation step.
+
+For development and tests:
+
 ```bash
-source venv/bin/activate
+uv sync --group dev
+
+# If you are working on image features too
+uv sync --group dev --extra images
 ```
 
 Then install [LM Studio](https://lmstudio.ai/), download a model (e.g., Qwen 2.5 7B, Llama 3.1 8B), and start the local server.
@@ -52,7 +59,7 @@ Then install [LM Studio](https://lmstudio.ai/), download a model (e.g., Qwen 2.5
 Start the interactive web interface:
 
 ```bash
-python src/cli.py --serve
+uv run python src/cli.py --serve
 ```
 
 This opens `http://localhost:8000` with:
@@ -78,31 +85,31 @@ Gallery pages include:
 
 ```bash
 # Generate 50 prompt variations (default)
-python src/cli.py -p "a dragon flying over mountains"
+uv run python src/cli.py -p "a dragon flying over mountains"
 
 # Generate fewer variations
-python src/cli.py -p "a cat sleeping on a bookshelf" -n 50
+uv run python src/cli.py -p "a cat sleeping on a bookshelf" -n 50
 
 # Preview grammar without creating files
-python src/cli.py -p "a cyberpunk city at night" --dry-run
+uv run python src/cli.py -p "a cyberpunk city at night" --dry-run
 ```
 
 ### With Image Generation
 
 ```bash
 # Generate prompts AND images (Apple Silicon only)
-python src/cli.py -p "a dragon flying over mountains" -n 5 \
+uv run python src/cli.py -p "a dragon flying over mountains" -n 5 \
     --generate-images \
     --prefix dragon
 
 # Multiple images per prompt
-python src/cli.py -p "a mystical forest" -n 10 \
+uv run python src/cli.py -p "a mystical forest" -n 10 \
     --generate-images \
     --images-per-prompt 3 \
     --prefix forest
 
 # Limit how many prompts get rendered
-python src/cli.py -p "abstract art" -n 100 \
+uv run python src/cli.py -p "abstract art" -n 100 \
     --generate-images \
     --max-prompts 10 \
     --prefix abstract
@@ -112,17 +119,17 @@ python src/cli.py -p "abstract art" -n 100 \
 
 ```bash
 # Different model (auto-selects optimized prompt structure)
-python src/cli.py -p "portrait of a wizard" -n 5 -i \
+uv run python src/cli.py -p "portrait of a wizard" -n 5 -i \
     --model flux2-klein-4b \
     --prefix wizard
 
 # Custom resolution and steps
-python src/cli.py -p "landscape painting" -n 5 -i \
+uv run python src/cli.py -p "landscape painting" -n 5 -i \
     --width 1024 --height 768 --steps 8 \
     --prefix landscape
 
 # Reproducible with seed
-python src/cli.py -p "abstract pattern" -n 3 -i \
+uv run python src/cli.py -p "abstract pattern" -n 3 -i \
     --seed 42 \
     --prefix pattern
 ```
@@ -133,18 +140,18 @@ Enhance generated images with 2x upscaling using SeedVR2. Enhanced images replac
 
 ```bash
 # Generate images with automatic 2x enhancement
-python src/cli.py -p "a cat sleeping" -n 3 -i \
+uv run python src/cli.py -p "a cat sleeping" -n 3 -i \
     --enhance \
     --prefix cat
 
 # Adjust enhancement softness (0.0-1.0, default: 0.5)
-python src/cli.py -p "portrait" -n 1 -i \
+uv run python src/cli.py -p "portrait" -n 1 -i \
     --enhance --enhance-softness 0.3 \
     --prefix portrait
 
 # Memory-efficient batch enhancement (for large batches)
 # Defers enhancement until after all images are generated
-python src/cli.py -p "a cat sleeping" -n 50 -i \
+uv run python src/cli.py -p "a cat sleeping" -n 50 -i \
     --enhance --enhance-after \
     --prefix cat
 ```
@@ -155,34 +162,34 @@ Enhance existing images in-place (replaces originals):
 
 ```bash
 # Enhance a single image
-python src/cli.py --enhance-images path/to/image.png
+uv run python src/cli.py --enhance-images path/to/image.png
 
 # Enhance all images in a folder
-python src/cli.py --enhance-images generated/prompts/myrun/
+uv run python src/cli.py --enhance-images generated/prompts/myrun/
 
 # Enhance using glob pattern
-python src/cli.py --enhance-images "generated/prompts/*/cat_*.png"
+uv run python src/cli.py --enhance-images "generated/prompts/*/cat_*.png"
 
 # With custom softness
-python src/cli.py --enhance-images folder/ --enhance-softness 0.7
+uv run python src/cli.py --enhance-images folder/ --enhance-softness 0.7
 ```
 
 ### Resume from Intermediate Steps
 
 ```bash
 # Resume from cached grammar (skip LLM generation)
-python src/cli.py --from-grammar generated/grammars/abc123.tracery.json \
+uv run python src/cli.py --from-grammar generated/grammars/abc123.tracery.json \
     -n 100 --prefix dragon2
 
 # Resume from existing prompts (generate images only)
-python src/cli.py --from-prompts generated/prompts/abc123_20260124_122208 \
+uv run python src/cli.py --from-prompts generated/prompts/abc123_20260124_122208 \
     --generate-images --images-per-prompt 2
 ```
 
 ### Cleanup
 
 ```bash
-python src/cli.py --clean
+uv run python src/cli.py --clean
 ```
 
 ## CLI Options
@@ -288,7 +295,7 @@ export PROMPT_GEN_DEFAULT_HEIGHT=768
 
 **"Connection refused"** - Start LM Studio and ensure the server is running.
 
-**"mflux is required"** - Run `pip install mflux` (requires Apple Silicon).
+**"mflux is required"** - Run `uv sync --extra images` (requires Apple Silicon).
 
 **"Invalid JSON grammar"** - Try `--no-cache` or use a different LLM model.
 
@@ -303,28 +310,26 @@ export PROMPT_GEN_DEFAULT_HEIGHT=768
 ```bash
 git clone https://github.com/fabian20ro/image-prompt-expander.git
 cd image-prompt-expander
-python3 -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
-pip install -r requirements-dev.txt  # pytest, pytest-asyncio, pytest-cov
+uv sync --group dev
+
+# Optional: image generation / enhancement dependencies
+uv sync --group dev --extra images
 ```
 
 ### Running Tests
 
 ```bash
-source venv/bin/activate
-
 # Run all tests
-pytest -v --tb=short
+uv run pytest -v --tb=short
 
 # Run specific test file
-pytest tests/test_pipeline.py -v
+uv run pytest tests/test_pipeline.py -v
 
 # Run with coverage
-pytest --cov=src --cov-report=html
+uv run pytest --cov=src --cov-report=html
 ```
 
-The test suite currently collects 271 tests covering:
+The test suite currently collects 313 tests covering:
 - Pipeline orchestration (`test_pipeline.py`)
 - Image generation (`test_image_generator.py`)
 - Grammar expansion (`test_tracery_runner.py`)
@@ -367,7 +372,7 @@ Key patterns:
 1. Fork the repository
 2. Create a feature branch
 3. Add tests for new functionality
-4. Ensure all tests pass: `pytest -v --tb=short`
+4. Ensure all tests pass: `uv run pytest -v --tb=short`
 5. Submit a pull request
 
 ## Credits

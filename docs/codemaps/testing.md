@@ -20,4 +20,4 @@
 ## Notes
 
 - In this environment, `tests/test_image_generator.py` aborts due native MLX/mflux import behavior during one unsupported-model test path.
-- Other suites run clean when executed individually with `./venv/bin/pytest`.
+- Other suites run clean when executed individually with `uv run pytest`.

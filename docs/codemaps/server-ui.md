@@ -2,7 +2,7 @@
 
 ## Serve Entry Path
 
-1. `python src/cli.py --serve [--port N]`
+1. `uv run python src/cli.py --serve [--port N]`
 2. CLI starts `uvicorn` with `src/server/app.py:app`
 3. FastAPI lifespan initializes:
    - `generated/` directories

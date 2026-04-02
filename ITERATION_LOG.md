@@ -20,6 +20,16 @@ Each entry should follow this structure:
 
 ---
 
+### [2026-04-03] Migrated pip/venv workflow to uv
+
+**Context:** User requested full migration from `pip` + `venv` to `uv`, with the legacy setup removed rather than kept for compatibility.
+**What happened:** Added `pyproject.toml` and committed `uv.lock`; moved runtime/dev deps into `uv` metadata; made `mflux` an optional `images` extra; deleted `requirements.txt` and `requirements-dev.txt`; removed the local `venv/` directory; updated `.gitignore` to `.venv/`; rewrote README, AGENTS, codemaps, repo-local Claude skills/settings, runtime error messages, and CLI help text to use `uv sync` / `uv run`; refreshed the README test-count note after verification.
+**Outcome:** Success — `uv lock`, `uv sync --group dev`, and `uv sync --group dev --extra images` all completed successfully; `uv run python src/cli.py --help` worked; full test suite passed under `uv` (`313 passed`).
+**Insight:** For this repo’s current flat-import layout, `uv` works cleanly with `tool.uv.package = false`; switching to package/module entrypoints would be a separate refactor.
+**Promoted to Lessons Learned:** Yes
+
+---
+
 ### [2026-02-24] AI Agent Configuration Restructuring
 
 **Context:** Applied standardized AI agent config guide (informed by "Evaluating AGENTS.md" and "SkillsBench" research) to restructure all agent configuration files.
