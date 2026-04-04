@@ -9,6 +9,7 @@ from server.models import (
     QueueState,
     TaskProgress,
     GenerateRequest,
+    GenerateFromGrammarRequest,
     EnhanceImageRequest,
 )
 
@@ -19,6 +20,7 @@ class TestModels:
     def test_task_type_enum(self):
         """Test TaskType enum values."""
         assert TaskType.GENERATE_PIPELINE.value == "generate_pipeline"
+        assert TaskType.GENERATE_FROM_GRAMMAR.value == "generate_from_grammar"
         assert TaskType.REGENERATE_PROMPTS.value == "regenerate_prompts"
         assert TaskType.GENERATE_IMAGE.value == "generate_image"
         assert TaskType.ENHANCE_IMAGE.value == "enhance_image"
@@ -100,6 +102,12 @@ class TestModels:
         assert req.generate_images is True
         assert req.enhance is True
         assert req.enhance_softness == 0.3
+
+    def test_generate_from_grammar_request_defaults(self):
+        req = GenerateFromGrammarRequest(grammar='{"origin": ["test"]}')
+        assert req.prefix == "image"
+        assert req.count == 50
+        assert req.images_per_prompt == 1
 
 
 class TestInputValidation:

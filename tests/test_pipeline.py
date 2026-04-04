@@ -479,6 +479,44 @@ class TestRegeneratePrompts:
         assert result.success is False
         assert "Run directory not found" in result.error
 
+    @patch("pipeline.run_tracery")
+    @patch("pipeline.create_gallery")
+    @patch("pipeline.backup_run")
+    @patch("pipeline.run_has_images")
+    def test_regenerate_prompts_archives_and_clears_active_images(
+        self, mock_has_images, mock_backup, mock_gallery, mock_tracery, temp_dir
+    ):
+        """Regeneration should archive old PNGs and remove them from the active run."""
+        with patch("pipeline.paths") as mock_paths:
+            prompts_dir = temp_dir / "prompts"
+            prompts_dir.mkdir(parents=True)
+            mock_paths.prompts_dir = prompts_dir
+            mock_paths.saved_dir = temp_dir / "saved"
+
+            run_dir = prompts_dir / "test_run"
+            run_dir.mkdir(parents=True)
+            create_run_files(run_dir, prefix="test", num_prompts=2, create_images=True)
+
+            mock_tracery.return_value = ["new prompt 1", "new prompt 2"]
+            mock_has_images.return_value = True
+
+            executor = PipelineExecutor()
+            result = executor.regenerate_prompts(
+                run_id="test_run",
+                grammar='{"origin": ["new output"]}',
+                count=2,
+                images_per_prompt=2,
+                max_prompts=1,
+            )
+
+        assert result.success is True
+        mock_backup.assert_called_once()
+        assert not (run_dir / "test_0_0.png").exists()
+        assert not (run_dir / "test_1_0.png").exists()
+        called_args = mock_gallery.call_args.args
+        assert called_args[2] == ["new prompt 1"]
+        assert called_args[3] == 2
+
 
 class TestGenerateSingleImage:
     """Tests for generate_single_image method."""

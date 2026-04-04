@@ -39,6 +39,7 @@ class RunMetadata:
     source: str | None = None
     grammar_path: str | None = None
     regenerated_at: str | None = None
+    gallery_layout: dict = field(default_factory=dict)
     _raw: dict = field(default_factory=dict, repr=False)
 
     @classmethod
@@ -55,6 +56,7 @@ class RunMetadata:
             source=data.get("source"),
             grammar_path=data.get("grammar_path"),
             regenerated_at=data.get("regenerated_at"),
+            gallery_layout=data.get("gallery_layout", {}),
             _raw=data,
         )
 
@@ -77,6 +79,8 @@ class RunMetadata:
             result["grammar_path"] = self.grammar_path
         if self.regenerated_at:
             result["regenerated_at"] = self.regenerated_at
+        if self.gallery_layout:
+            result["gallery_layout"] = self.gallery_layout
 
         # Preserve any extra fields from raw data
         for key, value in self._raw.items():
@@ -88,6 +92,35 @@ class RunMetadata:
     def get(self, key: str, default: Any = None) -> Any:
         """Get a value from raw data, for backwards compatibility."""
         return self._raw.get(key, default)
+
+
+def resolve_gallery_layout(metadata: RunMetadata | dict, prompt_count: int | None = None) -> dict:
+    """Resolve persisted gallery layout with fallbacks for older runs."""
+    if isinstance(metadata, RunMetadata):
+        gallery_layout = metadata.gallery_layout or {}
+        image_generation = metadata.image_generation or {}
+    else:
+        gallery_layout = metadata.get("gallery_layout", {}) or {}
+        image_generation = metadata.get("image_generation", {}) or {}
+
+    images_per_prompt = gallery_layout.get("images_per_prompt")
+    if images_per_prompt is None:
+        images_per_prompt = image_generation.get("images_per_prompt", 1)
+
+    max_prompts = gallery_layout.get("max_prompts")
+    if max_prompts is None and "max_prompts" not in gallery_layout:
+        max_prompts = image_generation.get("max_prompts")
+
+    images_per_prompt = max(1, int(images_per_prompt or 1))
+    if max_prompts is not None:
+        max_prompts = max(1, int(max_prompts))
+        if prompt_count is not None:
+            max_prompts = min(max_prompts, prompt_count)
+
+    return {
+        "images_per_prompt": images_per_prompt,
+        "max_prompts": max_prompts,
+    }
 
 
 class MetadataManager:
@@ -274,6 +307,15 @@ class MetadataManager:
             return metadata.image_generation
         except MetadataError:
             return {}
+
+    @classmethod
+    def get_gallery_layout(cls, run_dir: Path, prompt_count: int | None = None) -> dict:
+        """Get gallery layout settings with fallbacks for older runs."""
+        try:
+            metadata = cls.load(run_dir)
+            return resolve_gallery_layout(metadata, prompt_count=prompt_count)
+        except MetadataError:
+            return resolve_gallery_layout({}, prompt_count=prompt_count)
 
 
 # Convenience functions for backwards compatibility

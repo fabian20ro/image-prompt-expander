@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field
 class TaskType(str, Enum):
     """Types of tasks that can be queued."""
     GENERATE_PIPELINE = "generate_pipeline"
+    GENERATE_FROM_GRAMMAR = "generate_from_grammar"
     REGENERATE_PROMPTS = "regenerate_prompts"
     GENERATE_IMAGE = "generate_image"
     ENHANCE_IMAGE = "enhance_image"
@@ -89,7 +90,10 @@ class RegeneratePromptsRequest(BaseModel):
 
 class RegeneratePromptsApiRequest(BaseModel):
     """API request to regenerate prompts (run_id and grammar from URL/file)."""
+    grammar: str | None = None
     count: int | None = Field(None, ge=1, le=10000)
+    images_per_prompt: int | None = Field(None, ge=1, le=100)
+    max_prompts: int | None = Field(None, ge=1)
 
 
 class GrammarUpdateRequest(BaseModel):
@@ -122,6 +126,27 @@ class GenerateAllImagesRequest(BaseModel):
     # Enhancement settings
     enhance: bool = False
     enhance_softness: float = Field(0.5, ge=0.0, le=1.0)
+
+
+class GalleryLayoutUpdateRequest(BaseModel):
+    """Request to persist gallery layout state."""
+    images_per_prompt: int = Field(1, ge=1, le=100)
+    max_prompts: int | None = Field(None, ge=1)
+
+
+class GenerateFromGrammarRequest(BaseModel):
+    """Request to create a run directly from pasted Tracery grammar."""
+    grammar: str = Field(..., min_length=2)
+    title: str | None = Field(None, max_length=500)
+    count: int = Field(50, ge=1, le=10000)
+    prefix: str = Field("image", min_length=1, max_length=100, pattern=r'^[a-zA-Z0-9_-]+$')
+    model: str = Field("flux2-klein-4b")
+    images_per_prompt: int = Field(1, ge=1, le=100)
+    max_prompts: int | None = Field(None, ge=1)
+    width: int = Field(864, ge=64, le=4096)
+    height: int = Field(1152, ge=64, le=4096)
+    steps: int | None = Field(None, ge=1, le=100)
+    seed: int | None = Field(None, ge=0)
 
 
 class EnhanceAllImagesRequest(BaseModel):

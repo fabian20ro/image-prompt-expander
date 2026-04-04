@@ -14,12 +14,14 @@ from sse_starlette.sse import EventSourceResponse
 from .app import get_queue_manager, get_worker, get_shutdown_event
 from .models import (
     GenerateRequest,
+    GenerateFromGrammarRequest,
     RegeneratePromptsApiRequest,
     GrammarUpdateRequest,
     GenerateImageRequest,
     EnhanceImageRequest,
     GenerateAllImagesRequest,
     EnhanceAllImagesRequest,
+    GalleryLayoutUpdateRequest,
     StatusResponse,
     TaskResponse,
     TaskType,
@@ -31,7 +33,9 @@ from .models import (
 import sys
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from config import paths
+from grammar_history import append_grammar_revision, load_grammar_history
 from gallery_index import generate_master_index, _extract_run_info
+from metadata_manager import MetadataManager
 from utils import backup_run, is_backup_run
 from services.gallery_service import GalleryService, GalleryNotFoundError, MetadataNotFoundError
 
@@ -188,6 +192,26 @@ async def start_generation(req: GenerateRequest):
     return TaskResponse(
         task_id=task.id,
         message=f"Generation queued (task {task.id[:8]})",
+    )
+
+
+@router.post("/api/generate-from-grammar", response_model=TaskResponse)
+async def start_generation_from_grammar(req: GenerateFromGrammarRequest):
+    """Create a new gallery directly from pasted Tracery grammar."""
+    try:
+        json.loads(req.grammar)
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=400, detail="Invalid JSON grammar")
+
+    qm = get_queue_manager()
+    task = qm.add_task(
+        TaskType.GENERATE_FROM_GRAMMAR,
+        req.model_dump(),
+    )
+
+    return TaskResponse(
+        task_id=task.id,
+        message=f"Grammar gallery queued (task {task.id[:8]})",
     )
 
 
@@ -388,6 +412,23 @@ async def get_grammar(
     return {"grammar": grammar}
 
 
+@router.get("/api/gallery/{run_id}/grammar/history")
+async def get_grammar_history(
+    run_id: str,
+    service: GalleryService = Depends(get_gallery_service),
+):
+    """Get persisted grammar revisions for a gallery."""
+    try:
+        run_dir = service.get_run_directory(run_id)
+    except GalleryNotFoundError:
+        raise HTTPException(status_code=404, detail="Gallery not found")
+
+    prefix = service.get_prefix(run_dir)
+    grammar = service.load_grammar(run_dir, prefix) or ""
+    history = load_grammar_history(run_dir, prefix, current_grammar=grammar)
+    return {"history": history}
+
+
 @router.put("/api/gallery/{run_id}/grammar", response_model=TaskResponse)
 async def update_grammar(
     run_id: str,
@@ -409,9 +450,33 @@ async def update_grammar(
 
     prefix = service.get_prefix(run_dir)
     grammar_file = service.get_grammar_file(run_dir, prefix)
+    append_grammar_revision(run_dir, prefix, req.grammar, action="save")
     grammar_file.write_text(req.grammar)
 
     return TaskResponse(task_id="", message="Grammar updated")
+
+
+@router.put("/api/gallery/{run_id}/layout", response_model=TaskResponse)
+async def update_gallery_layout(
+    run_id: str,
+    req: GalleryLayoutUpdateRequest,
+    service: GalleryService = Depends(get_gallery_service),
+):
+    """Persist gallery layout settings for a run."""
+    try:
+        run_dir = service.get_run_directory(run_id)
+    except GalleryNotFoundError:
+        raise HTTPException(status_code=404, detail="Gallery not found")
+
+    MetadataManager.update(
+        run_dir,
+        gallery_layout={
+            "images_per_prompt": req.images_per_prompt,
+            "max_prompts": req.max_prompts,
+        },
+    )
+
+    return TaskResponse(task_id="", message="Layout updated")
 
 
 @router.post("/api/gallery/{run_id}/regenerate", response_model=TaskResponse)
@@ -430,9 +495,18 @@ async def regenerate_prompts(
     except MetadataNotFoundError:
         raise HTTPException(status_code=404, detail="No metadata found")
 
-    grammar = service.load_grammar(run_dir)
+    grammar = req.grammar if req and req.grammar is not None else service.load_grammar(run_dir)
     if grammar is None:
         raise HTTPException(status_code=404, detail="Grammar not found")
+
+    try:
+        json.loads(grammar)
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=400, detail="Invalid JSON grammar")
+
+    prefix = service.get_prefix(run_dir)
+    append_grammar_revision(run_dir, prefix, grammar, action="save")
+    service.get_grammar_file(run_dir, prefix).write_text(grammar)
 
     count = req.count if req and req.count else metadata.get("count", 50)
 
@@ -443,6 +517,8 @@ async def regenerate_prompts(
             "run_id": run_id,
             "grammar": grammar,
             "count": count,
+            "images_per_prompt": req.images_per_prompt if req else None,
+            "max_prompts": req.max_prompts if req else None,
         },
     )
 

@@ -20,11 +20,29 @@ class TestGalleryIndexInteractive:
 
         # Check for interactive elements
         assert "generate-form" in content
+        assert "generate-from-grammar-form" in content
         assert "queue-status" in content
         assert "btn-kill" in content
         assert "btn-clear" in content
         assert "/api/generate" in content
         assert "EventSource" in content
+
+    def test_index_prefers_display_title_for_run_cards(self, temp_dir):
+        active_run = temp_dir / "prompts" / "20240101_120000_abc123"
+        active_run.mkdir(parents=True)
+        (active_run / "test_metadata.json").write_text(json.dumps({
+            "prefix": "test",
+            "count": 1,
+            "user_prompt": "hidden raw prompt",
+            "display_title": "Grammar import",
+        }))
+        (active_run / "test_gallery.html").write_text("<html></html>")
+
+        index_path = generate_master_index(temp_dir, interactive=True)
+        content = index_path.read_text()
+
+        assert "Grammar import" in content
+        assert "hidden raw prompt" not in content
 
     def test_index_non_interactive_mode(self, temp_dir):
         """Test that non-interactive index doesn't include form."""

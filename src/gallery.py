@@ -1,11 +1,13 @@
 """HTML gallery generation for image prompt outputs."""
 
 import html
+import json
 import re
 from pathlib import Path
 
 from filelock import FileLock
 
+from grammar_history import load_grammar_history
 from html_components import (
     LogPanel,
     ProgressBar,
@@ -15,6 +17,7 @@ from html_components import (
     SSEClient,
     Notifications,
 )
+from metadata_manager import resolve_gallery_layout
 
 
 def create_gallery(
@@ -27,6 +30,9 @@ def create_gallery(
     interactive: bool = False,
     run_id: str | None = None,
     user_prompt: str = "",
+    image_settings: dict | None = None,
+    layout_settings: dict | None = None,
+    grammar_history: list[dict] | None = None,
 ) -> Path:
     """Create initial gallery with placeholders for all expected images.
 
@@ -82,7 +88,12 @@ def create_gallery(
 
     gallery_html = _build_gallery_html(
         prefix, cards_html, completed, total_images, grammar, raw_response_file,
-        interactive=interactive, run_id=run_id, user_prompt=user_prompt
+        interactive=interactive,
+        run_id=run_id,
+        user_prompt=user_prompt,
+        image_settings=image_settings or {},
+        layout_settings=layout_settings or {},
+        grammar_history=grammar_history or [],
     )
     gallery_path.write_text(gallery_html)
 
@@ -188,8 +199,6 @@ def generate_gallery_for_directory(prompts_dir: Path, interactive: bool = False)
     Raises:
         ValueError: If no metadata file found or no prompts found
     """
-    import json
-
     # Find metadata file
     meta_files = list(prompts_dir.glob("*_metadata.json"))
     if not meta_files:
@@ -197,8 +206,7 @@ def generate_gallery_for_directory(prompts_dir: Path, interactive: bool = False)
 
     metadata = json.loads(meta_files[0].read_text())
     prefix = metadata.get("prefix", "image")
-    user_prompt = metadata.get("user_prompt", "")
-    images_per_prompt = metadata.get("image_generation", {}).get("images_per_prompt", 1)
+    user_prompt = metadata.get("display_title") or metadata.get("user_prompt", "")
 
     # Load prompts
     prompt_files = sorted(prompts_dir.glob(f"{prefix}_*.txt"))
@@ -208,6 +216,9 @@ def generate_gallery_for_directory(prompts_dir: Path, interactive: bool = False)
         raise ValueError(f"No prompt files found in {prompts_dir}")
 
     prompts = [f.read_text() for f in prompt_files]
+    layout_settings = resolve_gallery_layout(metadata, prompt_count=len(prompts))
+    images_per_prompt = layout_settings["images_per_prompt"]
+    prompts_to_render = prompts[:layout_settings["max_prompts"]] if layout_settings["max_prompts"] else prompts
 
     # Load grammar if available
     grammar = None
@@ -223,11 +234,28 @@ def generate_gallery_for_directory(prompts_dir: Path, interactive: bool = False)
 
     # Get run_id from directory name
     run_id = prompts_dir.name if interactive else None
+    grammar_history = load_grammar_history(prompts_dir, prefix, current_grammar=grammar)
+    image_settings = metadata.get("image_generation", {}) or {}
+    if "model" not in image_settings and metadata.get("model"):
+        image_settings = {
+            "model": metadata.get("model"),
+            **image_settings,
+        }
 
     # Create gallery
     gallery_path = create_gallery(
-        prompts_dir, prefix, prompts, images_per_prompt, grammar, raw_response_file,
-        interactive=interactive, run_id=run_id, user_prompt=user_prompt
+        prompts_dir,
+        prefix,
+        prompts_to_render,
+        images_per_prompt,
+        grammar,
+        raw_response_file,
+        interactive=interactive,
+        run_id=run_id,
+        user_prompt=user_prompt,
+        image_settings=image_settings,
+        layout_settings=layout_settings,
+        grammar_history=grammar_history,
     )
 
     return gallery_path
@@ -246,18 +274,33 @@ def _build_interactive_grammar_section(grammar: str, run_id: str) -> str:
     <div class="grammar-header">
       <span class="grammar-title">Tracery Grammar</span>
       <div class="grammar-actions">
+        <button id="btn-undo-grammar" class="btn-small btn-secondary">Undo</button>
+        <button id="btn-redo-grammar" class="btn-small btn-secondary">Redo</button>
         <button id="btn-save-grammar" class="btn-small btn-primary">Save</button>
         <button id="btn-regenerate" class="btn-small btn-secondary">Regenerate Prompts</button>
       </div>
     </div>
     <textarea id="grammar-editor" class="grammar-editor">{escaped_grammar}</textarea>
+    <details class="grammar-history">
+      <summary>Grammar History</summary>
+      <div id="grammar-history-list" class="grammar-history-list"></div>
+    </details>
   </div>
 '''
 
 
-def _build_image_settings_section() -> str:
+def _build_image_settings_section(image_settings: dict, layout_settings: dict) -> str:
     """Build the collapsible image settings section."""
-    return '''
+    model = image_settings.get("model", "flux2-klein-4b")
+    width = image_settings.get("width", 864)
+    height = image_settings.get("height", 1152)
+    steps = image_settings.get("steps")
+    seed = image_settings.get("seed")
+    enhance = "checked" if image_settings.get("enhance", False) else ""
+    enhance_softness = image_settings.get("enhance_softness", 0.5) or 0.5
+    images_per_prompt = layout_settings.get("images_per_prompt", 1)
+    max_prompts = layout_settings.get("max_prompts")
+    return f'''
   <details id="image-settings" class="settings-section" open>
     <summary>Image Settings</summary>
     <div class="settings-form">
@@ -265,50 +308,50 @@ def _build_image_settings_section() -> str:
         <div class="form-group">
           <label for="img-model">Model</label>
           <select id="img-model" name="model">
-            <option value="z-image-turbo">z-image-turbo</option>
-            <option value="flux2-klein-4b" selected>flux2-klein-4b</option>
-            <option value="flux2-klein-9b">flux2-klein-9b</option>
+            <option value="z-image-turbo"{" selected" if model == "z-image-turbo" else ""}>z-image-turbo</option>
+            <option value="flux2-klein-4b"{" selected" if model == "flux2-klein-4b" else ""}>flux2-klein-4b</option>
+            <option value="flux2-klein-9b"{" selected" if model == "flux2-klein-9b" else ""}>flux2-klein-9b</option>
           </select>
         </div>
         <div class="form-group">
           <label for="img-images-per-prompt">Images/Prompt</label>
-          <input type="number" id="img-images-per-prompt" name="images_per_prompt" value="2" min="1">
+          <input type="number" id="img-images-per-prompt" name="images_per_prompt" value="{images_per_prompt}" min="1">
         </div>
         <div class="form-group">
           <label for="img-max-prompts">Max Prompts</label>
-          <input type="number" id="img-max-prompts" name="max_prompts" value="100" min="1">
+          <input type="number" id="img-max-prompts" name="max_prompts" value="{'' if max_prompts is None else max_prompts}" min="1" placeholder="all">
         </div>
       </div>
       <div class="form-row">
         <div class="form-group">
           <label for="img-width">Width</label>
-          <input type="number" id="img-width" name="width" value="864" step="8">
+          <input type="number" id="img-width" name="width" value="{width}" step="8">
         </div>
         <div class="form-group">
           <label for="img-height">Height</label>
-          <input type="number" id="img-height" name="height" value="1152" step="8">
+          <input type="number" id="img-height" name="height" value="{height}" step="8">
         </div>
         <div class="form-group">
           <label for="img-steps">Steps</label>
-          <input type="number" id="img-steps" name="steps" placeholder="auto" min="1">
+          <input type="number" id="img-steps" name="steps" value="{'' if steps is None else steps}" placeholder="auto" min="1">
         </div>
       </div>
       <div class="form-row">
         <div class="form-group">
           <label for="img-seed">Seed</label>
-          <input type="number" id="img-seed" name="seed" placeholder="random">
+          <input type="number" id="img-seed" name="seed" value="{'' if seed is None else seed}" placeholder="random">
         </div>
       </div>
       <div class="form-row">
         <div class="form-group checkbox-group">
           <label>
-            <input type="checkbox" id="img-enhance" name="enhance">
+            <input type="checkbox" id="img-enhance" name="enhance" {enhance}>
             Enhance after generation
           </label>
         </div>
         <div class="form-group">
           <label for="img-enhance-softness">Softness</label>
-          <input type="number" id="img-enhance-softness" name="enhance_softness" value="0.5" step="0.1" min="0" max="1">
+          <input type="number" id="img-enhance-softness" name="enhance_softness" value="{enhance_softness}" step="0.1" min="0" max="1">
         </div>
       </div>
     </div>
@@ -340,17 +383,21 @@ def _build_log_panel() -> str:
     return LogPanel.html()
 
 
-def _build_interactive_js(run_id: str) -> str:
+def _build_interactive_js(run_id: str, grammar_history: list[dict]) -> str:
     """Build JavaScript for interactive gallery features."""
     log_js = LogPanel.js()
     sse_js = SSEClient.js()
     notify_js = Notifications.js()
+    history_json = json.dumps(grammar_history)
 
     return f'''
 <script>
 (function() {{
   const RUN_ID = "{run_id}";
+  const initialGrammarHistory = {history_json};
   const grammarEditor = document.getElementById('grammar-editor');
+  const btnUndoGrammar = document.getElementById('btn-undo-grammar');
+  const btnRedoGrammar = document.getElementById('btn-redo-grammar');
   const btnSaveGrammar = document.getElementById('btn-save-grammar');
   const btnRegenerate = document.getElementById('btn-regenerate');
   const btnGenerateAll = document.getElementById('btn-generate-all');
@@ -362,6 +409,17 @@ def _build_interactive_js(run_id: str) -> str:
   const progressFill = document.getElementById('progress-fill');
   const progressText = document.getElementById('progress-text');
   const logPanel = document.getElementById('log-panel');
+  const grammarHistoryList = document.getElementById('grammar-history-list');
+  const grammarDraftKey = `grammar-draft:${{RUN_ID}}`;
+  const layoutInputs = [
+    document.getElementById('img-images-per-prompt'),
+    document.getElementById('img-max-prompts'),
+  ].filter(Boolean);
+  let undoStack = grammarEditor ? [grammarEditor.value] : [];
+  let redoStack = [];
+  let grammarSnapshotTimer = null;
+  let layoutSaveTimer = null;
+  let suppressSnapshot = false;
 
   // Shared notification helpers
 {notify_js}
@@ -384,6 +442,79 @@ def _build_interactive_js(run_id: str) -> str:
       btn.disabled = false;
       btn.textContent = original;
     }}
+  }}
+
+  function pushUndoSnapshot(value) {{
+    if (!grammarEditor || suppressSnapshot) return;
+    if (undoStack[undoStack.length - 1] === value) return;
+    undoStack.push(value);
+    if (undoStack.length > 100) undoStack.shift();
+    redoStack = [];
+    syncUndoButtons();
+  }}
+
+  function syncUndoButtons() {{
+    if (btnUndoGrammar) btnUndoGrammar.disabled = undoStack.length <= 1;
+    if (btnRedoGrammar) btnRedoGrammar.disabled = redoStack.length === 0;
+  }}
+
+  function applyGrammarValue(value) {{
+    if (!grammarEditor) return;
+    suppressSnapshot = true;
+    grammarEditor.value = value;
+    suppressSnapshot = false;
+  }}
+
+  function renderGrammarHistory(history) {{
+    if (!grammarHistoryList) return;
+    if (!history.length) {{
+      grammarHistoryList.innerHTML = '<p class="history-empty">No saved revisions yet.</p>';
+      return;
+    }}
+    grammarHistoryList.innerHTML = history.slice().reverse().map((entry) => {{
+      const when = new Date(entry.created_at).toLocaleString();
+      const action = entry.action || 'saved';
+      const preview = (entry.grammar || '').split('\\n')[0].slice(0, 80);
+      return `
+        <button type="button" class="history-item" data-grammar-id="${{entry.id}}">
+          <span class="history-item-meta">${{action}} · ${{when}}</span>
+          <span class="history-item-preview">${{preview || '(empty grammar)'}} </span>
+        </button>
+      `;
+    }}).join('');
+
+    grammarHistoryList.querySelectorAll('.history-item').forEach((btn) => {{
+      btn.addEventListener('click', () => {{
+        const match = history.find((entry) => entry.id === btn.dataset.grammarId);
+        if (!match) return;
+        applyGrammarValue(match.grammar || '');
+        pushUndoSnapshot(grammarEditor.value);
+        localStorage.setItem(grammarDraftKey, grammarEditor.value);
+        showToast('Loaded revision into editor', 'success');
+      }});
+    }});
+  }}
+
+  async function refreshGrammarHistory() {{
+    try {{
+      const resp = await fetch(`/api/gallery/${{RUN_ID}}/grammar/history`);
+      if (!resp.ok) return;
+      const data = await resp.json();
+      renderGrammarHistory(data.history || []);
+    }} catch (_err) {{
+      // Best effort only.
+    }}
+  }}
+
+  async function persistLayoutAndReload() {{
+    const imagesPerPrompt = parseInt(document.getElementById('img-images-per-prompt')?.value) || 1;
+    const maxPromptsValue = document.getElementById('img-max-prompts')?.value;
+    const maxPrompts = maxPromptsValue ? parseInt(maxPromptsValue) : null;
+    await apiPut(`/api/gallery/${{RUN_ID}}/layout`, {{
+      images_per_prompt: imagesPerPrompt,
+      max_prompts: maxPrompts,
+    }});
+    window.location.reload();
   }}
 
   function initSSE() {{
@@ -560,15 +691,22 @@ def _build_interactive_js(run_id: str) -> str:
           grammar: grammarEditor.value
         }});
       }});
+      localStorage.removeItem(grammarDraftKey);
       showToast('Grammar saved', 'success');
+      refreshGrammarHistory();
     }});
   }}
 
   if (btnRegenerate) {{
     btnRegenerate.addEventListener('click', async () => {{
       await withButtonBusy(btnRegenerate, 'Queueing...', async () => {{
-        await apiPost(`/api/gallery/${{RUN_ID}}/regenerate`);
+        await apiPost(`/api/gallery/${{RUN_ID}}/regenerate`, {{
+          grammar: grammarEditor.value,
+          images_per_prompt: parseInt(document.getElementById('img-images-per-prompt')?.value) || 1,
+          max_prompts: document.getElementById('img-max-prompts')?.value ? parseInt(document.getElementById('img-max-prompts').value) : null,
+        }});
       }});
+      localStorage.removeItem(grammarDraftKey);
       progressBar.classList.remove('hidden');
       progressMessage.textContent = 'Regenerating prompts...';
       showToast('Prompt regeneration queued', 'success');
@@ -578,7 +716,7 @@ def _build_interactive_js(run_id: str) -> str:
   if (btnGenerateAll) {{
     btnGenerateAll.addEventListener('click', async () => {{
       const data = {{
-        images_per_prompt: parseInt(document.getElementById('img-images-per-prompt')?.value) || 2,
+        images_per_prompt: parseInt(document.getElementById('img-images-per-prompt')?.value) || 1,
         resume: true,
         model: document.getElementById('img-model')?.value || null,
         width: parseInt(document.getElementById('img-width')?.value) || null,
@@ -670,7 +808,53 @@ def _build_interactive_js(run_id: str) -> str:
     showToast(`Queued enhancement for ${{promptIdx}}_${{imageIdx}}`, 'success');
   }};
 
+  if (grammarEditor) {{
+    const savedDraft = localStorage.getItem(grammarDraftKey);
+    if (savedDraft && savedDraft !== grammarEditor.value) {{
+      applyGrammarValue(savedDraft);
+      undoStack = [savedDraft];
+    }}
+    grammarEditor.addEventListener('input', () => {{
+      localStorage.setItem(grammarDraftKey, grammarEditor.value);
+      clearTimeout(grammarSnapshotTimer);
+      grammarSnapshotTimer = setTimeout(() => pushUndoSnapshot(grammarEditor.value), 300);
+    }});
+  }}
+
+  if (btnUndoGrammar) {{
+    btnUndoGrammar.addEventListener('click', () => {{
+      if (undoStack.length <= 1 || !grammarEditor) return;
+      const current = undoStack.pop();
+      redoStack.push(current);
+      applyGrammarValue(undoStack[undoStack.length - 1]);
+      syncUndoButtons();
+    }});
+  }}
+
+  if (btnRedoGrammar) {{
+    btnRedoGrammar.addEventListener('click', () => {{
+      if (!redoStack.length || !grammarEditor) return;
+      const next = redoStack.pop();
+      applyGrammarValue(next);
+      undoStack.push(next);
+      syncUndoButtons();
+    }});
+  }}
+
+  layoutInputs.forEach((input) => {{
+    input.addEventListener('change', () => {{
+      clearTimeout(layoutSaveTimer);
+      layoutSaveTimer = setTimeout(() => {{
+        persistLayoutAndReload().catch((err) => {{
+          showToast('Error: ' + err.message, 'error', 4200);
+        }});
+      }}, 150);
+    }});
+  }});
+
   // Start SSE
+  renderGrammarHistory(initialGrammarHistory);
+  syncUndoButtons();
   initSSE();
 }})();
 </script>
@@ -706,6 +890,14 @@ def _build_interactive_styles() -> str:
     .checkbox-group { flex-direction: row; align-items: center; }
     .checkbox-group label { display: flex; align-items: center; gap: 8px; font-size: 14px; color: #ddd; margin-bottom: 0; }
     .checkbox-group input[type="checkbox"] { width: 16px; height: 16px; }
+    .grammar-history { margin-top: 12px; background: #222; border-radius: 6px; }
+    .grammar-history summary { padding: 10px 12px; cursor: pointer; color: #888; font-size: 13px; }
+    .grammar-history-list { display: flex; flex-direction: column; gap: 8px; padding: 0 12px 12px; }
+    .history-item { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; width: 100%; padding: 10px 12px; background: #2c2c2c; border: 1px solid #444; border-radius: 6px; color: #ddd; text-align: left; cursor: pointer; }
+    .history-item:hover { border-color: #4a9eff; }
+    .history-item-meta { font-size: 12px; color: #8aa; }
+    .history-item-preview { font-size: 12px; color: #bbb; font-family: monospace; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; width: 100%; }
+    .history-empty { margin: 0; padding: 0 12px 12px; color: #666; font-size: 13px; }
 ''' +
         LogPanel.css()
     )
@@ -721,9 +913,15 @@ def _build_gallery_html(
     interactive: bool = False,
     run_id: str | None = None,
     user_prompt: str = "",
+    image_settings: dict | None = None,
+    layout_settings: dict | None = None,
+    grammar_history: list[dict] | None = None,
 ) -> str:
     """Build the complete gallery HTML document."""
     cards_joined = "\n".join(cards_html)
+    image_settings = image_settings or {}
+    layout_settings = layout_settings or {}
+    grammar_history = grammar_history or []
 
     # Base tag for interactive galleries to resolve relative URLs correctly
     base_tag = f'<base href="/gallery/{run_id}/">' if interactive and run_id else ""
@@ -761,11 +959,17 @@ def _build_gallery_html(
     # Build interactive sections
     nav_header = _build_nav_header() if interactive else ""
     notifications = Notifications.html() if interactive else ""
-    image_settings = _build_image_settings_section() if interactive and run_id else ""
+    image_settings_html = (
+        _build_image_settings_section(image_settings, layout_settings)
+        if interactive and run_id else ""
+    )
     action_bar = _build_interactive_action_bar(run_id) if interactive and run_id else ""
     log_panel = _build_log_panel() if interactive else ""
     progress_bar = _build_interactive_progress_bar() if interactive else ""
-    interactive_js = _build_interactive_js(run_id) if interactive and run_id else ""
+    interactive_js = (
+        _build_interactive_js(run_id, grammar_history)
+        if interactive and run_id else ""
+    )
     extra_styles = _build_interactive_styles() if interactive else ""
 
     return f'''<!DOCTYPE html>
@@ -797,7 +1001,7 @@ def _build_gallery_html(
   </style>
 </head>
 <body>{notifications}{nav_header}
-  <h1>Gallery: {prefix}</h1>{prompt_display}{header_section}{grammar_section}{image_settings}{action_bar}{log_panel}
+  <h1>Gallery: {prefix}</h1>{prompt_display}{header_section}{grammar_section}{image_settings_html}{action_bar}{log_panel}
   <p class="status">Generated: {completed} / {total} images</p>
   <div class="grid">
 {cards_joined}

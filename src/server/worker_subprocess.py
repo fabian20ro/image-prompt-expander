@@ -201,11 +201,63 @@ def run_generate_pipeline(params: dict):
         emit_result(False, error=result.error)
 
 
+def run_generate_from_grammar(params: dict):
+    """Create a new gallery directly from pasted Tracery grammar."""
+    grammar = params["grammar"]
+    title = params.get("title") or "Grammar import"
+    prefix = params.get("prefix", "image")
+    count = params.get("count", 50)
+    model = params.get("model", "flux2-klein-4b")
+    images_per_prompt = params.get("images_per_prompt", 1)
+    max_prompts = params.get("max_prompts")
+    width = params.get("width", 864)
+    height = params.get("height", 1152)
+    steps = params.get("steps")
+    seed = params.get("seed")
+
+    run_timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    run_output_dir = paths.prompts_dir / f"{run_timestamp}_{hash_prompt(grammar)}"
+    set_log_file(run_output_dir / f"{prefix}_worker.log")
+    log_to_file(f"Starting grammar import for: {title[:100]}")
+
+    executor = create_executor()
+
+    with Heartbeat(f"Creating gallery from grammar: {title[:30]}..."):
+        result = executor.run_from_grammar_text(
+            grammar=grammar,
+            count=count,
+            prefix=prefix,
+            model=model,
+            images_per_prompt=images_per_prompt,
+            width=width,
+            height=height,
+            steps=steps,
+            seed=seed,
+            max_prompts=max_prompts,
+            output_dir=run_output_dir,
+            user_prompt=title,
+            display_title=title,
+            generate_images=False,
+            source="from_grammar_text",
+        )
+
+    if result.success:
+        emit_result(True, data={
+            "run_id": result.run_id,
+            "prompt_count": result.prompt_count,
+            "output_dir": str(result.output_dir),
+        })
+    else:
+        emit_result(False, error=result.error)
+
+
 def run_regenerate_prompts(params: dict):
     """Regenerate prompts from edited grammar."""
     run_id = params["run_id"]
     grammar = params["grammar"]
     count = params.get("count")
+    images_per_prompt = params.get("images_per_prompt")
+    max_prompts = params.get("max_prompts")
 
     output_dir = paths.prompts_dir / run_id
 
@@ -231,6 +283,8 @@ def run_regenerate_prompts(params: dict):
             run_id=run_id,
             grammar=grammar,
             count=count,
+            images_per_prompt=images_per_prompt,
+            max_prompts=max_prompts,
         )
 
     if result.success:
@@ -462,6 +516,7 @@ def run_delete_gallery(params: dict):
 
 TASK_HANDLERS = {
     "generate_pipeline": run_generate_pipeline,
+    "generate_from_grammar": run_generate_from_grammar,
     "regenerate_prompts": run_regenerate_prompts,
     "generate_image": run_generate_image,
     "enhance_image": run_enhance_image,

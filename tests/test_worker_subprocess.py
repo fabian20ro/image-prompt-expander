@@ -17,6 +17,7 @@ from server.worker_subprocess import (
     Heartbeat,
     create_executor,
     run_generate_pipeline,
+    run_generate_from_grammar,
     run_regenerate_prompts,
     run_generate_image,
     run_enhance_image,
@@ -148,6 +149,7 @@ class TestTaskHandlers:
         """Test that all expected handlers are registered."""
         expected_handlers = [
             "generate_pipeline",
+            "generate_from_grammar",
             "regenerate_prompts",
             "generate_image",
             "enhance_image",
@@ -274,6 +276,37 @@ class TestRunGeneratePipeline:
 
         assert result["success"] is False
         assert "Grammar generation failed" in result["error"]
+
+
+class TestRunGenerateFromGrammar:
+    """Tests for grammar-import worker handler."""
+
+    @patch("server.worker_subprocess.create_executor")
+    @patch("server.worker_subprocess.set_log_file")
+    def test_run_generate_from_grammar_success(self, mock_log, mock_exec, capsys):
+        from pipeline import PipelineResult
+
+        mock_executor = MagicMock()
+        mock_executor.run_from_grammar_text.return_value = PipelineResult(
+            success=True,
+            run_id="test-run",
+            output_dir=Path("/tmp/test"),
+            prompt_count=3,
+        )
+        mock_exec.return_value = mock_executor
+
+        run_generate_from_grammar({
+            "grammar": '{"origin": ["test"]}',
+            "title": "Imported",
+            "count": 3,
+        })
+
+        captured = capsys.readouterr()
+        lines = captured.out.strip().split('\n')
+        result = json.loads(lines[-1])
+
+        assert result["success"] is True
+        mock_executor.run_from_grammar_text.assert_called_once()
 
 
 class TestRunRegeneratePrompts:

@@ -20,6 +20,16 @@ Each entry should follow this structure:
 
 ---
 
+### [2026-04-04] Added revision-safe grammar regeneration, layout persistence, and grammar-import galleries
+
+**Context:** User reported that regenerating prompts after pasting a new grammar kept stale images attached to changed prompts, and that gallery canvas size could drift from selected `images per prompt` / `max prompts`. User also requested grammar undo/history and a way to create a gallery directly from pasted Tracery grammar.
+**What happened:** Added persisted `gallery_layout` metadata with fallback for older runs; changed gallery rendering to respect persisted layout instead of hardcoded form defaults; added per-run persisted grammar history (`*_grammar_history.json`) plus gallery UI controls for undo/redo and revision restore; added local draft persistence so layout-triggered reloads do not drop unsaved grammar edits; changed regenerate flow to auto-save posted grammar, archive existing PNGs, delete active PNGs only after successful backup, and rebuild the gallery from the new prompts/layout; added `/api/generate-from-grammar` for grammar-first gallery creation; updated index UI with a grammar-import form; extended worker/task plumbing and route models; added regression tests for layout persistence, history, safe regeneration, and grammar-import queueing.
+**Outcome:** Success — targeted suite passed (`158 passed`) and full suite passed (`324 passed`).
+**Insight:** If a route both persists a file and records a revision snapshot, revision capture must happen before overwriting the file or the history bootstrap path will misclassify the first saved revision as the current baseline.
+**Promoted to Lessons Learned:** No
+
+---
+
 ### [2026-04-03] Migrated pip/venv workflow to uv
 
 **Context:** User requested full migration from `pip` + `venv` to `uv`, with the legacy setup removed rather than kept for compatibility.

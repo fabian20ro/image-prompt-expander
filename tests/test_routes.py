@@ -128,6 +128,28 @@ class TestGenerateEndpoint:
         assert response.status_code == 422
 
 
+class TestGenerateFromGrammarEndpoint:
+    """Tests for /api/generate-from-grammar endpoint."""
+
+    def test_generate_from_grammar_valid_request(self, client):
+        response = client.post("/api/generate-from-grammar", json={
+            "grammar": '{"origin": ["hello"]}',
+            "title": "Grammar import",
+            "count": 5,
+        })
+
+        assert response.status_code == 200
+        assert "task_id" in response.json()
+
+    def test_generate_from_grammar_rejects_invalid_json(self, client):
+        response = client.post("/api/generate-from-grammar", json={
+            "grammar": '{"origin": [}',
+        })
+
+        assert response.status_code == 400
+        assert "Invalid JSON grammar" in response.json()["detail"]
+
+
 class TestGalleryEndpoint:
     """Tests for /gallery/{run_id} endpoint."""
 
@@ -211,6 +233,89 @@ class TestGrammarUpdateEndpoint:
         # Verify file was updated
         updated = (run_dir / "test_grammar.json").read_text()
         assert updated == new_grammar
+
+    def test_update_grammar_appends_history(self, client, temp_dir):
+        prompts_dir = temp_dir / "prompts"
+        run_dir = prompts_dir / "20240101_120000_abc123"
+        run_dir.mkdir()
+
+        (run_dir / "test_metadata.json").write_text(json.dumps({"prefix": "test"}))
+        (run_dir / "test_grammar.json").write_text(json.dumps({"origin": ["old"]}))
+
+        response = client.put("/api/gallery/20240101_120000_abc123/grammar", json={
+            "grammar": '{"origin": ["new"]}',
+        })
+
+        assert response.status_code == 200
+        history = json.loads((run_dir / "test_grammar_history.json").read_text())
+        assert history[-1]["grammar"] == '{"origin": ["new"]}'
+        assert history[-1]["action"] == "save"
+
+
+class TestGrammarHistoryEndpoint:
+    """Tests for GET /api/gallery/{run_id}/grammar/history."""
+
+    def test_get_grammar_history_returns_current_revision(self, client, temp_dir):
+        prompts_dir = temp_dir / "prompts"
+        run_dir = prompts_dir / "20240101_120000_abc123"
+        run_dir.mkdir()
+
+        (run_dir / "test_metadata.json").write_text(json.dumps({"prefix": "test"}))
+        (run_dir / "test_grammar.json").write_text(json.dumps({"origin": ["current"]}))
+
+        response = client.get("/api/gallery/20240101_120000_abc123/grammar/history")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["history"][0]["grammar"] == '{"origin": ["current"]}'
+
+
+class TestLayoutEndpoint:
+    """Tests for PUT /api/gallery/{run_id}/layout."""
+
+    def test_update_layout_persists_gallery_layout(self, client, temp_dir):
+        prompts_dir = temp_dir / "prompts"
+        run_dir = prompts_dir / "20240101_120000_abc123"
+        run_dir.mkdir()
+
+        (run_dir / "test_metadata.json").write_text(json.dumps({"prefix": "test"}))
+
+        response = client.put("/api/gallery/20240101_120000_abc123/layout", json={
+            "images_per_prompt": 3,
+            "max_prompts": 8,
+        })
+
+        assert response.status_code == 200
+        metadata = json.loads((run_dir / "test_metadata.json").read_text())
+        assert metadata["gallery_layout"] == {"images_per_prompt": 3, "max_prompts": 8}
+
+
+class TestRegenerateEndpoint:
+    """Tests for POST /api/gallery/{run_id}/regenerate."""
+
+    def test_regenerate_auto_saves_grammar_and_layout(self, client, temp_dir, mock_queue_manager):
+        prompts_dir = temp_dir / "prompts"
+        run_dir = prompts_dir / "20240101_120000_abc123"
+        run_dir.mkdir()
+
+        (run_dir / "test_metadata.json").write_text(json.dumps({
+            "prefix": "test",
+            "count": 10,
+        }))
+        (run_dir / "test_grammar.json").write_text(json.dumps({"origin": ["old"]}))
+
+        response = client.post("/api/gallery/20240101_120000_abc123/regenerate", json={
+            "grammar": '{"origin": ["new"]}',
+            "images_per_prompt": 4,
+            "max_prompts": 6,
+        })
+
+        assert response.status_code == 200
+        assert (run_dir / "test_grammar.json").read_text() == '{"origin": ["new"]}'
+        queued_params = mock_queue_manager.add_task.call_args.args[1]
+        assert queued_params["grammar"] == '{"origin": ["new"]}'
+        assert queued_params["images_per_prompt"] == 4
+        assert queued_params["max_prompts"] == 6
 
 
 class TestDeleteGalleryEndpoint:

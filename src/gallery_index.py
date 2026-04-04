@@ -144,7 +144,7 @@ def _extract_run_info(run_dir: Path, is_archive: bool = False) -> dict | None:
         "dir_name": run_dir.name,
         "timestamp": timestamp,
         "display_time": display_time,
-        "user_prompt": metadata.get("user_prompt", "Unknown prompt"),
+        "user_prompt": metadata.get("display_title") or metadata.get("user_prompt", "Unknown prompt"),
         "prefix": prefix,
         "gallery_path": gallery_path,
         "thumbnail": str(thumbnail) if thumbnail else None,
@@ -259,6 +259,77 @@ def _build_generation_form() -> str:
       </div>
     </form>
   </div>
+
+  <div class="form-section">
+    <h2>New Gallery From Grammar</h2>
+    <form id="generate-from-grammar-form">
+      <div class="form-row">
+        <div class="form-group flex-grow">
+          <label for="grammar_title">Title</label>
+          <input type="text" id="grammar_title" name="title" placeholder="optional gallery title">
+        </div>
+        <div class="form-group">
+          <label for="grammar_prefix">Prefix</label>
+          <input type="text" id="grammar_prefix" name="prefix" value="image" placeholder="image">
+        </div>
+        <div class="form-group">
+          <label for="grammar_count">Prompt Count</label>
+          <input type="number" id="grammar_count" name="count" value="50" min="1">
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group flex-grow">
+          <label for="grammar_text">Tracery Grammar</label>
+          <textarea id="grammar_text" name="grammar" rows="12" required placeholder='{"origin": ["#subject# in #setting#"], "subject": ["cat"], "setting": ["forest"]}'></textarea>
+        </div>
+      </div>
+
+      <details class="settings-section" open>
+        <summary>Image Defaults</summary>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="grammar_model">Model</label>
+            <select id="grammar_model" name="model">
+              <option value="z-image-turbo">z-image-turbo</option>
+              <option value="flux2-klein-4b" selected>flux2-klein-4b</option>
+              <option value="flux2-klein-9b">flux2-klein-9b</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="grammar_images_per_prompt">Images/Prompt</label>
+            <input type="number" id="grammar_images_per_prompt" name="images_per_prompt" value="1" min="1">
+          </div>
+          <div class="form-group">
+            <label for="grammar_max_prompts">Max Prompts</label>
+            <input type="number" id="grammar_max_prompts" name="max_prompts" min="1" placeholder="all">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="grammar_width">Width</label>
+            <input type="number" id="grammar_width" name="width" value="864" step="8">
+          </div>
+          <div class="form-group">
+            <label for="grammar_height">Height</label>
+            <input type="number" id="grammar_height" name="height" value="1152" step="8">
+          </div>
+          <div class="form-group">
+            <label for="grammar_steps">Steps</label>
+            <input type="number" id="grammar_steps" name="steps" min="1" placeholder="auto">
+          </div>
+          <div class="form-group">
+            <label for="grammar_seed">Seed</label>
+            <input type="number" id="grammar_seed" name="seed" placeholder="random">
+          </div>
+        </div>
+      </details>
+
+      <div class="form-actions">
+        <button type="submit" class="btn-primary">Create Gallery From Grammar</button>
+      </div>
+    </form>
+  </div>
 '''
 
 
@@ -287,6 +358,7 @@ def _build_interactive_js() -> str:
 <script>
 document.addEventListener('DOMContentLoaded', function() {{
   const form = document.getElementById('generate-form');
+  const grammarForm = document.getElementById('generate-from-grammar-form');
   const queueStatus = document.getElementById('queue-status');
   const queueText = document.getElementById('queue-text');
   const progressContainer = document.getElementById('progress-container');
@@ -296,8 +368,9 @@ document.addEventListener('DOMContentLoaded', function() {{
   const btnClear = document.getElementById('btn-clear');
   const logPanel = document.getElementById('log-panel');
   const submitBtn = form ? form.querySelector('button[type="submit"]') : null;
+  const grammarSubmitBtn = grammarForm ? grammarForm.querySelector('button[type="submit"]') : null;
 
-  if (!form) {{
+  if (!form || !grammarForm) {{
     return;
   }}
 
@@ -322,6 +395,23 @@ document.addEventListener('DOMContentLoaded', function() {{
       btn.disabled = false;
       btn.textContent = original;
     }}
+  }}
+
+  async function postJson(url, data) {{
+    const resp = await fetch(url, {{
+      method: 'POST',
+      headers: {{'Content-Type': 'application/json'}},
+      body: JSON.stringify(data),
+    }});
+    if (!resp.ok) {{
+      let detail = 'Unknown error';
+      try {{
+        const err = await resp.json();
+        detail = err.detail || detail;
+      }} catch (_e) {{}}
+      throw new Error(detail);
+    }}
+    return await resp.json();
   }}
 
   function initSSE() {{
@@ -449,26 +539,48 @@ document.addEventListener('DOMContentLoaded', function() {{
     queueText.textContent = 'Submitting...';
     await withButtonBusy(submitBtn, 'Submitting...', async () => {{
       try {{
-        const resp = await fetch('/api/generate', {{
-          method: 'POST',
-          headers: {{'Content-Type': 'application/json'}},
-          body: JSON.stringify(data),
-        }});
-
-        if (!resp.ok) {{
-          let detail = 'Unknown error';
-          try {{
-            const err = await resp.json();
-            detail = err.detail || detail;
-          }} catch (_e) {{}}
-          showToast('Error: ' + detail, 'error', 4200);
-          queueStatus.classList.add('hidden');
-          return;
-        }}
-
-        const result = await resp.json();
+        const result = await postJson('/api/generate', data);
         queueText.textContent = result.message;
         showToast(result.message || 'Generation queued', 'success');
+      }} catch (err) {{
+        showToast('Error: ' + err.message, 'error', 4200);
+        queueStatus.classList.add('hidden');
+      }}
+    }});
+  }});
+
+  grammarForm.addEventListener('submit', async function(e) {{
+    e.preventDefault();
+
+    const formData = new FormData(grammarForm);
+    const grammarValue = formData.get('grammar');
+
+    if (!grammarValue || !grammarValue.trim()) {{
+      showToast('Please paste a grammar', 'error');
+      return;
+    }}
+
+    const data = {{
+      grammar: grammarValue.trim(),
+      title: (formData.get('title') || '').trim() || null,
+      prefix: formData.get('prefix') || 'image',
+      count: parseInt(formData.get('count')) || 50,
+      model: formData.get('model') || 'flux2-klein-4b',
+      images_per_prompt: parseInt(formData.get('images_per_prompt')) || 1,
+      max_prompts: formData.get('max_prompts') ? parseInt(formData.get('max_prompts')) : null,
+      width: parseInt(formData.get('width')) || 864,
+      height: parseInt(formData.get('height')) || 1152,
+      steps: formData.get('steps') ? parseInt(formData.get('steps')) : null,
+      seed: formData.get('seed') ? parseInt(formData.get('seed')) : null,
+    }};
+
+    queueStatus.classList.remove('hidden');
+    queueText.textContent = 'Submitting grammar...';
+    await withButtonBusy(grammarSubmitBtn, 'Submitting...', async () => {{
+      try {{
+        const result = await postJson('/api/generate-from-grammar', data);
+        queueText.textContent = result.message;
+        showToast(result.message || 'Grammar gallery queued', 'success');
       }} catch (err) {{
         showToast('Error: ' + err.message, 'error', 4200);
         queueStatus.classList.add('hidden');

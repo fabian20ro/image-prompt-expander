@@ -388,9 +388,10 @@ class FormStyles:
     .form-group { display: flex; flex-direction: column; gap: 6px; min-width: 120px; }
     .form-group.flex-grow { flex: 1; min-width: 200px; }
     .form-group label { font-size: 12px; color: #888; }
-    .form-group input, .form-group select { background: #1a1a1a; border: 1px solid #444; border-radius: 6px; padding: 8px 12px; color: #fff; font-size: 14px; }
-    .form-group input:focus, .form-group select:focus { outline: none; border-color: #6af; }
+    .form-group input, .form-group select, .form-group textarea { background: #1a1a1a; border: 1px solid #444; border-radius: 6px; padding: 8px 12px; color: #fff; font-size: 14px; }
+    .form-group input:focus, .form-group select:focus, .form-group textarea:focus { outline: none; border-color: #6af; }
     .form-group input::placeholder { color: #666; }
+    .form-group textarea { resize: vertical; font-family: monospace; min-height: 160px; }
     .checkbox-group { flex-direction: row; align-items: center; }
     .checkbox-group label { display: flex; align-items: center; gap: 8px; font-size: 14px; color: #ddd; cursor: pointer; }
     .checkbox-group input[type="checkbox"] { width: 16px; height: 16px; }

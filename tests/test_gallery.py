@@ -30,6 +30,9 @@ class TestGalleryInteractive:
         assert "grammar-editor" in content
         assert "btn-save-grammar" in content
         assert "btn-regenerate" in content
+        assert "btn-undo-grammar" in content
+        assert "btn-redo-grammar" in content
+        assert "grammar-history-list" in content
         assert "btn-generate-all" in content
         assert "btn-enhance-all" in content
         assert "generateImage" in content
@@ -106,3 +109,38 @@ class TestGalleryInteractive:
         # Guard against regressions back to blocking browser dialogs.
         assert "alert(" not in content
         assert "confirm(" not in content
+
+    def test_gallery_uses_persisted_layout_and_settings(self, temp_dir):
+        """Gallery form defaults should come from persisted metadata, not hardcoded literals."""
+        run_dir = temp_dir
+        metadata = {
+            "prefix": "test",
+            "count": 3,
+            "display_title": "Imported grammar run",
+            "image_generation": {
+                "model": "z-image-turbo",
+                "width": 1024,
+                "height": 768,
+                "steps": 12,
+                "seed": 7,
+                "enhance": True,
+                "enhance_softness": 0.3,
+            },
+            "gallery_layout": {
+                "images_per_prompt": 3,
+                "max_prompts": 2,
+            },
+        }
+        create_run_files(run_dir, num_prompts=3, metadata=metadata)
+
+        gallery_path = generate_gallery_for_directory(run_dir, interactive=True)
+        content = gallery_path.read_text()
+
+        assert 'value="3"' in content
+        assert 'value="2"' in content
+        assert 'value="1024"' in content
+        assert 'value="768"' in content
+        assert 'value="12"' in content
+        assert 'value="7"' in content
+        assert "Imported grammar run" in content
+        assert content.count('data-prompt-idx="2"') == 0

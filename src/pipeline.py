@@ -20,7 +20,13 @@ from image_generator import generate_image, clear_model_cache, MODEL_DEFAULTS
 from image_enhancer import enhance_image
 from gallery import create_gallery, update_gallery
 from gallery_index import generate_master_index
-from metadata_manager import MetadataManager, MetadataNotFoundError, MetadataError
+from grammar_history import append_grammar_revision
+from metadata_manager import (
+    MetadataManager,
+    MetadataNotFoundError,
+    MetadataError,
+    resolve_gallery_layout,
+)
 from utils import backup_run, run_has_images
 
 
@@ -331,6 +337,11 @@ class PipelineExecutor:
             "grammar_cached": was_cached,
             "prefix": prefix,
             "model": model,
+            "display_title": prompt,
+            "gallery_layout": {
+                "images_per_prompt": images_per_prompt,
+                "max_prompts": max_prompts,
+            },
         }
 
         if generate_images:
@@ -354,6 +365,7 @@ class PipelineExecutor:
 
         grammar_file = output_dir / f"{prefix}_grammar.json"
         grammar_file.write_text(grammar)
+        append_grammar_revision(output_dir, prefix, grammar, action="create")
 
         # Save raw LLM response
         raw_response_file = None
@@ -366,8 +378,9 @@ class PipelineExecutor:
         prompts_to_render = outputs[:max_prompts] if max_prompts else outputs
         gallery_path = create_gallery(
             output_dir, prefix, prompts_to_render,
-            images_per_prompt if generate_images else 0,
-            grammar=grammar, raw_response_file=raw_response_file
+            images_per_prompt,
+            grammar=grammar, raw_response_file=raw_response_file,
+            user_prompt=metadata["display_title"],
         )
 
         # Update master index
@@ -471,6 +484,60 @@ class PipelineExecutor:
         raw_path = grammar_path.parent / f"{grammar_hash}.raw.txt"
         raw_response = raw_path.read_text() if raw_path.exists() else None
 
+        return self.run_from_grammar_text(
+            grammar=grammar,
+            count=count,
+            prefix=prefix,
+            model=model,
+            generate_images=generate_images,
+            images_per_prompt=images_per_prompt,
+            width=width,
+            height=height,
+            steps=steps,
+            quantize=quantize,
+            seed=seed,
+            max_prompts=max_prompts,
+            tiled_vae=tiled_vae,
+            enhance=enhance,
+            enhance_softness=enhance_softness,
+            enhance_after=enhance_after,
+            resume=resume,
+            output_dir=output_dir,
+            user_prompt=user_prompt,
+            source="from_grammar",
+            grammar_path=str(grammar_path),
+            raw_response=raw_response,
+            display_title=user_prompt,
+        )
+
+    def run_from_grammar_text(
+        self,
+        grammar: str,
+        count: int = 50,
+        prefix: str = "image",
+        model: str = "flux2-klein-4b",
+        generate_images: bool = False,
+        images_per_prompt: int = 1,
+        width: int = 864,
+        height: int = 1152,
+        steps: int | None = None,
+        quantize: int = 8,
+        seed: int | None = None,
+        max_prompts: int | None = None,
+        tiled_vae: bool = True,
+        enhance: bool = False,
+        enhance_softness: float = 0.5,
+        enhance_after: bool = False,
+        resume: bool = False,
+        output_dir: Path | None = None,
+        user_prompt: str = "Grammar import",
+        source: str = "from_grammar_text",
+        grammar_path: str | None = None,
+        raw_response: str | None = None,
+        display_title: str | None = None,
+    ) -> PipelineResult:
+        """Run pipeline from grammar text without requiring a source file."""
+
         # Run Tracery
         self.on_progress("expanding_prompts", 0, count, f"Expanding {count} prompts...")
 
@@ -483,7 +550,10 @@ class PipelineExecutor:
 
         # Create output directory
         if output_dir is None:
-            grammar_stem = grammar_path.stem.replace('.tracery', '')
+            grammar_stem = (
+                Path(grammar_path).stem.replace('.tracery', '')
+                if grammar_path else hash_prompt(grammar)
+            )
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             output_dir = paths.prompts_dir / f"{timestamp}_{grammar_stem}"
 
@@ -498,30 +568,36 @@ class PipelineExecutor:
         # Build metadata
         effective_steps = steps if steps is not None else MODEL_DEFAULTS[model]["steps"]
         metadata = {
-            "source": "from_grammar",
-            "grammar_path": str(grammar_path),
+            "source": source,
             "user_prompt": user_prompt,
             "count": len(outputs),
             "created_at": datetime.now().isoformat(),
             "grammar_cached": True,
             "prefix": prefix,
             "model": model,
-        }
-
-        if generate_images:
-            metadata["image_generation"] = {
-                "enabled": True,
-                "model": model,
-                "steps": effective_steps,
-                "width": width,
-                "height": height,
-                "quantize": quantize,
+            "display_title": display_title or user_prompt,
+            "gallery_layout": {
                 "images_per_prompt": images_per_prompt,
                 "max_prompts": max_prompts,
-                "seed": seed,
-                "enhance": enhance,
-                "enhance_softness": enhance_softness if enhance else None,
-            }
+            },
+        }
+        if grammar_path:
+            metadata["grammar_path"] = grammar_path
+
+        metadata["image_generation"] = {
+            "enabled": generate_images,
+            "model": model,
+            "steps": effective_steps,
+            "width": width,
+            "height": height,
+            "quantize": quantize,
+            "images_per_prompt": images_per_prompt,
+            "max_prompts": max_prompts,
+            "seed": seed,
+            "enhance": enhance,
+            "enhance_softness": enhance_softness if enhance else None,
+            "tiled_vae": tiled_vae,
+        }
 
         # Save metadata and grammar
         metadata_file = output_dir / f"{prefix}_metadata.json"
@@ -529,6 +605,7 @@ class PipelineExecutor:
 
         grammar_file = output_dir / f"{prefix}_grammar.json"
         grammar_file.write_text(grammar)
+        append_grammar_revision(output_dir, prefix, grammar, action="create")
 
         # Save raw response if available
         raw_response_file = None
@@ -541,8 +618,9 @@ class PipelineExecutor:
         prompts_to_render = outputs[:max_prompts] if max_prompts else outputs
         gallery_path = create_gallery(
             output_dir, prefix, prompts_to_render,
-            images_per_prompt if generate_images else 0,
-            grammar=grammar, raw_response_file=raw_response_file
+            images_per_prompt,
+            grammar=grammar, raw_response_file=raw_response_file,
+            user_prompt=metadata["display_title"],
         )
 
         # Update master index
@@ -670,7 +748,14 @@ class PipelineExecutor:
             "enhance_softness": enhance_softness if enhance else None,
             "tiled_vae": tiled_vae,
         }
-        MetadataManager.update(prompts_dir, image_generation=new_image_settings)
+        MetadataManager.update(
+            prompts_dir,
+            image_generation=new_image_settings,
+            gallery_layout={
+                "images_per_prompt": images_per_prompt,
+                "max_prompts": max_prompts,
+            },
+        )
 
         # Load grammar for gallery
         grammar = None
@@ -686,7 +771,9 @@ class PipelineExecutor:
         # Create/update gallery
         gallery_path = create_gallery(
             prompts_dir, prefix, prompts_to_render, images_per_prompt,
-            grammar=grammar, raw_response_file=raw_response_file
+            grammar=grammar,
+            raw_response_file=raw_response_file,
+            user_prompt=meta.get("display_title", meta.user_prompt),
         )
 
         # Generate images
@@ -717,6 +804,8 @@ class PipelineExecutor:
         run_id: str,
         grammar: str,
         count: int | None = None,
+        images_per_prompt: int | None = None,
+        max_prompts: int | None = None,
     ) -> PipelineResult:
         """Regenerate prompts from edited grammar.
 
@@ -724,6 +813,8 @@ class PipelineExecutor:
             run_id: Run directory name
             grammar: New grammar JSON
             count: Number of prompts (uses metadata default if None)
+            images_per_prompt: Optional gallery layout override
+            max_prompts: Optional gallery layout override
 
         Returns:
             PipelineResult with operation results
@@ -744,13 +835,25 @@ class PipelineExecutor:
         if count is None:
             count = meta.count or 50
 
+        resolved_layout = resolve_gallery_layout(meta, prompt_count=count)
+        if images_per_prompt is None:
+            images_per_prompt = resolved_layout["images_per_prompt"]
+        if max_prompts is None:
+            max_prompts = resolved_layout["max_prompts"]
+
         # Create backup if there are images
         if run_has_images(output_dir):
             self.on_progress("backup", 0, 1, "Creating backup before regenerating...")
             try:
                 backup_run(output_dir, paths.saved_dir, reason="pre_regenerate")
             except Exception as e:
-                logger.warning(f"Failed to create backup before regenerating: {e}")
+                return PipelineResult(
+                    success=False,
+                    error=f"Backup failed before regeneration: {e}",
+                )
+
+            for image_file in output_dir.glob(f"{prefix}_*_*.png"):
+                image_file.unlink(missing_ok=True)
 
         self.on_progress("expanding_prompts", 0, count, f"Regenerating {count} prompts...")
 
@@ -772,12 +875,17 @@ class PipelineExecutor:
         # Update grammar file
         grammar_file = output_dir / f"{prefix}_grammar.json"
         grammar_file.write_text(grammar)
+        append_grammar_revision(output_dir, prefix, grammar, action="regenerate")
 
         # Update metadata
         MetadataManager.update(
             output_dir,
             count=len(outputs),
             regenerated_at=datetime.now().isoformat(),
+            gallery_layout={
+                "images_per_prompt": images_per_prompt,
+                "max_prompts": max_prompts,
+            },
         )
 
         # Regenerate gallery
@@ -788,14 +896,13 @@ class PipelineExecutor:
         if raw_file.exists():
             raw_response_file = f"{prefix}_raw_response.txt"
 
-        images_per_prompt = meta.image_generation.get("images_per_prompt", 1)
-        if not meta.image_generation.get("enabled", False):
-            images_per_prompt = 0
+        prompts_to_render = outputs[:max_prompts] if max_prompts else outputs
 
         create_gallery(
-            output_dir, prefix, outputs, images_per_prompt,
+            output_dir, prefix, prompts_to_render, images_per_prompt,
             grammar=grammar, raw_response_file=raw_response_file,
-            interactive=True, run_id=run_id
+            interactive=True, run_id=run_id,
+            user_prompt=meta.get("display_title", meta.user_prompt),
         )
 
         self.on_progress("updating_gallery", 1, 1, "Gallery updated")
@@ -983,6 +1090,7 @@ class PipelineExecutor:
 
         prefix = meta.prefix
         image_settings = meta.image_generation
+        layout_settings = resolve_gallery_layout(meta, prompt_count=meta.count)
 
         # Use passed settings or fall back to metadata defaults
         effective_model = model or image_settings.get("model") or meta.model
@@ -1001,6 +1109,9 @@ class PipelineExecutor:
             return PipelineResult(success=False, error="No prompt files found")
 
         prompts = [f.read_text() for f in prompt_files]
+
+        if max_prompts is None:
+            max_prompts = layout_settings.get("max_prompts")
 
         # Apply max_prompts limit
         if max_prompts is not None:
@@ -1021,11 +1132,18 @@ class PipelineExecutor:
             "enhance_softness": enhance_softness if enhance else None,
             "tiled_vae": effective_tiled_vae,
         }
-        MetadataManager.update(output_dir, image_generation=new_image_settings)
+        MetadataManager.update(
+            output_dir,
+            image_generation=new_image_settings,
+            gallery_layout={
+                "images_per_prompt": images_per_prompt,
+                "max_prompts": max_prompts,
+            },
+        )
 
         # Check if gallery needs regeneration (settings changed)
-        old_ipp = image_settings.get("images_per_prompt", 1)
-        old_max = image_settings.get("max_prompts")
+        old_ipp = layout_settings.get("images_per_prompt", 1)
+        old_max = layout_settings.get("max_prompts")
 
         if images_per_prompt != old_ipp or max_prompts != old_max:
             # Load grammar for gallery
@@ -1043,7 +1161,9 @@ class PipelineExecutor:
             create_gallery(
                 output_dir, prefix, prompts, images_per_prompt,
                 grammar=grammar, raw_response_file=raw_response_file,
-                interactive=True, run_id=run_id, user_prompt=meta.user_prompt
+                interactive=True,
+                run_id=run_id,
+                user_prompt=meta.get("display_title", meta.user_prompt),
             )
 
         # Delegate to shared image generation method
