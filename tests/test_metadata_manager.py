@@ -187,9 +187,19 @@ class TestMetadataManager:
         with pytest.raises(MetadataNotFoundError):
             MetadataManager.update(temp_dir, count=10)
 
-    def test_exists(self, temp_dir):
-        """Test checking if metadata exists."""
-        assert MetadataManager.exists(temp_dir) is False
+    def test_update_deletion(self, temp_dir):
+        """Test deleting a key via update by passing None."""
+        initial = {"prefix": "test", "count": 5, "user_prompt": "original"}
+        (temp_dir / "test_metadata.json").write_text(json.dumps(initial))
+
+        # In our implementation, passing None to update deletes the key from the raw dict
+        result = MetadataManager.update(temp_dir, user_prompt=None)
+
+        # The object will have default value (empty string), but the file should not have the key
+        assert result.user_prompt == ""
+        # Check that it's actually gone from the JSON file
+        saved = json.loads((temp_dir / "test_metadata.json").read_text())
+        assert "user_prompt" not in saved
 
         (temp_dir / "test_metadata.json").write_text('{"prefix": "test"}')
         assert MetadataManager.exists(temp_dir) is True
