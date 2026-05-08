@@ -63,7 +63,7 @@ def cli_progress(stage: str, current: int = 0, total: int = 0, message: str = ""
 @click.option(
     '--dry-run',
     is_flag=True,
-    help='Generate and display grammar without running Dada Engine'
+    help='Generate and display grammar without generating images'
 )
 @click.option(
     '--no-cache',

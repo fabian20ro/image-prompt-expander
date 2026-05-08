@@ -126,6 +126,31 @@ class TestCliValidation:
         assert "--generate-images" in result.output
 
 
+class TestCliDryRun:
+    """Tests for --dry-run behavior."""
+
+    @patch("cli.generate_grammar")
+    @patch("cli.PipelineExecutor")
+    def test_dry_run_previews_grammar_without_pipeline(self, mock_executor_cls, mock_generate_grammar):
+        """Test --dry-run prints grammar and skips the full pipeline."""
+        mock_generate_grammar.return_value = ('{"origin": ["a cat"]}', False, None)
+
+        runner = CliRunner()
+        result = runner.invoke(main, ["-p", "a cat", "--dry-run"])
+
+        assert result.exit_code == 0
+        assert "--- Generated Grammar ---" in result.output
+        assert '{"origin": ["a cat"]}' in result.output
+        mock_generate_grammar.assert_called_once_with(
+            user_prompt="a cat",
+            base_url="http://localhost:1234/v1",
+            use_cache=True,
+            temperature=0.7,
+            model="flux2-klein-4b",
+        )
+        mock_executor_cls.assert_not_called()
+
+
 class TestCliServe:
     """Tests for --serve flag."""
 

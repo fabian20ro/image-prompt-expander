@@ -70,4 +70,14 @@ Each entry should follow this structure:
 
 ---
 
+### [2026-05-08] Clarified dry-run CLI help and added regression coverage
+
+**Context:** The CLI `--dry-run` option had stale help text and lacked a direct regression test.
+**What happened:** Reworded the `--dry-run` help text to say it previews grammar without generating images, and added a CLI test that mocks grammar generation, verifies the preview output, and confirms the full pipeline is not constructed in dry-run mode.
+**Outcome:** Success — focused CLI test file passed and the full suite stayed green.
+**Insight:** Small CLI text tweaks are worth pinning with a behavior test when they describe a distinct execution path.
+**Promoted to Lessons Learned:** No
+
+---
+
 <!-- New entries go above this line, most recent first -->
