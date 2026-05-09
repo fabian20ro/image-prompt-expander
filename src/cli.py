@@ -250,7 +250,7 @@ def main(
     # Handle --clean
     if clean:
         removed = clean_generated()
-        click.echo(f"Cleaned {removed} items from generated/")
+        click.echo(f"Cleaned {removed} items from {paths.generated_dir}")
         if not prompt and not from_grammar and not from_prompts and not enhance_images and not serve:
             return
 
