@@ -194,8 +194,14 @@ def generate_grammar(
 
     raw_response = response.choices[0].message.content
 
-    # Clean up the grammar (remove any markdown code blocks if present)
+    # Clean up the grammar (remove markdown code blocks if present)
     grammar = clean_grammar_output(raw_response)
+
+    # Validate that the cleaned output is actually valid JSON
+    try:
+        json.loads(grammar)
+    except json.JSONDecodeError as e:
+        raise ValueError(f"LLM returned invalid JSON grammar after cleaning: {e}")
 
     # Cache the result
     if use_cache:
