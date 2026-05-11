@@ -13,7 +13,7 @@ User prompt → LLM generates Tracery grammar → Tracery produces N prompts →
 **System:**
 - Python 3.10+
 - macOS with Apple Silicon (M1/M2/M3/M4) for image generation
-- [LM Studio](https://lmstudio.ai/) running locally (default: http://localhost:1234)
+- [LM Studio](https://lmstudio.ai/) running locally (default: http://localhost:1234/v1)
 
 **Recommended Hardware:**
 - **M4 Max with 36GB+ unified memory** for concurrent generation + enhancement

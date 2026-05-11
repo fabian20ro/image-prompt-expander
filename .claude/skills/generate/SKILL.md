@@ -42,5 +42,5 @@ uv run python src/cli.py --from-prompts generated/prompts/... --generate-images 
 
 ## Requirements
 
-- LM Studio running at localhost:1234
+- LM Studio running at localhost:1234/v1
 - Apple Silicon Mac for image generation (mflux)

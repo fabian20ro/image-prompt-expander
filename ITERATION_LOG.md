@@ -80,4 +80,14 @@ Each entry should follow this structure:
 
 ---
 
+### [2026-05-11] Corrected LM Studio base URL docs
+
+**Context:** The project README and generate skill still pointed at the LM Studio host without the `/v1` API suffix, even though the code and other instructions use the full base URL.
+**What happened:** Updated `README.md` and `.claude/skills/generate/SKILL.md` so the documented default matches `http://localhost:1234/v1`.
+**Outcome:** Success — documentation now aligns with the configured default base URL.
+**Insight:** When a tool-specific skill mirrors README setup instructions, keep both in sync with the actual configured API path.
+**Promoted to Lessons Learned:** No
+
+---
+
 <!-- New entries go above this line, most recent first -->
