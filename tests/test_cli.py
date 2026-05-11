@@ -160,14 +160,26 @@ class TestCliServe:
 
         mock_uvicorn = MagicMock()
         mock_app = MagicMock()
+        mock_webbrowser = MagicMock()
+
+        class ImmediateThread:
+            def __init__(self, target=None, daemon=None):
+                self.target = target
+                self.daemon = daemon
+
+            def start(self):
+                if self.target is not None:
+                    self.target()
 
         with patch.dict("sys.modules", {
             "uvicorn": mock_uvicorn,
             "server.app": MagicMock(app=mock_app),
-        }):
+        }), patch("threading.Thread", ImmediateThread), patch("webbrowser.open", mock_webbrowser):
             result = runner.invoke(main, ["--serve", "--port", "9999"])
 
         assert "Starting web UI server" in result.output
+        mock_webbrowser.assert_called_once_with("http://localhost:9999")
+        mock_uvicorn.run.assert_called_once_with(mock_app, host="0.0.0.0", port=9999, log_level="info")
 
 
 class TestCliFullPipeline:
