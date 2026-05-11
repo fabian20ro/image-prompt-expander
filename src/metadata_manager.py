@@ -111,7 +111,9 @@ def resolve_gallery_layout(metadata: RunMetadata | dict, prompt_count: int | Non
     if max_prompts is None and "max_prompts" not in gallery_layout:
         max_prompts = image_generation.get("max_prompts")
 
-    images_per_prompt = max(1, int(images_per_prompt or 1))
+    if images_per_prompt is None:
+        images_per_prompt = 1
+    images_per_prompt = max(0, int(images_per_prompt))
     if max_prompts is not None:
         max_prompts = max(1, int(max_prompts))
         if prompt_count is not None:

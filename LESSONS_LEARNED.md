@@ -34,6 +34,7 @@ move it to the Archive section at the bottom with a date and reason.
 **[2026-02-07]** Validate model names before importing `mflux` - Importing `mflux` before rejecting unsupported models can trigger native MLX aborts in unsupported test paths.
 **[2026-02-07]** Keep docs and signatures aligned - Drift between documented defaults and implementation defaults (`tiled_vae`) causes repeated operator mistake
 **[2026-02-24]** Prefer MetadataManager for metadata operations — Direct JSON manipulation of run metadata bypasses validation and path logic; use MetadataManager consistently.s.
+**[2026-05-11]** Preserve explicit zero-value gallery layouts — `images_per_prompt: 0` is a real prompt-only layout, so normalize `None` separately instead of coercing all falsy values to 1.
 
 ## Testing & Quality
 
