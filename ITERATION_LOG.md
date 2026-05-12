@@ -90,4 +90,13 @@ Each entry should follow this structure:
 
 ---
 
+### [2026-05-12] Synced README test-suite count with collected tests
+
+**Context:** The README’s development section listed an outdated test-suite count.
+**What happened:** Ran `uv run pytest --collect-only -q` to verify the current collection count, then updated the README to say the suite currently collects 330 tests.
+**Outcome:** Success — documentation now matches the observed test collection output.
+**Insight:** Small maintenance docs can drift quietly; a quick collect-only check is enough to confirm the current count before editing.
+**Promoted to Lessons Learned:** No
+
+---
 <!-- New entries go above this line, most recent first -->

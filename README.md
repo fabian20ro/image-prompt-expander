@@ -329,7 +329,7 @@ uv run pytest tests/test_pipeline.py -v
 uv run pytest --cov=src --cov-report=html
 ```
 
-The test suite currently collects 313 tests covering:
+The test suite currently collects 330 tests covering:
 - Pipeline orchestration (`test_pipeline.py`)
 - Image generation (`test_image_generator.py`)
 - Grammar expansion (`test_tracery_runner.py`)
