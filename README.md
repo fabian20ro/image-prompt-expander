@@ -208,7 +208,7 @@ uv run python src/cli.py --clean
 | `--from-grammar PATH` | Resume from existing grammar file (skip LLM generation) |
 | `--from-prompts PATH` | Resume from existing prompts directory (images only) |
 | `-i, --generate-images` | Enable mflux image generation |
-| `--images-per-prompt INT` | Images per prompt (default: 1) |
+| `--images-per-prompt INT` | Images per prompt (default: 1, `0` = prompt-only layout) |
 | `--max-prompts INT` | Limit prompts to render |
 | `-m, --model` | `z-image-turbo`, `flux2-klein-4b`, `flux2-klein-9b` (default: `flux2-klein-4b`) |
 | `--steps INT` | Inference steps |
