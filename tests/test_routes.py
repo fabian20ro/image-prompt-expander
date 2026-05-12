@@ -281,13 +281,34 @@ class TestLayoutEndpoint:
         (run_dir / "test_metadata.json").write_text(json.dumps({"prefix": "test"}))
 
         response = client.put("/api/gallery/20240101_120000_abc123/layout", json={
-            "images_per_prompt": 3,
+            "images_per_prompt": 0,
             "max_prompts": 8,
         })
 
         assert response.status_code == 200
         metadata = json.loads((run_dir / "test_metadata.json").read_text())
-        assert metadata["gallery_layout"] == {"images_per_prompt": 3, "max_prompts": 8}
+        assert metadata["gallery_layout"] == {"images_per_prompt": 0, "max_prompts": 8}
+
+
+class TestGenerateAllEndpoint:
+    """Tests for POST /api/gallery/{run_id}/generate-all."""
+
+    def test_generate_all_accepts_zero_images_per_prompt(self, client, temp_dir, mock_queue_manager):
+        prompts_dir = temp_dir / "prompts"
+        run_dir = prompts_dir / "20240101_120000_abc123"
+        run_dir.mkdir()
+
+        (run_dir / "test_metadata.json").write_text(json.dumps({"prefix": "test"}))
+
+        response = client.post("/api/gallery/20240101_120000_abc123/generate-all", json={
+            "images_per_prompt": 0,
+            "resume": True,
+        })
+
+        assert response.status_code == 200
+        queued_params = mock_queue_manager.add_task.call_args.args[1]
+        assert queued_params["images_per_prompt"] == 0
+        assert queued_params["resume"] is True
 
 
 class TestRegenerateEndpoint:

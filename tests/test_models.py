@@ -11,6 +11,7 @@ from server.models import (
     GenerateRequest,
     GenerateFromGrammarRequest,
     EnhanceImageRequest,
+    GalleryLayoutUpdateRequest,
 )
 
 
@@ -109,6 +110,10 @@ class TestModels:
         assert req.count == 50
         assert req.images_per_prompt == 1
 
+    def test_generate_from_grammar_request_allows_zero_images_per_prompt(self):
+        req = GenerateFromGrammarRequest(grammar='{"origin": ["test"]}', images_per_prompt=0)
+        assert req.images_per_prompt == 0
+
 
 class TestInputValidation:
     """Tests for Pydantic model input validation."""
@@ -175,6 +180,10 @@ class TestInputValidation:
         # Just right
         req = GenerateRequest(prompt="test", temperature=1.5)
         assert req.temperature == 1.5
+
+    def test_gallery_layout_update_request_allows_zero_images_per_prompt(self):
+        req = GalleryLayoutUpdateRequest(images_per_prompt=0)
+        assert req.images_per_prompt == 0
 
     def test_generate_request_prefix_pattern(self):
         """Test that prefix must match allowed pattern."""

@@ -315,7 +315,7 @@ def _build_image_settings_section(image_settings: dict, layout_settings: dict) -
         </div>
         <div class="form-group">
           <label for="img-images-per-prompt">Images/Prompt</label>
-          <input type="number" id="img-images-per-prompt" name="images_per_prompt" value="{images_per_prompt}" min="1">
+          <input type="number" id="img-images-per-prompt" name="images_per_prompt" value="{images_per_prompt}" min="0">
         </div>
         <div class="form-group">
           <label for="img-max-prompts">Max Prompts</label>
@@ -397,6 +397,11 @@ def _build_interactive_js(run_id: str, grammar_history: list[dict]) -> str:
   const initialGrammarHistory = {history_json};
   const grammarEditor = document.getElementById('grammar-editor');
   const btnUndoGrammar = document.getElementById('btn-undo-grammar');
+
+  function readImagesPerPrompt() {{
+    const value = document.getElementById('img-images-per-prompt')?.value;
+    return value === '' ? 1 : parseInt(value);
+  }}
   const btnRedoGrammar = document.getElementById('btn-redo-grammar');
   const btnSaveGrammar = document.getElementById('btn-save-grammar');
   const btnRegenerate = document.getElementById('btn-regenerate');
@@ -507,7 +512,7 @@ def _build_interactive_js(run_id: str, grammar_history: list[dict]) -> str:
   }}
 
   async function persistLayoutAndReload() {{
-    const imagesPerPrompt = parseInt(document.getElementById('img-images-per-prompt')?.value) || 1;
+    const imagesPerPrompt = readImagesPerPrompt();
     const maxPromptsValue = document.getElementById('img-max-prompts')?.value;
     const maxPrompts = maxPromptsValue ? parseInt(maxPromptsValue) : null;
     await apiPut(`/api/gallery/${{RUN_ID}}/layout`, {{
@@ -702,7 +707,7 @@ def _build_interactive_js(run_id: str, grammar_history: list[dict]) -> str:
       await withButtonBusy(btnRegenerate, 'Queueing...', async () => {{
         await apiPost(`/api/gallery/${{RUN_ID}}/regenerate`, {{
           grammar: grammarEditor.value,
-          images_per_prompt: parseInt(document.getElementById('img-images-per-prompt')?.value) || 1,
+          images_per_prompt: readImagesPerPrompt(),
           max_prompts: document.getElementById('img-max-prompts')?.value ? parseInt(document.getElementById('img-max-prompts').value) : null,
         }});
       }});
@@ -716,7 +721,7 @@ def _build_interactive_js(run_id: str, grammar_history: list[dict]) -> str:
   if (btnGenerateAll) {{
     btnGenerateAll.addEventListener('click', async () => {{
       const data = {{
-        images_per_prompt: parseInt(document.getElementById('img-images-per-prompt')?.value) || 1,
+        images_per_prompt: readImagesPerPrompt(),
         resume: true,
         model: document.getElementById('img-model')?.value || null,
         width: parseInt(document.getElementById('img-width')?.value) || null,

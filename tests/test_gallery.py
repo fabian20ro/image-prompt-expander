@@ -163,5 +163,6 @@ class TestGalleryInteractive:
         content = gallery_path.read_text()
 
         assert 'class="card prompt-only"' in content
+        assert 'id="img-images-per-prompt" name="images_per_prompt" value="0" min="0"' in content
         assert "prompt-only run" in content
         assert "Pending..." not in content
