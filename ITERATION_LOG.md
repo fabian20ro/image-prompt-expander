@@ -99,4 +99,14 @@ Each entry should follow this structure:
 **Promoted to Lessons Learned:** No
 
 ---
+### [2026-05-13] Clarified zero-value prompt-only layout in CLI help
+
+**Context:** The CLI already accepted `--images-per-prompt 0` as a prompt-only layout, but the `--help` text only mentioned the default and did not surface that contract.
+**What happened:** Updated `src/cli.py` so the `--images-per-prompt` help string now says `0 = prompt-only layout`, and added a focused CLI test that asserts `--help` includes that wording.
+**Outcome:** Success — `uv run pytest tests/test_cli.py -q` passed with 14 tests.
+**Insight:** When the code treats `0` as a real sentinel, the CLI help should name that behavior explicitly so users do not assume it is invalid.
+**Promoted to Lessons Learned:** No
+
+---
+
 <!-- New entries go above this line, most recent first -->

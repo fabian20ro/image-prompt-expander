@@ -125,6 +125,13 @@ class TestCliValidation:
         assert result.exit_code != 0
         assert "--generate-images" in result.output
 
+    def test_help_documents_prompt_only_layout(self):
+        """Test --help documents the zero-value prompt-only layout."""
+        runner = CliRunner()
+        result = runner.invoke(main, ["--help"])
+        assert result.exit_code == 0
+        assert "0 = prompt-only layout" in result.output
+
 
 class TestCliDryRun:
     """Tests for --dry-run behavior."""

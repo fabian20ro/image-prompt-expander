@@ -90,7 +90,7 @@ def cli_progress(stage: str, current: int = 0, total: int = 0, message: str = ""
     '--images-per-prompt',
     default=1,
     type=int,
-    help='Number of images to generate per prompt (default: 1)'
+    help='Number of images to generate per prompt (default: 1, 0 = prompt-only layout)'
 )
 @click.option(
     '--prefix',
