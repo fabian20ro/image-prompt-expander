@@ -314,7 +314,7 @@ def _build_image_settings_section(image_settings: dict, layout_settings: dict) -
           </select>
         </div>
         <div class="form-group">
-          <label for="img-images-per-prompt">Images/Prompt</label>
+          <label for="img-images-per-prompt">Images/Prompt (0 = prompt-only)</label>
           <input type="number" id="img-images-per-prompt" name="images_per_prompt" value="{images_per_prompt}" min="0">
         </div>
         <div class="form-group">

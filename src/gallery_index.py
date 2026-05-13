@@ -297,7 +297,7 @@ def _build_generation_form() -> str:
             </select>
           </div>
           <div class="form-group">
-            <label for="grammar_images_per_prompt">Images/Prompt</label>
+            <label for="grammar_images_per_prompt">Images/Prompt (0 = prompt-only)</label>
             <input type="number" id="grammar_images_per_prompt" name="images_per_prompt" value="1" min="0">
           </div>
           <div class="form-group">
