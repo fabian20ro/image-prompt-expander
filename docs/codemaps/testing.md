@@ -19,5 +19,5 @@
 
 ## Notes
 
-- In this environment, `tests/test_image_generator.py` aborts due native MLX/mflux import behavior during one unsupported-model test path.
-- Other suites run clean when executed individually with `uv run pytest`.
+- `tests/test_image_generator.py` runs cleanly under `uv run pytest` in this checkout.
+- The full suite also runs cleanly (`331 passed`).

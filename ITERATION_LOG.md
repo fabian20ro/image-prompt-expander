@@ -119,4 +119,14 @@ Each entry should follow this structure:
 
 ---
 
+### [2026-05-13] Synced stale image-generator codemap note
+
+**Context:** The testing codemap still claimed `tests/test_image_generator.py` aborted because of native MLX/mflux import behavior, but the current checkout had already passed the full suite.
+**What happened:** Ran `uv run pytest -q` and `uv run pytest tests/test_image_generator.py -q` to verify the current state, then updated `docs/codemaps/testing.md` to say the image-generator test file runs cleanly and the suite passes.
+**Outcome:** Success — the codemap now reflects the live verification result.
+**Insight:** When a maintenance note mentions an environment-specific failure, re-run the narrow test before preserving the warning; stale caveats can survive long after the underlying issue is fixed.
+**Promoted to Lessons Learned:** Yes
+
+---
+
 <!-- New entries go above this line, most recent first -->
