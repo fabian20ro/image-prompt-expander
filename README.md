@@ -158,7 +158,7 @@ uv run python src/cli.py -p "a cat sleeping" -n 50 -i \
 
 ### Standalone Enhancement
 
-Enhance existing images in-place (replaces originals):
+Enhance existing images in-place (replaces originals). The same `--seed` and `--quantize` options apply here, and `--quantize` defaults to 8 when omitted:
 
 ```bash
 # Enhance a single image
@@ -214,7 +214,7 @@ uv run python src/cli.py --clean
 | `--steps INT` | Inference steps |
 | `--width INT` | Image width (default: 864) |
 | `--height INT` | Image height (default: 1152) |
-| `-q, --quantize` | Quantization: 3, 4, 5, 6, or 8 |
+| `-q, --quantize` | Quantization: 3, 4, 5, 6, or 8. Applies to generation and standalone enhancement |
 | `--seed INT` | Random seed |
 | `--enhance` | Enable SeedVR2 2x enhancement (replaces original) |
 | `--enhance-softness FLOAT` | Enhancement softness (0.0-1.0, default: 0.5) |

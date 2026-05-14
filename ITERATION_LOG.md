@@ -139,4 +139,14 @@ Each entry should follow this structure:
 
 ---
 
+### [2026-05-14] Clarified shared quantize behavior in CLI help and README
+
+**Context:** The CLI `--quantize` flag already defaulted to 8 and was used by both prompt generation and standalone image enhancement, but the user-facing docs did not say that clearly.
+**What happened:** Updated `src/cli.py` help text, the README options table, and the standalone enhancement section to note that `--quantize` applies to generation and enhancement and defaults to 8 when omitted; added a CLI help regression that asserts the new wording appears in `--help` output.
+**Outcome:** Success — `uv run pytest tests/test_cli.py -q` passed (14 tests).
+**Insight:** When one flag feeds multiple execution paths, the help text should name every path so users do not assume it is generation-only.
+**Promoted to Lessons Learned:** Yes
+
+---
+
 <!-- New entries go above this line, most recent first -->

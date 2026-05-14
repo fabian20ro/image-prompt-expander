@@ -125,7 +125,7 @@ def cli_progress(stage: str, current: int = 0, total: int = 0, message: str = ""
     '--quantize', '-q',
     default=None,
     type=click.Choice([3, 4, 5, 6, 8], case_sensitive=False),
-    help='Quantization level for model (default: 8)'
+    help='Quantization level for model (default: 8; used for generation and standalone enhancement)'
 )
 @click.option(
     '--max-prompts',

@@ -131,6 +131,7 @@ class TestCliValidation:
         result = runner.invoke(main, ["--help"])
         assert result.exit_code == 0
         assert "0 = prompt-only layout" in result.output
+        assert "standalone enhancement" in result.output
 
 
 class TestCliDryRun:
