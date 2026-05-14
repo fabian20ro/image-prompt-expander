@@ -129,4 +129,14 @@ Each entry should follow this structure:
 
 ---
 
+### [2026-05-14] Synced prompt-only gallery labels across UI surfaces
+
+**Context:** The interactive gallery and index forms still used the shorter `Images/Prompt (0 = prompt-only)` label, while the CLI help and README already spelled out `0 = prompt-only layout`.
+**What happened:** Updated the gallery and gallery index form labels to say `Images/Prompt (0 = prompt-only layout)`, and aligned the focused gallery/index tests with the new wording.
+**Outcome:** Success — `uv run pytest tests/test_gallery.py tests/test_gallery_index.py -q` passed (11 tests).
+**Insight:** Small copy syncs are easier to keep consistent when the exact runtime label is asserted in the tests that render the surface.
+**Promoted to Lessons Learned:** No
+
+---
+
 <!-- New entries go above this line, most recent first -->
