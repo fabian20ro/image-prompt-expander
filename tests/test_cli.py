@@ -132,6 +132,8 @@ class TestCliValidation:
         assert result.exit_code == 0
         assert "0 = prompt-only layout" in result.output
         assert "standalone enhancement" in result.output
+        assert "LM Studio API base URL (default:" in result.output
+        assert "http://localhost:1234/v1" in result.output
 
 
 class TestCliDryRun:

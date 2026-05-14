@@ -73,7 +73,7 @@ def cli_progress(stage: str, current: int = 0, total: int = 0, message: str = ""
 @click.option(
     '--base-url',
     default='http://localhost:1234/v1',
-    help='LM Studio API base URL'
+    help='LM Studio API base URL (default: http://localhost:1234/v1)'
 )
 @click.option(
     '--temperature',
