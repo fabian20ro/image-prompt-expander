@@ -149,4 +149,12 @@ Each entry should follow this structure:
 
 ---
 
+### [2026-05-14] Exposed LM Studio base URL default in CLI help
+
+**Context:** The CLI `--base-url` option already defaulted to `http://localhost:1234/v1`, but the help text did not surface that default for users scanning `--help` output.
+**What happened:** Updated the `--base-url` help string to include the default URL and added a CLI help regression that asserts the base URL default is visible alongside the existing prompt-only layout/help coverage.
+**Outcome:** Success — focused CLI tests passed (`14 passed`).
+**Insight:** Click help output can wrap long option descriptions, so tests should assert stable substrings rather than a single exact line when a default is embedded in a long help string.
+**Promoted to Lessons Learned:** Yes
+
 <!-- New entries go above this line, most recent first -->

@@ -43,6 +43,7 @@ move it to the Archive section at the bottom with a date and reason.
 **[2026-02-07]** Prefer intent assertions for worker logs - Worker success/failure paths emit variable extra lines, so tests should assert sequencing/intent rather than exact call counts.
 **[2026-02-07]** Use module fakes for MLX-heavy imports - Patching deep `mflux.*` paths can still initialize native MLX/Metal; prefer `patch.dict(sys.modules, ...)` with fake modules.
 **[2026-02-24]** Mock external services in tests — Always mock LM Studio and mflux; requiring live GPU or inference server makes tests environment-dependent and fragile.
+**[2026-05-14]** Click help output can wrap long option descriptions — when asserting `--help` text, prefer stable substrings over exact single-line matches for defaults embedded in long help strings.
 
 ## Performance & Infrastructure
 
