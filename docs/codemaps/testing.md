@@ -6,6 +6,7 @@
 - Grammar generation + cleanup: `tests/test_grammar_generator.py`
 - Tracery runner: `tests/test_tracery_runner.py`
 - Image generation wrapper: `tests/test_image_generator.py`
+- Shared HTML/CSS/JS components: `tests/test_html_components.py`
 - Gallery HTML generation: `tests/test_gallery.py`, `tests/test_gallery_index.py`
 - Gallery service: `tests/test_gallery_service.py`
 - Metadata manager: `tests/test_metadata_manager.py`

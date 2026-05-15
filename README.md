@@ -337,6 +337,7 @@ The test suite currently collects 331 tests covering:
 - Pipeline orchestration (`test_pipeline.py`)
 - Image generation (`test_image_generator.py`)
 - Grammar expansion (`test_tracery_runner.py`)
+- Shared HTML/CSS/JS components (`test_html_components.py`)
 - API routes (`test_routes.py`)
 - Background workers (`test_worker.py`, `test_worker_subprocess.py`)
 - Metadata management (`test_metadata_manager.py`)

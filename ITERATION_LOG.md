@@ -20,6 +20,16 @@ Each entry should follow this structure:
 
 ---
 
+### [2026-05-15] Added the shared HTML components test file to the test codemap
+
+**Context:** The test codemap and README coverage summary listed most major test surfaces, but they did not call out `tests/test_html_components.py`, which covers the shared CSS/JS building blocks used by the gallery and index pages.
+**What happened:** Added `tests/test_html_components.py` to `docs/codemaps/testing.md` and the README's test coverage list so the shared UI component tests are easier to find.
+**Outcome:** Success — docs now reflect the full test surface visible in the current checkout.
+**Insight:** Small codemap omissions are easiest to catch when the test file list is compared directly against the current collected suite.
+**Promoted to Lessons Learned:** No
+
+---
+
 ### [2026-04-04] Added revision-safe grammar regeneration, layout persistence, and grammar-import galleries
 
 **Context:** User reported that regenerating prompts after pasting a new grammar kept stale images attached to changed prompts, and that gallery canvas size could drift from selected `images per prompt` / `max prompts`. User also requested grammar undo/history and a way to create a gallery directly from pasted Tracery grammar.
