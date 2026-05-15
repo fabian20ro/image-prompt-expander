@@ -173,4 +173,12 @@ Each entry should follow this structure:
 **Insight:** Small persistence features are easier to find later when the README names both the UI affordance and the file written to disk.
 **Promoted to Lessons Learned:** No
 
+### [2026-05-15] Documented benign Hermes uv warning in the README test notes
+
+**Context:** `uv run pytest --collect-only -q` still completed successfully, but the shell emitted a recurring `VIRTUAL_ENV` mismatch warning under Hermes that can distract future maintainers during test runs.
+**What happened:** Added a short note in the README's testing section explaining that the warning is benign when `uv run` finishes successfully and the repo environment is still used.
+**Outcome:** Success — the warning is now documented alongside the test commands that can surface it.
+**Insight:** Small environment quirks are easier to remember when they live next to the command that triggers them.
+**Promoted to Lessons Learned:** No
+
 <!-- New entries go above this line, most recent first -->
