@@ -36,6 +36,7 @@ move it to the Archive section at the bottom with a date and reason.
 **[2026-02-24]** Prefer MetadataManager for metadata operations — Direct JSON manipulation of run metadata bypasses validation and path logic; use MetadataManager consistently.s.
 **[2026-05-11]** Preserve explicit zero-value gallery layouts — `images_per_prompt: 0` is a real prompt-only layout, so normalize `None` separately instead of coercing all falsy values to 1.
 **[2026-05-14]** Surface shared quantize behavior in docs/help — `--quantize` defaults to 8 and applies to both prompt generation and standalone image enhancement, so the CLI help and README should call out both surfaces explicitly.
+**[2026-05-15]** `uv run` may warn about a mismatched `VIRTUAL_ENV` under Hermes — the project command still uses the repo environment and `uv run pytest --collect-only -q` completed successfully with the warning present.
 
 ## Testing & Quality
 

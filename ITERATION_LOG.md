@@ -157,4 +157,12 @@ Each entry should follow this structure:
 **Insight:** Click help output can wrap long option descriptions, so tests should assert stable substrings rather than a single exact line when a default is embedded in a long help string.
 **Promoted to Lessons Learned:** Yes
 
+### [2026-05-15] Noted benign uv environment warning during test-count verification
+
+**Context:** While checking the live test collection count to keep docs honest, `uv run` emitted a `VIRTUAL_ENV` mismatch warning from the Hermes environment.
+**What happened:** Ran `uv run pytest --collect-only -q`, confirmed the suite still collects 331 tests, and recorded that the warning did not block the repo-local command.
+**Outcome:** Success — the docs count remains current and the environment quirk is now captured for future runs.
+**Insight:** When `uv run` warns about `VIRTUAL_ENV` drift in this checkout, the repo command can still be trusted if the focused verification completes cleanly.
+**Promoted to Lessons Learned:** Yes
+
 <!-- New entries go above this line, most recent first -->
