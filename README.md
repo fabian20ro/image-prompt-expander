@@ -72,7 +72,8 @@ This opens `http://localhost:8000` with:
 Image generation and enhancement settings are configured per-gallery (not from the index form).
 
 Gallery pages include:
-- **Edit Grammar**: Modify Tracery grammar and regenerate prompts
+- **Edit Grammar**: Modify Tracery grammar, review grammar history, and regenerate prompts
+- **Grammar History**: Restore a previous grammar revision from the saved revision list
 - **Generate Images**: Queue individual or all images for generation
 - **Enhance Images**: Apply SeedVR2 enhancement to individual or all images
 - **Save to Archive**: Manually backup the current gallery state
@@ -241,6 +242,7 @@ generated/
 │   ├── ...
 │   ├── dragon_gallery.html   # Gallery generated dynamically via --serve
 │   ├── dragon_grammar.json   # Tracery grammar used
+│   ├── dragon_grammar_history.json  # Saved grammar revisions for undo/restore
 │   └── dragon_metadata.json  # Generation settings
 └── saved/                    # Flat archived images
     ├── dragon_20260126_143052_0_0.png  # {prefix}_{timestamp}_{promptIdx}_{imgIdx}.png

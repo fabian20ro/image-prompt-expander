@@ -165,4 +165,12 @@ Each entry should follow this structure:
 **Insight:** When `uv run` warns about `VIRTUAL_ENV` drift in this checkout, the repo command can still be trusted if the focused verification completes cleanly.
 **Promoted to Lessons Learned:** Yes
 
+### [2026-05-15] Documented grammar revision history in the gallery README
+
+**Context:** The gallery now persists grammar revision history and exposes it in the UI, but the README only described the edit/regenerate path and did not mention the restore surface or the on-disk history file.
+**What happened:** Updated the README gallery section to mention grammar-history review/restore and added `dragon_grammar_history.json` to the example output structure so the persisted revision file is discoverable.
+**Outcome:** Success — user-facing docs now describe the grammar history capability that already exists in the app.
+**Insight:** Small persistence features are easier to find later when the README names both the UI affordance and the file written to disk.
+**Promoted to Lessons Learned:** No
+
 <!-- New entries go above this line, most recent first -->
