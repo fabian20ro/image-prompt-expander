@@ -201,4 +201,14 @@ Each entry should follow this structure:
 
 ---
 
+### [2026-05-16] Added missing CLI and gallery-index test surfaces to the README coverage list
+
+**Context:** The README’s development section listed the live 331-test collection count, but its coverage bullet list omitted `tests/test_cli.py` and `tests/test_gallery_index.py` even though both files are part of the current suite.
+**What happened:** Ran `uv run pytest --collect-only -q` to verify the live test surface, then updated the README coverage list to include CLI help/validation and gallery index rendering.
+**Outcome:** Success — the user-facing test summary now matches the collected suite more completely.
+**Insight:** When a README summarizes test coverage, it should name the top-level test modules that users are most likely to search for, not just the broad subsystems.
+**Promoted to Lessons Learned:** No
+
+---
+
 <!-- New entries go above this line, most recent first -->

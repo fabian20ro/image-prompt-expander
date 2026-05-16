@@ -334,10 +334,12 @@ uv run pytest --cov=src --cov-report=html
 `uv run` may emit a benign `VIRTUAL_ENV` mismatch warning under Hermes; if the command completes successfully, the repo environment is still being used.
 
 The test suite currently collects 331 tests covering:
+- CLI help and validation (`test_cli.py`)
 - Pipeline orchestration (`test_pipeline.py`)
 - Image generation (`test_image_generator.py`)
 - Grammar expansion (`test_tracery_runner.py`)
 - Shared HTML/CSS/JS components (`test_html_components.py`)
+- Gallery index rendering (`test_gallery_index.py`)
 - API routes (`test_routes.py`)
 - Background workers (`test_worker.py`, `test_worker_subprocess.py`)
 - Metadata management (`test_metadata_manager.py`)
