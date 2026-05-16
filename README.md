@@ -69,7 +69,7 @@ This opens `http://localhost:8000` with:
 - **Queue Management**: Queue multiple operations, clear pending queue, kill running tasks
 - **Gallery Deletion**: Queue deletion for active galleries from the index page
 
-Image generation and enhancement settings are configured per-gallery (not from the index form).
+Image generation and enhancement settings are configured per-gallery (not from the index form). The per-gallery form also exposes `Images/Prompt (0 = prompt-only layout)` for prompt-only runs.
 
 Gallery pages include:
 - **Edit Grammar**: Modify Tracery grammar, review grammar history, and regenerate prompts

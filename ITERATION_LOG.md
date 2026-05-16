@@ -191,4 +191,14 @@ Each entry should follow this structure:
 **Insight:** Small environment quirks are easier to remember when they live next to the command that triggers them.
 **Promoted to Lessons Learned:** No
 
+### [2026-05-16] Documented prompt-only gallery layout in the README
+
+**Context:** The gallery already supported the `Images/Prompt (0 = prompt-only layout)` control on per-gallery forms, but the README only said image settings were configured per-gallery and did not name the prompt-only affordance.
+**What happened:** Added one README sentence under the Web UI section to call out the prompt-only layout control explicitly.
+**Outcome:** Success — the user-facing docs now mention the shipped prompt-only gallery behavior in the place readers look for gallery setup details.
+**Insight:** When a form exposes a useful zero-value sentinel, the README should name the exact control label so users can find it without hunting through the UI.
+**Promoted to Lessons Learned:** No
+
+---
+
 <!-- New entries go above this line, most recent first -->
