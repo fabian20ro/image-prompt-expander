@@ -92,7 +92,7 @@ class RegeneratePromptsApiRequest(BaseModel):
     """API request to regenerate prompts (run_id and grammar from URL/file)."""
     grammar: str | None = None
     count: int | None = Field(None, ge=1, le=10000)
-    images_per_prompt: int | None = Field(None, ge=1, le=100)
+    images_per_prompt: int | None = Field(None, ge=0, le=100)
     max_prompts: int | None = Field(None, ge=1)
 
 
@@ -114,7 +114,7 @@ class EnhanceImageRequest(BaseModel):
 
 class GenerateAllImagesRequest(BaseModel):
     """Request to generate all images for a gallery."""
-    images_per_prompt: int = Field(1, ge=1, le=100)
+    images_per_prompt: int = Field(1, ge=0, le=100)
     resume: bool = True
     # Image generation settings (override metadata defaults)
     model: str | None = None
@@ -130,7 +130,7 @@ class GenerateAllImagesRequest(BaseModel):
 
 class GalleryLayoutUpdateRequest(BaseModel):
     """Request to persist gallery layout state."""
-    images_per_prompt: int = Field(1, ge=1, le=100)
+    images_per_prompt: int = Field(1, ge=0, le=100)
     max_prompts: int | None = Field(None, ge=1)
 
 
@@ -141,7 +141,7 @@ class GenerateFromGrammarRequest(BaseModel):
     count: int = Field(50, ge=1, le=10000)
     prefix: str = Field("image", min_length=1, max_length=100, pattern=r'^[a-zA-Z0-9_-]+$')
     model: str = Field("flux2-klein-4b")
-    images_per_prompt: int = Field(1, ge=1, le=100)
+    images_per_prompt: int = Field(1, ge=0, le=100)
     max_prompts: int | None = Field(None, ge=1)
     width: int = Field(864, ge=64, le=4096)
     height: int = Field(1152, ge=64, le=4096)

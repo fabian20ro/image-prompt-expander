@@ -13,7 +13,7 @@ User prompt → LLM generates Tracery grammar → Tracery produces N prompts →
 **System:**
 - Python 3.10+
 - macOS with Apple Silicon (M1/M2/M3/M4) for image generation
-- [LM Studio](https://lmstudio.ai/) running locally
+- [LM Studio](https://lmstudio.ai/) running locally (default: http://localhost:1234/v1)
 
 **Recommended Hardware:**
 - **M4 Max with 36GB+ unified memory** for concurrent generation + enhancement
@@ -69,10 +69,11 @@ This opens `http://localhost:8000` with:
 - **Queue Management**: Queue multiple operations, clear pending queue, kill running tasks
 - **Gallery Deletion**: Queue deletion for active galleries from the index page
 
-Image generation and enhancement settings are configured per-gallery (not from the index form).
+Image generation and enhancement settings are configured per-gallery (not from the index form). The per-gallery form also exposes `Images/Prompt (0 = prompt-only layout)` for prompt-only runs.
 
 Gallery pages include:
-- **Edit Grammar**: Modify Tracery grammar and regenerate prompts
+- **Edit Grammar**: Modify Tracery grammar, review grammar history, and regenerate prompts
+- **Grammar History**: Restore a previous grammar revision from the saved revision list
 - **Generate Images**: Queue individual or all images for generation
 - **Enhance Images**: Apply SeedVR2 enhancement to individual or all images
 - **Save to Archive**: Manually backup the current gallery state
@@ -158,7 +159,7 @@ uv run python src/cli.py -p "a cat sleeping" -n 50 -i \
 
 ### Standalone Enhancement
 
-Enhance existing images in-place (replaces originals):
+Enhance existing images in-place (replaces originals). The same `--seed` and `--quantize` options apply here, and `--quantize` defaults to 8 when omitted:
 
 ```bash
 # Enhance a single image
@@ -208,13 +209,13 @@ uv run python src/cli.py --clean
 | `--from-grammar PATH` | Resume from existing grammar file (skip LLM generation) |
 | `--from-prompts PATH` | Resume from existing prompts directory (images only) |
 | `-i, --generate-images` | Enable mflux image generation |
-| `--images-per-prompt INT` | Images per prompt (default: 1) |
+| `--images-per-prompt INT` | Images per prompt (default: 1, `0` = prompt-only layout) |
 | `--max-prompts INT` | Limit prompts to render |
 | `-m, --model` | `z-image-turbo`, `flux2-klein-4b`, `flux2-klein-9b` (default: `flux2-klein-4b`) |
 | `--steps INT` | Inference steps |
 | `--width INT` | Image width (default: 864) |
 | `--height INT` | Image height (default: 1152) |
-| `-q, --quantize` | Quantization: 3, 4, 5, 6, or 8 |
+| `-q, --quantize` | Quantization: 3, 4, 5, 6, or 8. Applies to generation and standalone enhancement |
 | `--seed INT` | Random seed |
 | `--enhance` | Enable SeedVR2 2x enhancement (replaces original) |
 | `--enhance-softness FLOAT` | Enhancement softness (0.0-1.0, default: 0.5) |
@@ -241,6 +242,7 @@ generated/
 │   ├── ...
 │   ├── dragon_gallery.html   # Gallery generated dynamically via --serve
 │   ├── dragon_grammar.json   # Tracery grammar used
+│   ├── dragon_grammar_history.json  # Saved grammar revisions for undo/restore
 │   └── dragon_metadata.json  # Generation settings
 └── saved/                    # Flat archived images
     ├── dragon_20260126_143052_0_0.png  # {prefix}_{timestamp}_{promptIdx}_{imgIdx}.png
@@ -329,10 +331,15 @@ uv run pytest tests/test_pipeline.py -v
 uv run pytest --cov=src --cov-report=html
 ```
 
-The test suite currently collects 313 tests covering:
+`uv run` may emit a benign `VIRTUAL_ENV` mismatch warning under Hermes; if the command completes successfully, the repo environment is still being used.
+
+The test suite currently collects 331 tests covering:
+- CLI help and validation (`test_cli.py`)
 - Pipeline orchestration (`test_pipeline.py`)
 - Image generation (`test_image_generator.py`)
 - Grammar expansion (`test_tracery_runner.py`)
+- Shared HTML/CSS/JS components (`test_html_components.py`)
+- Gallery index rendering (`test_gallery_index.py`)
 - API routes (`test_routes.py`)
 - Background workers (`test_worker.py`, `test_worker_subprocess.py`)
 - Metadata management (`test_metadata_manager.py`)

@@ -125,6 +125,41 @@ class TestCliValidation:
         assert result.exit_code != 0
         assert "--generate-images" in result.output
 
+    def test_help_documents_prompt_only_layout(self):
+        """Test --help documents the zero-value prompt-only layout."""
+        runner = CliRunner()
+        result = runner.invoke(main, ["--help"])
+        assert result.exit_code == 0
+        assert "0 = prompt-only layout" in result.output
+        assert "standalone enhancement" in result.output
+        assert "LM Studio API base URL (default:" in result.output
+        assert "http://localhost:1234/v1" in result.output
+
+
+class TestCliDryRun:
+    """Tests for --dry-run behavior."""
+
+    @patch("cli.generate_grammar")
+    @patch("cli.PipelineExecutor")
+    def test_dry_run_previews_grammar_without_pipeline(self, mock_executor_cls, mock_generate_grammar):
+        """Test --dry-run prints grammar and skips the full pipeline."""
+        mock_generate_grammar.return_value = ('{"origin": ["a cat"]}', False, None)
+
+        runner = CliRunner()
+        result = runner.invoke(main, ["-p", "a cat", "--dry-run"])
+
+        assert result.exit_code == 0
+        assert "--- Generated Grammar ---" in result.output
+        assert '{"origin": ["a cat"]}' in result.output
+        mock_generate_grammar.assert_called_once_with(
+            user_prompt="a cat",
+            base_url="http://localhost:1234/v1",
+            use_cache=True,
+            temperature=0.7,
+            model="flux2-klein-4b",
+        )
+        mock_executor_cls.assert_not_called()
+
 
 class TestCliServe:
     """Tests for --serve flag."""
@@ -135,14 +170,26 @@ class TestCliServe:
 
         mock_uvicorn = MagicMock()
         mock_app = MagicMock()
+        mock_webbrowser = MagicMock()
+
+        class ImmediateThread:
+            def __init__(self, target=None, daemon=None):
+                self.target = target
+                self.daemon = daemon
+
+            def start(self):
+                if self.target is not None:
+                    self.target()
 
         with patch.dict("sys.modules", {
             "uvicorn": mock_uvicorn,
             "server.app": MagicMock(app=mock_app),
-        }):
+        }), patch("threading.Thread", ImmediateThread), patch("webbrowser.open", mock_webbrowser):
             result = runner.invoke(main, ["--serve", "--port", "9999"])
 
         assert "Starting web UI server" in result.output
+        mock_webbrowser.assert_called_once_with("http://localhost:9999")
+        mock_uvicorn.run.assert_called_once_with(mock_app, host="0.0.0.0", port=9999, log_level="info")
 
 
 class TestCliFullPipeline:

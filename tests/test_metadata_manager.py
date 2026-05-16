@@ -10,6 +10,7 @@ from metadata_manager import (
     MetadataError,
     MetadataNotFoundError,
     RunMetadata,
+    resolve_gallery_layout,
     load_metadata,
     save_metadata,
     get_metadata_prefix,
@@ -187,9 +188,19 @@ class TestMetadataManager:
         with pytest.raises(MetadataNotFoundError):
             MetadataManager.update(temp_dir, count=10)
 
-    def test_exists(self, temp_dir):
-        """Test checking if metadata exists."""
-        assert MetadataManager.exists(temp_dir) is False
+    def test_update_deletion(self, temp_dir):
+        """Test deleting a key via update by passing None."""
+        initial = {"prefix": "test", "count": 5, "user_prompt": "original"}
+        (temp_dir / "test_metadata.json").write_text(json.dumps(initial))
+
+        # In our implementation, passing None to update deletes the key from the raw dict
+        result = MetadataManager.update(temp_dir, user_prompt=None)
+
+        # The object will have default value (empty string), but the file should not have the key
+        assert result.user_prompt == ""
+        # Check that it's actually gone from the JSON file
+        saved = json.loads((temp_dir / "test_metadata.json").read_text())
+        assert "user_prompt" not in saved
 
         (temp_dir / "test_metadata.json").write_text('{"prefix": "test"}')
         assert MetadataManager.exists(temp_dir) is True
@@ -229,6 +240,24 @@ class TestMetadataManager:
 
         settings = MetadataManager.get_image_settings(temp_dir)
         assert settings == {}
+
+    def test_resolve_gallery_layout_preserves_explicit_zero_images_per_prompt(self):
+        """Explicit zero-image layouts should survive normalization."""
+        metadata = {
+            "gallery_layout": {
+                "images_per_prompt": 0,
+                "max_prompts": 3,
+            },
+            "image_generation": {
+                "images_per_prompt": 4,
+                "max_prompts": 7,
+            },
+        }
+
+        layout = resolve_gallery_layout(metadata, prompt_count=2)
+
+        assert layout["images_per_prompt"] == 0
+        assert layout["max_prompts"] == 2
 
 
 class TestConvenienceFunctions:

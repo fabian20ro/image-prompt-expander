@@ -63,7 +63,7 @@ def cli_progress(stage: str, current: int = 0, total: int = 0, message: str = ""
 @click.option(
     '--dry-run',
     is_flag=True,
-    help='Generate and display grammar without running Dada Engine'
+    help='Generate and display grammar without generating images'
 )
 @click.option(
     '--no-cache',
@@ -73,7 +73,7 @@ def cli_progress(stage: str, current: int = 0, total: int = 0, message: str = ""
 @click.option(
     '--base-url',
     default='http://localhost:1234/v1',
-    help='LM Studio API base URL'
+    help='LM Studio API base URL (default: http://localhost:1234/v1)'
 )
 @click.option(
     '--temperature',
@@ -90,7 +90,7 @@ def cli_progress(stage: str, current: int = 0, total: int = 0, message: str = ""
     '--images-per-prompt',
     default=1,
     type=int,
-    help='Number of images to generate per prompt (default: 1)'
+    help='Number of images to generate per prompt (default: 1, 0 = prompt-only layout)'
 )
 @click.option(
     '--prefix',
@@ -125,7 +125,7 @@ def cli_progress(stage: str, current: int = 0, total: int = 0, message: str = ""
     '--quantize', '-q',
     default=None,
     type=click.Choice([3, 4, 5, 6, 8], case_sensitive=False),
-    help='Quantization level for model (default: 8)'
+    help='Quantization level for model (default: 8; used for generation and standalone enhancement)'
 )
 @click.option(
     '--max-prompts',
@@ -250,7 +250,7 @@ def main(
     # Handle --clean
     if clean:
         removed = clean_generated()
-        click.echo(f"Cleaned {removed} items from generated/")
+        click.echo(f"Cleaned {removed} items from {paths.generated_dir}")
         if not prompt and not from_grammar and not from_prompts and not enhance_images and not serve:
             return
 

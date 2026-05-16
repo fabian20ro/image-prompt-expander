@@ -144,3 +144,26 @@ class TestGalleryInteractive:
         assert 'value="7"' in content
         assert "Imported grammar run" in content
         assert content.count('data-prompt-idx="2"') == 0
+
+    def test_gallery_preserves_prompt_only_layout(self, temp_dir):
+        """A persisted zero-images layout should render prompt-only cards."""
+        run_dir = temp_dir
+        metadata = {
+            "prefix": "test",
+            "count": 2,
+            "user_prompt": "prompt-only run",
+            "gallery_layout": {
+                "images_per_prompt": 0,
+                "max_prompts": 2,
+            },
+        }
+        create_run_files(run_dir, num_prompts=2, metadata=metadata)
+
+        gallery_path = generate_gallery_for_directory(run_dir, interactive=True)
+        content = gallery_path.read_text()
+
+        assert 'class="card prompt-only"' in content
+        assert 'Images/Prompt (0 = prompt-only layout)' in content
+        assert 'id="img-images-per-prompt" name="images_per_prompt" value="0" min="0"' in content
+        assert "prompt-only run" in content
+        assert "Pending..." not in content

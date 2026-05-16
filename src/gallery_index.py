@@ -297,8 +297,8 @@ def _build_generation_form() -> str:
             </select>
           </div>
           <div class="form-group">
-            <label for="grammar_images_per_prompt">Images/Prompt</label>
-            <input type="number" id="grammar_images_per_prompt" name="images_per_prompt" value="1" min="1">
+            <label for="grammar_images_per_prompt">Images/Prompt (0 = prompt-only layout)</label>
+            <input type="number" id="grammar_images_per_prompt" name="images_per_prompt" value="1" min="0">
           </div>
           <div class="form-group">
             <label for="grammar_max_prompts">Max Prompts</label>
@@ -566,7 +566,10 @@ document.addEventListener('DOMContentLoaded', function() {{
       prefix: formData.get('prefix') || 'image',
       count: parseInt(formData.get('count')) || 50,
       model: formData.get('model') || 'flux2-klein-4b',
-      images_per_prompt: parseInt(formData.get('images_per_prompt')) || 1,
+      images_per_prompt: (() => {{
+        const value = formData.get('images_per_prompt');
+        return value === null || value === '' ? 1 : parseInt(value);
+      }})(),
       max_prompts: formData.get('max_prompts') ? parseInt(formData.get('max_prompts')) : null,
       width: parseInt(formData.get('width')) || 864,
       height: parseInt(formData.get('height')) || 1152,

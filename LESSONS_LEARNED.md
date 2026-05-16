@@ -34,12 +34,17 @@ move it to the Archive section at the bottom with a date and reason.
 **[2026-02-07]** Validate model names before importing `mflux` - Importing `mflux` before rejecting unsupported models can trigger native MLX aborts in unsupported test paths.
 **[2026-02-07]** Keep docs and signatures aligned - Drift between documented defaults and implementation defaults (`tiled_vae`) causes repeated operator mistake
 **[2026-02-24]** Prefer MetadataManager for metadata operations — Direct JSON manipulation of run metadata bypasses validation and path logic; use MetadataManager consistently.s.
+**[2026-05-11]** Preserve explicit zero-value gallery layouts — `images_per_prompt: 0` is a real prompt-only layout, so normalize `None` separately instead of coercing all falsy values to 1.
+**[2026-05-14]** Surface shared quantize behavior in docs/help — `--quantize` defaults to 8 and applies to both prompt generation and standalone image enhancement, so the CLI help and README should call out both surfaces explicitly.
+**[2026-05-15]** `uv run` may warn about a mismatched `VIRTUAL_ENV` under Hermes — the project command still uses the repo environment and `uv run pytest --collect-only -q` completed successfully with the warning present.
 
 ## Testing & Quality
 
+**[2026-05-13]** Re-verify environment-specific failure notes before preserving them — stale caveats about native imports or toolchain aborts can outlive the real issue, so rerun the narrow test and update the note to the current observed state.
 **[2026-02-07]** Prefer intent assertions for worker logs - Worker success/failure paths emit variable extra lines, so tests should assert sequencing/intent rather than exact call counts.
 **[2026-02-07]** Use module fakes for MLX-heavy imports - Patching deep `mflux.*` paths can still initialize native MLX/Metal; prefer `patch.dict(sys.modules, ...)` with fake modules.
 **[2026-02-24]** Mock external services in tests — Always mock LM Studio and mflux; requiring live GPU or inference server makes tests environment-dependent and fragile.
+**[2026-05-14]** Click help output can wrap long option descriptions — when asserting `--help` text, prefer stable substrings over exact single-line matches for defaults embedded in long help strings.
 
 ## Performance & Infrastructure
 
@@ -47,9 +52,8 @@ move it to the Archive section at the bottom with a date and reason.
 
 ## Dependencies & External Services
 
-<!-- Version constraints, API quirks, integration lessons -->
-<!-- Format: **[YYYY-MM-DD]** Brief title — Explanation -->
 **[2026-04-03]** Use `tool.uv.package = false` for this repo’s flat imports — The code and tests rely on `src/` being executed directly (`uv run python src/cli.py`, pytest path injection). During `uv` migration, keep the repo non-packaged instead of switching to module entrypoints unless imports are refactored first.
+**[2026-05-08]** When uv wheel extraction fails with `Operation not permitted` in the default cache, point `UV_CACHE_DIR` at a writable local path like `/tmp/uv-cache` before retrying.
 
 ## Process & Workflow
 

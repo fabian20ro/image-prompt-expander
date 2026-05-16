@@ -21,6 +21,7 @@ class TestGalleryIndexInteractive:
         # Check for interactive elements
         assert "generate-form" in content
         assert "generate-from-grammar-form" in content
+        assert "Images/Prompt (0 = prompt-only layout)" in content
         assert "queue-status" in content
         assert "btn-kill" in content
         assert "btn-clear" in content

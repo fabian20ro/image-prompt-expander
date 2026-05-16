@@ -6,6 +6,7 @@
 - Grammar generation + cleanup: `tests/test_grammar_generator.py`
 - Tracery runner: `tests/test_tracery_runner.py`
 - Image generation wrapper: `tests/test_image_generator.py`
+- Shared HTML/CSS/JS components: `tests/test_html_components.py`
 - Gallery HTML generation: `tests/test_gallery.py`, `tests/test_gallery_index.py`
 - Gallery service: `tests/test_gallery_service.py`
 - Metadata manager: `tests/test_metadata_manager.py`
@@ -19,5 +20,5 @@
 
 ## Notes
 
-- In this environment, `tests/test_image_generator.py` aborts due native MLX/mflux import behavior during one unsupported-model test path.
-- Other suites run clean when executed individually with `uv run pytest`.
+- `tests/test_image_generator.py` runs cleanly under `uv run pytest` in this checkout.
+- The full suite also runs cleanly (`331 passed`).

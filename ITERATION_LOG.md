@@ -20,6 +20,16 @@ Each entry should follow this structure:
 
 ---
 
+### [2026-05-15] Added the shared HTML components test file to the test codemap
+
+**Context:** The test codemap and README coverage summary listed most major test surfaces, but they did not call out `tests/test_html_components.py`, which covers the shared CSS/JS building blocks used by the gallery and index pages.
+**What happened:** Added `tests/test_html_components.py` to `docs/codemaps/testing.md` and the README's test coverage list so the shared UI component tests are easier to find.
+**Outcome:** Success — docs now reflect the full test surface visible in the current checkout.
+**Insight:** Small codemap omissions are easiest to catch when the test file list is compared directly against the current collected suite.
+**Promoted to Lessons Learned:** No
+
+---
+
 ### [2026-04-04] Added revision-safe grammar regeneration, layout persistence, and grammar-import galleries
 
 **Context:** User reported that regenerating prompts after pasting a new grammar kept stale images attached to changed prompts, and that gallery canvas size could drift from selected `images per prompt` / `max prompts`. User also requested grammar undo/history and a way to create a gallery directly from pasted Tracery grammar.
@@ -66,6 +76,137 @@ Each entry should follow this structure:
 **What happened:** Replaced `LESSONS_LEARNED.md` with a structured curated template, migrated existing validated lessons into categories, created `ITERATION_LOG.md` with required format, and updated `AGENTS.md` with mandatory read/write workflow rules.
 **Outcome:** Success - memory system is now present and referenced from `AGENTS.md`.
 **Insight:** Keep `LESSONS_LEARNED.md` high-signal and concise; put session detail in the log and only promote repeated/validated patterns.
+**Promoted to Lessons Learned:** No
+
+---
+
+### [2026-05-08] Clarified dry-run CLI help and added regression coverage
+
+**Context:** The CLI `--dry-run` option had stale help text and lacked a direct regression test.
+**What happened:** Reworded the `--dry-run` help text to say it previews grammar without generating images, and added a CLI test that mocks grammar generation, verifies the preview output, and confirms the full pipeline is not constructed in dry-run mode.
+**Outcome:** Success — focused CLI test file passed and the full suite stayed green.
+**Insight:** Small CLI text tweaks are worth pinning with a behavior test when they describe a distinct execution path.
+**Promoted to Lessons Learned:** No
+
+---
+
+### [2026-05-11] Corrected LM Studio base URL docs
+
+**Context:** The project README and generate skill still pointed at the LM Studio host without the `/v1` API suffix, even though the code and other instructions use the full base URL.
+**What happened:** Updated `README.md` and `.claude/skills/generate/SKILL.md` so the documented default matches `http://localhost:1234/v1`.
+**Outcome:** Success — documentation now aligns with the configured default base URL.
+**Insight:** When a tool-specific skill mirrors README setup instructions, keep both in sync with the actual configured API path.
+**Promoted to Lessons Learned:** No
+
+---
+
+### [2026-05-12] Synced README test-suite count with collected tests
+
+**Context:** The README’s development section listed an outdated test-suite count.
+**What happened:** Ran `uv run pytest --collect-only -q` to verify the current collection count, then updated the README to say the suite currently collects 330 tests.
+**Outcome:** Success — documentation now matches the observed test collection output.
+**Insight:** Small maintenance docs can drift quietly; a quick collect-only check is enough to confirm the current count before editing.
+**Promoted to Lessons Learned:** No
+
+---
+### [2026-05-13] Clarified zero-value prompt-only layout in CLI help
+
+**Context:** The CLI already accepted `--images-per-prompt 0` as a prompt-only layout, but the `--help` text only mentioned the default and did not surface that contract.
+**What happened:** Updated `src/cli.py` so the `--images-per-prompt` help string now says `0 = prompt-only layout`, and added a focused CLI test that asserts `--help` includes that wording.
+**Outcome:** Success — `uv run pytest tests/test_cli.py -q` passed with 14 tests.
+**Insight:** When the code treats `0` as a real sentinel, the CLI help should name that behavior explicitly so users do not assume it is invalid.
+**Promoted to Lessons Learned:** No
+
+---
+
+### [2026-05-13] Synced README test-suite count with current collection
+
+**Context:** The README’s development section had drifted from the live test collection count.
+**What happened:** Ran `uv run pytest --collect-only -q` and confirmed the suite currently collects 331 tests, then updated the README to match.
+**Outcome:** Success — documentation now matches the observed collection output.
+**Insight:** Collect-only verification is the cheapest way to keep count-based docs honest.
+**Promoted to Lessons Learned:** No
+
+---
+
+### [2026-05-13] Synced stale image-generator codemap note
+
+**Context:** The testing codemap still claimed `tests/test_image_generator.py` aborted because of native MLX/mflux import behavior, but the current checkout had already passed the full suite.
+**What happened:** Ran `uv run pytest -q` and `uv run pytest tests/test_image_generator.py -q` to verify the current state, then updated `docs/codemaps/testing.md` to say the image-generator test file runs cleanly and the suite passes.
+**Outcome:** Success — the codemap now reflects the live verification result.
+**Insight:** When a maintenance note mentions an environment-specific failure, re-run the narrow test before preserving the warning; stale caveats can survive long after the underlying issue is fixed.
+**Promoted to Lessons Learned:** Yes
+
+---
+
+### [2026-05-14] Synced prompt-only gallery labels across UI surfaces
+
+**Context:** The interactive gallery and index forms still used the shorter `Images/Prompt (0 = prompt-only)` label, while the CLI help and README already spelled out `0 = prompt-only layout`.
+**What happened:** Updated the gallery and gallery index form labels to say `Images/Prompt (0 = prompt-only layout)`, and aligned the focused gallery/index tests with the new wording.
+**Outcome:** Success — `uv run pytest tests/test_gallery.py tests/test_gallery_index.py -q` passed (11 tests).
+**Insight:** Small copy syncs are easier to keep consistent when the exact runtime label is asserted in the tests that render the surface.
+**Promoted to Lessons Learned:** No
+
+---
+
+### [2026-05-14] Clarified shared quantize behavior in CLI help and README
+
+**Context:** The CLI `--quantize` flag already defaulted to 8 and was used by both prompt generation and standalone image enhancement, but the user-facing docs did not say that clearly.
+**What happened:** Updated `src/cli.py` help text, the README options table, and the standalone enhancement section to note that `--quantize` applies to generation and enhancement and defaults to 8 when omitted; added a CLI help regression that asserts the new wording appears in `--help` output.
+**Outcome:** Success — `uv run pytest tests/test_cli.py -q` passed (14 tests).
+**Insight:** When one flag feeds multiple execution paths, the help text should name every path so users do not assume it is generation-only.
+**Promoted to Lessons Learned:** Yes
+
+---
+
+### [2026-05-14] Exposed LM Studio base URL default in CLI help
+
+**Context:** The CLI `--base-url` option already defaulted to `http://localhost:1234/v1`, but the help text did not surface that default for users scanning `--help` output.
+**What happened:** Updated the `--base-url` help string to include the default URL and added a CLI help regression that asserts the base URL default is visible alongside the existing prompt-only layout/help coverage.
+**Outcome:** Success — focused CLI tests passed (`14 passed`).
+**Insight:** Click help output can wrap long option descriptions, so tests should assert stable substrings rather than a single exact line when a default is embedded in a long help string.
+**Promoted to Lessons Learned:** Yes
+
+### [2026-05-15] Noted benign uv environment warning during test-count verification
+
+**Context:** While checking the live test collection count to keep docs honest, `uv run` emitted a `VIRTUAL_ENV` mismatch warning from the Hermes environment.
+**What happened:** Ran `uv run pytest --collect-only -q`, confirmed the suite still collects 331 tests, and recorded that the warning did not block the repo-local command.
+**Outcome:** Success — the docs count remains current and the environment quirk is now captured for future runs.
+**Insight:** When `uv run` warns about `VIRTUAL_ENV` drift in this checkout, the repo command can still be trusted if the focused verification completes cleanly.
+**Promoted to Lessons Learned:** Yes
+
+### [2026-05-15] Documented grammar revision history in the gallery README
+
+**Context:** The gallery now persists grammar revision history and exposes it in the UI, but the README only described the edit/regenerate path and did not mention the restore surface or the on-disk history file.
+**What happened:** Updated the README gallery section to mention grammar-history review/restore and added `dragon_grammar_history.json` to the example output structure so the persisted revision file is discoverable.
+**Outcome:** Success — user-facing docs now describe the grammar history capability that already exists in the app.
+**Insight:** Small persistence features are easier to find later when the README names both the UI affordance and the file written to disk.
+**Promoted to Lessons Learned:** No
+
+### [2026-05-15] Documented benign Hermes uv warning in the README test notes
+
+**Context:** `uv run pytest --collect-only -q` still completed successfully, but the shell emitted a recurring `VIRTUAL_ENV` mismatch warning under Hermes that can distract future maintainers during test runs.
+**What happened:** Added a short note in the README's testing section explaining that the warning is benign when `uv run` finishes successfully and the repo environment is still used.
+**Outcome:** Success — the warning is now documented alongside the test commands that can surface it.
+**Insight:** Small environment quirks are easier to remember when they live next to the command that triggers them.
+**Promoted to Lessons Learned:** No
+
+### [2026-05-16] Documented prompt-only gallery layout in the README
+
+**Context:** The gallery already supported the `Images/Prompt (0 = prompt-only layout)` control on per-gallery forms, but the README only said image settings were configured per-gallery and did not name the prompt-only affordance.
+**What happened:** Added one README sentence under the Web UI section to call out the prompt-only layout control explicitly.
+**Outcome:** Success — the user-facing docs now mention the shipped prompt-only gallery behavior in the place readers look for gallery setup details.
+**Insight:** When a form exposes a useful zero-value sentinel, the README should name the exact control label so users can find it without hunting through the UI.
+**Promoted to Lessons Learned:** No
+
+---
+
+### [2026-05-16] Added missing CLI and gallery-index test surfaces to the README coverage list
+
+**Context:** The README’s development section listed the live 331-test collection count, but its coverage bullet list omitted `tests/test_cli.py` and `tests/test_gallery_index.py` even though both files are part of the current suite.
+**What happened:** Ran `uv run pytest --collect-only -q` to verify the live test surface, then updated the README coverage list to include CLI help/validation and gallery index rendering.
+**Outcome:** Success — the user-facing test summary now matches the collected suite more completely.
+**Insight:** When a README summarizes test coverage, it should name the top-level test modules that users are most likely to search for, not just the broad subsystems.
 **Promoted to Lessons Learned:** No
 
 ---
