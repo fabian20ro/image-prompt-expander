@@ -125,6 +125,26 @@ class TestCliValidation:
         assert result.exit_code != 0
         assert "--generate-images" in result.output
 
+    def test_count_must_be_positive(self):
+        """Test --count rejects zero/negative prompt counts before pipeline execution."""
+        runner = CliRunner()
+        result = runner.invoke(main, ["--prompt", "a cat", "--count", "0"])
+        assert result.exit_code != 0
+        assert "Invalid value for '-n' / '--count'" in result.output
+        assert "0 is not in the range x>=1" in result.output
+
+    def test_images_per_prompt_must_be_non_negative(self):
+        """Test --images-per-prompt preserves zero but rejects negative values."""
+        runner = CliRunner()
+        result = runner.invoke(main, [
+            "--prompt", "a cat",
+            "--generate-images",
+            "--images-per-prompt", "-1",
+        ])
+        assert result.exit_code != 0
+        assert "Invalid value for '--images-per-prompt'" in result.output
+        assert "-1 is not in the range x>=0" in result.output
+
     def test_help_documents_prompt_only_layout(self):
         """Test --help documents the zero-value prompt-only layout."""
         runner = CliRunner()

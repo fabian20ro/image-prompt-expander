@@ -52,7 +52,7 @@ def cli_progress(stage: str, current: int = 0, total: int = 0, message: str = ""
 @click.option(
     '-n', '--count',
     default=50,
-    type=int,
+    type=click.IntRange(min=1),
     help='Number of variations to generate (default: 50)'
 )
 @click.option(
@@ -89,7 +89,7 @@ def cli_progress(stage: str, current: int = 0, total: int = 0, message: str = ""
 @click.option(
     '--images-per-prompt',
     default=1,
-    type=int,
+    type=click.IntRange(min=0),
     help='Number of images to generate per prompt (default: 1, 0 = prompt-only layout)'
 )
 @click.option(
