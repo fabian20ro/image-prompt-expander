@@ -7,7 +7,7 @@ from pathlib import Path
 
 import click
 
-from config import paths
+from config import paths, settings
 from grammar_generator import generate_grammar
 from image_generator import SUPPORTED_MODELS, MODEL_DEFAULTS
 from image_enhancer import enhance_image, collect_images
@@ -72,8 +72,8 @@ def cli_progress(stage: str, current: int = 0, total: int = 0, message: str = ""
 )
 @click.option(
     '--base-url',
-    default='http://localhost:1234/v1',
-    help='LM Studio API base URL (default: http://localhost:1234/v1)'
+    default=settings.lm_studio.base_url,
+    help='LM Studio API base URL (default: %s)' % settings.lm_studio.base_url,
 )
 @click.option(
     '--temperature',
