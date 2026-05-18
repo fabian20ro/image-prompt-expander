@@ -299,6 +299,9 @@ def main(
     if prompt and (from_grammar or from_prompts):
         click.echo("Warning: --prompt is ignored when using --from-grammar or --from-prompts", err=True)
 
+    if not (0.0 <= temperature <= 2.0):
+        raise click.BadParameter(f"temperature must be between 0.0 and 2.0, got {temperature}")
+
     # Set defaults
     prefix = prefix or "image"
     model = model or settings.image_generation.default_model
