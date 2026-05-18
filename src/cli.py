@@ -101,7 +101,7 @@ def cli_progress(stage: str, current: int = 0, total: int = 0, message: str = ""
     '--model', '-m',
     default=None,
     type=click.Choice(SUPPORTED_MODELS),
-    help='mflux model to use (default: flux2-klein-4b)'
+    help='mflux model to use (default: %s)' % settings.image_generation.default_model
 )
 @click.option(
     '--steps',
@@ -113,19 +113,19 @@ def cli_progress(stage: str, current: int = 0, total: int = 0, message: str = ""
     '--width',
     default=None,
     type=int,
-    help='Image width in pixels (default: 864)'
+    help='Image width in pixels (default: %s)' % settings.image_generation.default_width
 )
 @click.option(
     '--height',
     default=None,
     type=int,
-    help='Image height in pixels (default: 1152)'
+    help='Image height in pixels (default: %s)' % settings.image_generation.default_height
 )
 @click.option(
     '--quantize', '-q',
     default=None,
     type=click.Choice([3, 4, 5, 6, 8], case_sensitive=False),
-    help='Quantization level for model (default: 8; used for generation and standalone enhancement)'
+    help='Quantization level for model (default: %s; used for generation and standalone enhancement)' % settings.image_generation.default_quantize,
 )
 @click.option(
     '--max-prompts',
@@ -301,10 +301,10 @@ def main(
 
     # Set defaults
     prefix = prefix or "image"
-    model = model or "flux2-klein-4b"
-    width = width or 864
-    height = height or 1152
-    quantize = quantize or 8
+    model = model or settings.image_generation.default_model
+    width = width or settings.image_generation.default_width
+    height = height or settings.image_generation.default_height
+    quantize = quantize or settings.image_generation.default_quantize
 
     # Handle --dry-run (needs special handling for grammar preview)
     if dry_run:
