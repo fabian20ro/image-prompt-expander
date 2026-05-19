@@ -39,9 +39,10 @@ uv sync
 uv sync --extra images
 ```
 
-**Important:** Use `uv run ...` for project commands. No manual activation step.
+**Important:** Use `uv run` for project commands. No manual activation step.
 
-For development and tests:
+If you see 'Connection refused', ensure LM Studio's local server is enabled and accessible at the correct URL (default: http://localhost:1234/v1).
+
 
 ```bash
 uv sync --group dev
@@ -333,7 +334,7 @@ uv run pytest --cov=src --cov-report=html
 
 `uv run` may emit a benign `VIRTUAL_ENV` mismatch warning under Hermes; if the command completes successfully, the repo environment is still being used.
 
-The test suite currently collects 331 tests covering:
+The test suite currently collects 333 tests covering:
 - CLI help and validation (`test_cli.py`)
 - Pipeline orchestration (`test_pipeline.py`)
 - Image generation (`test_image_generator.py`)

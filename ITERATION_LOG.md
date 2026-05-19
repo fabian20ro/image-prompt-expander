@@ -211,4 +211,14 @@ Each entry should follow this structure:
 
 ---
 
+### [2026-05-17] Rejected invalid CLI counts before pipeline execution
+
+**Context:** The CLI accepted integer options for prompt count and images per prompt, but the contract only makes sense for positive prompt counts and non-negative images-per-prompt values (`0` is the documented prompt-only layout).
+**What happened:** Changed `--count` to `click.IntRange(min=1)` and `--images-per-prompt` to `click.IntRange(min=0)`, added CLI validation regressions for `--count 0` and `--images-per-prompt -1`, and refreshed the README test count after the suite grew by two tests.
+**Outcome:** Success — focused CLI tests passed (`16 passed`) and the full suite passed (`333 passed`).
+**Insight:** Click's `IntRange` gives early, consistent validation for numeric CLI contracts while preserving documented sentinel values like zero.
+**Promoted to Lessons Learned:** No
+
+---
+
 <!-- New entries go above this line, most recent first -->

@@ -167,10 +167,9 @@ def _copy_with_exif(
     # Include image generation settings if available
     img_settings = metadata.get("image_generation", {})
     if img_settings:
-        png_info.add_text("width", str(img_settings.get("width", "")))
-        png_info.add_text("height", str(img_settings.get("height", "")))
-        png_info.add_text("steps", str(img_settings.get("steps", "")))
-        png_info.add_text("quantize", str(img_settings.get("quantize", "")))
+        for key in ["width", "height", "steps", "quantize"]:
+            if val := img_settings.get(key):
+                png_info.add_text(key, str(val))
 
     img.save(dest, pnginfo=png_info)
 

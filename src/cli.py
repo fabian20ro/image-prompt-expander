@@ -7,7 +7,7 @@ from pathlib import Path
 
 import click
 
-from config import paths
+from config import paths, settings
 from grammar_generator import generate_grammar
 from image_generator import SUPPORTED_MODELS, MODEL_DEFAULTS
 from image_enhancer import enhance_image, collect_images
@@ -52,7 +52,7 @@ def cli_progress(stage: str, current: int = 0, total: int = 0, message: str = ""
 @click.option(
     '-n', '--count',
     default=50,
-    type=int,
+    type=click.IntRange(min=1),
     help='Number of variations to generate (default: 50)'
 )
 @click.option(
@@ -72,8 +72,8 @@ def cli_progress(stage: str, current: int = 0, total: int = 0, message: str = ""
 )
 @click.option(
     '--base-url',
-    default='http://localhost:1234/v1',
-    help='LM Studio API base URL (default: http://localhost:1234/v1)'
+    default=settings.lm_studio.base_url,
+    help='LM Studio API base URL (default: %s)' % settings.lm_studio.base_url,
 )
 @click.option(
     '--temperature',
@@ -89,7 +89,7 @@ def cli_progress(stage: str, current: int = 0, total: int = 0, message: str = ""
 @click.option(
     '--images-per-prompt',
     default=1,
-    type=int,
+    type=click.IntRange(min=0),
     help='Number of images to generate per prompt (default: 1, 0 = prompt-only layout)'
 )
 @click.option(
@@ -101,7 +101,7 @@ def cli_progress(stage: str, current: int = 0, total: int = 0, message: str = ""
     '--model', '-m',
     default=None,
     type=click.Choice(SUPPORTED_MODELS),
-    help='mflux model to use (default: flux2-klein-4b)'
+    help='mflux model to use (default: %s)' % settings.image_generation.default_model
 )
 @click.option(
     '--steps',
@@ -113,19 +113,19 @@ def cli_progress(stage: str, current: int = 0, total: int = 0, message: str = ""
     '--width',
     default=None,
     type=int,
-    help='Image width in pixels (default: 864)'
+    help='Image width in pixels (default: %s)' % settings.image_generation.default_width
 )
 @click.option(
     '--height',
     default=None,
     type=int,
-    help='Image height in pixels (default: 1152)'
+    help='Image height in pixels (default: %s)' % settings.image_generation.default_height
 )
 @click.option(
     '--quantize', '-q',
     default=None,
     type=click.Choice([3, 4, 5, 6, 8], case_sensitive=False),
-    help='Quantization level for model (default: 8; used for generation and standalone enhancement)'
+    help='Quantization level for model (default: %s; used for generation and standalone enhancement)' % settings.image_generation.default_quantize,
 )
 @click.option(
     '--max-prompts',
@@ -299,12 +299,15 @@ def main(
     if prompt and (from_grammar or from_prompts):
         click.echo("Warning: --prompt is ignored when using --from-grammar or --from-prompts", err=True)
 
+    if not (0.0 <= temperature <= 2.0):
+        raise click.BadParameter(f"temperature must be between 0.0 and 2.0, got {temperature}")
+
     # Set defaults
     prefix = prefix or "image"
-    model = model or "flux2-klein-4b"
-    width = width or 864
-    height = height or 1152
-    quantize = quantize or 8
+    model = model or settings.image_generation.default_model
+    width = width or settings.image_generation.default_width
+    height = height or settings.image_generation.default_height
+    quantize = quantize or settings.image_generation.default_quantize
 
     # Handle --dry-run (needs special handling for grammar preview)
     if dry_run:

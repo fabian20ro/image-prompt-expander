@@ -241,18 +241,19 @@ def clean_grammar_output(grammar: str) -> str:
     for smart, straight in quote_replacements.items():
         grammar = grammar.replace(smart, straight)
 
-    # Validate it's valid JSON
-    try:
-        json.loads(grammar)
-    except json.JSONDecodeError:
-        # Try to extract JSON object from the text
-        json_match = re.search(r'\{[\s\S]*\}', grammar)
-        if json_match:
-            extracted = json_match.group(0)
-            try:
-                json.loads(extracted)
-                grammar = extracted
-            except json.JSONDecodeError:
-                pass  # Return stripped text; caller handles invalid JSON
+    # Try to find the first valid JSON object in the text
+    found_valid = False
+    for match in re.finditer(r'\{[\s\S]*?\}', grammar):
+        extracted = match.group(0)
+        try:
+            json.loads(extracted)
+            grammar = extracted
+            found_valid = True
+            break
+        except json.JSONDecodeError:
+            continue
+    if not found_valid:
+        # If no block is valid, we don't change grammar (caller handles error)
+        pass
 
     return grammar
