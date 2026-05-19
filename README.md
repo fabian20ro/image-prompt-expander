@@ -39,9 +39,10 @@ uv sync
 uv sync --extra images
 ```
 
-**Important:** Use `uv run ...` for project commands. No manual activation step.
+**Important:** Use `uv run` for project commands. No manual activation step.
 
-For development and tests:
+If you see 'Connection refused', ensure LM Studio's local server is enabled and accessible at the correct URL (default: http://localhost:1234/v1).
+
 
 ```bash
 uv sync --group dev
