@@ -216,7 +216,7 @@ uv run python src/cli.py --clean
 | `--steps INT` | Inference steps |
 | `--width INT` | Image width (default: 864) |
 | `--height INT` | Image height (default: 1152) |
-| `-q, --quantize` | Quantization: 3, 4, 5, 6, or 8. Applies to generation and standalone enhancement |
+|| `-q, --quantize` | Quantization level (3, 4, 5, 6, or 8; default: 8). Applies to generation and standalone enhancement |
 | `--seed INT` | Random seed |
 | `--enhance` | Enable SeedVR2 2x enhancement (replaces original) |
 | `--enhance-softness FLOAT` | Enhancement softness (0.0-1.0, default: 0.5) |
