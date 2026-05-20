@@ -301,7 +301,7 @@ class TestRunFullPipeline:
 
         # Check files were created
         assert result.output_dir.exists()
-        assert (result.output_dir / "test_metadata.json").exists()
+        assert (result.output_dir / "test.metaprompt.json").exists()
 
     @patch("pipeline.generate_grammar")
     def test_run_full_pipeline_grammar_failure(self, mock_grammar, temp_dir):
@@ -421,7 +421,7 @@ class TestRunFromPrompts:
 
         # Create only metadata, no prompts
         metadata = {"prefix": "test", "count": 0}
-        (prompts_dir / "test_metadata.json").write_text(json.dumps(metadata))
+        (prompts_dir / "test.metaprompt.json").write_text(json.dumps(metadata))
 
         executor = PipelineExecutor()
         result = executor.run_from_prompts(prompts_dir=prompts_dir)

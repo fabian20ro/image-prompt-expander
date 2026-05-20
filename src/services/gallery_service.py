@@ -64,11 +64,8 @@ class GalleryService:
         Raises:
             MetadataNotFoundError: If no metadata file found
         """
-        meta_files = list(run_dir.glob("*_metadata.json"))
-        if not meta_files:
-            raise MetadataNotFoundError(f"No metadata file found in {run_dir}")
-
-        return json.loads(meta_files[0].read_text())
+        meta_file = self.get_metadata_file(run_dir)
+        return json.loads(meta_file.read_text())
 
     def get_metadata_file(self, run_dir: Path) -> Path:
         """Get the metadata file path from a run directory.
@@ -82,11 +79,11 @@ class GalleryService:
         Raises:
             MetadataNotFoundError: If no metadata file found
         """
-        meta_files = list(run_dir.glob("*_metadata.json"))
-        if not meta_files:
-            raise MetadataNotFoundError(f"No metadata file found in {run_dir}")
-
-        return meta_files[0]
+        for pattern in ["*.metaprompt.json", "*_metadata.json"]:
+            meta_files = list(run_dir.glob(pattern))
+            if meta_files:
+                return meta_files[0]
+        raise MetadataNotFoundError(f"No metadata file found in {run_dir}")
 
     def get_prefix(self, run_dir: Path) -> str:
         """Get prefix from metadata.

@@ -44,7 +44,7 @@ class TestUtils:
 
     def test_load_run_metadata(self, temp_dir):
         """Test loading metadata from a run directory."""
-        (temp_dir / "test_metadata.json").write_text(json.dumps({
+        (temp_dir / "test.metaprompt.json").write_text(json.dumps({
             "prefix": "test",
             "count": 10,
             "user_prompt": "a dragon",
@@ -61,14 +61,14 @@ class TestUtils:
 
     def test_load_run_metadata_malformed_json(self, temp_dir):
         """Test loading metadata with malformed JSON."""
-        (temp_dir / "test_metadata.json").write_text("not valid json {")
+        (temp_dir / "test.metaprompt.json").write_text("not valid json {")
 
         with pytest.raises(json.JSONDecodeError):
             load_run_metadata(temp_dir)
 
     def test_get_prefix_from_metadata(self, temp_dir):
         """Test getting prefix from metadata."""
-        (temp_dir / "cat_metadata.json").write_text(json.dumps({
+        (temp_dir / "cat.metaprompt.json").write_text(json.dumps({
             "prefix": "cat",
         }))
 
@@ -82,7 +82,7 @@ class TestUtils:
 
     def test_count_images_in_run(self, temp_dir):
         """Test counting images in a run directory."""
-        (temp_dir / "test_metadata.json").write_text(json.dumps({"prefix": "test"}))
+        (temp_dir / "test.metaprompt.json").write_text(json.dumps({"prefix": "test"}))
         (temp_dir / "test_0_0.png").write_text("fake image")
         (temp_dir / "test_0_1.png").write_text("fake image")
         (temp_dir / "test_1_0.png").write_text("fake image")
@@ -92,7 +92,7 @@ class TestUtils:
 
     def test_get_prompts_from_run(self, temp_dir):
         """Test loading prompts from a run directory."""
-        (temp_dir / "test_metadata.json").write_text(json.dumps({"prefix": "test"}))
+        (temp_dir / "test.metaprompt.json").write_text(json.dumps({"prefix": "test"}))
         (temp_dir / "test_0.txt").write_text("First prompt")
         (temp_dir / "test_1.txt").write_text("Second prompt")
         (temp_dir / "test_2.txt").write_text("Third prompt")
@@ -109,7 +109,7 @@ class TestUtils:
         run_dir.mkdir(parents=True)
 
         # Create test files
-        (run_dir / "test_metadata.json").write_text(json.dumps({
+        (run_dir / "test.metaprompt.json").write_text(json.dumps({
             "prefix": "test",
             "user_prompt": "a dragon",
             "model": "test-model",
@@ -157,7 +157,7 @@ class TestUtils:
         run_dir.mkdir(parents=True)
 
         # Create metadata but no images
-        (run_dir / "test_metadata.json").write_text(json.dumps({
+        (run_dir / "test.metaprompt.json").write_text(json.dumps({
             "prefix": "test",
             "user_prompt": "a dragon",
         }))
@@ -167,7 +167,7 @@ class TestUtils:
 
     def test_run_has_images(self, temp_dir):
         """Test checking if a run has images."""
-        (temp_dir / "test_metadata.json").write_text(json.dumps({"prefix": "test"}))
+        (temp_dir / "test.metaprompt.json").write_text(json.dumps({"prefix": "test"}))
 
         # No images yet
         assert run_has_images(temp_dir) is False
@@ -184,7 +184,7 @@ class TestUtils:
         run_dir.mkdir()
 
         # Create test files
-        (run_dir / "test_metadata.json").write_text(json.dumps({
+        (run_dir / "test.metaprompt.json").write_text(json.dumps({
             "prefix": "test",
             "user_prompt": "a dragon",
         }))
@@ -213,7 +213,7 @@ class TestUtils:
         prompts_dir.mkdir()
         outside_dir = temp_dir / "outside"
         outside_dir.mkdir()
-        (outside_dir / "test_metadata.json").write_text(json.dumps({"prefix": "test"}))
+        (outside_dir / "test.metaprompt.json").write_text(json.dumps({"prefix": "test"}))
 
         with pytest.raises(ValueError, match="not inside prompts directory"):
             delete_run(outside_dir, prompts_dir)
@@ -226,7 +226,7 @@ class TestUtils:
         run_dir.mkdir()
 
         # Create backup metadata (marks this as an archive)
-        (run_dir / "test_metadata.json").write_text(json.dumps({
+        (run_dir / "test.metaprompt.json").write_text(json.dumps({
             "prefix": "test",
             "backup_info": {
                 "is_backup": True,
@@ -246,7 +246,7 @@ class TestUtils:
         # Attempt path traversal
         traversal_path = prompts_dir / ".." / "outside"
         traversal_path.mkdir(parents=True)
-        (traversal_path / "test_metadata.json").write_text(json.dumps({"prefix": "test"}))
+        (traversal_path / "test.metaprompt.json").write_text(json.dumps({"prefix": "test"}))
 
         with pytest.raises(ValueError, match="not inside prompts directory"):
             delete_run(traversal_path, prompts_dir)

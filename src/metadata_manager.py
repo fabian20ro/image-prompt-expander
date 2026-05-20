@@ -138,8 +138,12 @@ class MetadataManager:
         Returns:
             Path to the metadata file, or None if not found
         """
-        meta_files = list(run_dir.glob("*_metadata.json"))
-        return meta_files[0] if meta_files else None
+        # Search for both the new .metaprompt.json and old _metadata.json patterns
+        for pattern in ["*.metaprompt.json", "*_metadata.json"]:
+            meta_files = list(run_dir.glob(pattern))
+            if meta_files:
+                return meta_files[0]
+        return None
 
     @classmethod
     def load(cls, run_dir: Path) -> RunMetadata:
@@ -217,7 +221,7 @@ class MetadataManager:
             data = metadata
             prefix = prefix or data.get("prefix", "image")
 
-        meta_file = run_dir / f"{prefix}_metadata.json"
+        meta_file = run_dir / f"{prefix}.metaprompt.json"
 
         try:
             run_dir.mkdir(parents=True, exist_ok=True)

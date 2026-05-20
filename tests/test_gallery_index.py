@@ -31,7 +31,7 @@ class TestGalleryIndexInteractive:
     def test_index_prefers_display_title_for_run_cards(self, temp_dir):
         active_run = temp_dir / "prompts" / "20240101_120000_abc123"
         active_run.mkdir(parents=True)
-        (active_run / "test_metadata.json").write_text(json.dumps({
+        (active_run / "test.metaprompt.json").write_text(json.dumps({
             "prefix": "test",
             "count": 1,
             "user_prompt": "hidden raw prompt",
@@ -81,7 +81,7 @@ class TestGalleryIndexInteractive:
         # Create active run
         active_run = temp_dir / "prompts" / "20240101_120000_abc123"
         active_run.mkdir(parents=True)
-        (active_run / "test_metadata.json").write_text(json.dumps({
+        (active_run / "test.metaprompt.json").write_text(json.dumps({
             "prefix": "test",
             "count": 1,
             "user_prompt": "active prompt",
@@ -91,7 +91,7 @@ class TestGalleryIndexInteractive:
         # Create archived run
         archived_run = temp_dir / "saved" / "20240101_100000_def456_20240101_130000"
         archived_run.mkdir(parents=True)
-        (archived_run / "test_metadata.json").write_text(json.dumps({
+        (archived_run / "test.metaprompt.json").write_text(json.dumps({
             "prefix": "test",
             "count": 1,
             "user_prompt": "archived prompt",

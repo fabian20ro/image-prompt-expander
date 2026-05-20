@@ -200,7 +200,11 @@ def generate_gallery_for_directory(prompts_dir: Path, interactive: bool = False)
         ValueError: If no metadata file found or no prompts found
     """
     # Find metadata file
-    meta_files = list(prompts_dir.glob("*_metadata.json"))
+    meta_files = []
+    for pattern in ["*.metaprompt.json", "*_metadata.json"]:
+        meta_files = list(prompts_dir.glob(pattern))
+        if meta_files:
+            break
     if not meta_files:
         raise ValueError(f"No metadata file found in {prompts_dir}")
 

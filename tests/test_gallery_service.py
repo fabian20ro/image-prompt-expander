@@ -61,7 +61,7 @@ class TestGalleryService:
 
     def test_load_metadata_success(self, temp_dir):
         """Test loading metadata."""
-        (temp_dir / "test_metadata.json").write_text(json.dumps({
+        (temp_dir / "test.metaprompt.json").write_text(json.dumps({
             "prefix": "test",
             "user_prompt": "a dragon",
         }))
@@ -80,7 +80,7 @@ class TestGalleryService:
 
     def test_load_metadata_malformed_json(self, temp_dir):
         """Test loading metadata with malformed JSON."""
-        (temp_dir / "test_metadata.json").write_text("not valid json")
+        (temp_dir / "test.metaprompt.json").write_text("not valid json")
 
         service = GalleryService(temp_dir, temp_dir)
         with pytest.raises(json.JSONDecodeError):
@@ -88,7 +88,7 @@ class TestGalleryService:
 
     def test_get_prefix(self, temp_dir):
         """Test getting prefix from metadata."""
-        (temp_dir / "cat_metadata.json").write_text(json.dumps({"prefix": "cat"}))
+        (temp_dir / "cat.metaprompt.json").write_text(json.dumps({"prefix": "cat"}))
 
         service = GalleryService(temp_dir, temp_dir)
         assert service.get_prefix(temp_dir) == "cat"
@@ -101,7 +101,7 @@ class TestGalleryService:
     def test_load_grammar_success(self, temp_dir):
         """Test loading grammar."""
         grammar = {"origin": ["#subject#"], "subject": ["cat"]}
-        (temp_dir / "test_metadata.json").write_text(json.dumps({"prefix": "test"}))
+        (temp_dir / "test.metaprompt.json").write_text(json.dumps({"prefix": "test"}))
         (temp_dir / "test_grammar.json").write_text(json.dumps(grammar))
 
         service = GalleryService(temp_dir, temp_dir)
@@ -118,7 +118,7 @@ class TestGalleryService:
 
     def test_load_prompts(self, temp_dir):
         """Test loading prompts."""
-        (temp_dir / "test_metadata.json").write_text(json.dumps({"prefix": "test"}))
+        (temp_dir / "test.metaprompt.json").write_text(json.dumps({"prefix": "test"}))
         (temp_dir / "test_0.txt").write_text("First prompt")
         (temp_dir / "test_1.txt").write_text("Second prompt")
         (temp_dir / "test_2.txt").write_text("Third prompt")
@@ -136,7 +136,7 @@ class TestGalleryService:
 
     def test_load_prompts_with_missing_files(self, temp_dir):
         """Test loading prompts when directory is empty."""
-        (temp_dir / "test_metadata.json").write_text(json.dumps({"prefix": "test"}))
+        (temp_dir / "test.metaprompt.json").write_text(json.dumps({"prefix": "test"}))
 
         service = GalleryService(temp_dir, temp_dir)
         prompts = service.load_prompts(temp_dir)
@@ -164,7 +164,7 @@ class TestGalleryService:
 
     def test_is_backup_run_false(self, temp_dir):
         """Test is_backup_run returns False for normal runs."""
-        (temp_dir / "test_metadata.json").write_text(json.dumps({
+        (temp_dir / "test.metaprompt.json").write_text(json.dumps({
             "prefix": "test",
             "user_prompt": "a dragon",
         }))
@@ -174,7 +174,7 @@ class TestGalleryService:
 
     def test_is_backup_run_true(self, temp_dir):
         """Test is_backup_run returns True for backup runs."""
-        (temp_dir / "test_metadata.json").write_text(json.dumps({
+        (temp_dir / "test.metaprompt.json").write_text(json.dumps({
             "prefix": "test",
             "backup_info": {
                 "is_backup": True,
@@ -192,7 +192,7 @@ class TestGalleryService:
 
     def test_count_images(self, temp_dir):
         """Test counting images."""
-        (temp_dir / "test_metadata.json").write_text(json.dumps({"prefix": "test"}))
+        (temp_dir / "test.metaprompt.json").write_text(json.dumps({"prefix": "test"}))
         (temp_dir / "test_0_0.png").write_bytes(b"fake")
         (temp_dir / "test_0_1.png").write_bytes(b"fake")
         (temp_dir / "test_1_0.png").write_bytes(b"fake")
@@ -207,7 +207,7 @@ class TestGalleryService:
 
     def test_list_images(self, temp_dir):
         """Test listing images."""
-        (temp_dir / "test_metadata.json").write_text(json.dumps({"prefix": "test"}))
+        (temp_dir / "test.metaprompt.json").write_text(json.dumps({"prefix": "test"}))
         (temp_dir / "test_0_0.png").write_bytes(b"fake")
         (temp_dir / "test_1_0.png").write_bytes(b"fake")
         (temp_dir / "test_0_1.png").write_bytes(b"fake")

@@ -90,7 +90,11 @@ def _extract_run_info(run_dir: Path, is_archive: bool = False) -> dict | None:
         Dictionary with run info, or None if not a valid run
     """
     # Find metadata file
-    meta_files = list(run_dir.glob("*_metadata.json"))
+    meta_files = []
+    for pattern in ["*.metaprompt.json", "*_metadata.json"]:
+        meta_files = list(run_dir.glob(pattern))
+        if meta_files:
+            break
     if not meta_files:
         return None
 
