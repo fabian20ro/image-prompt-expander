@@ -45,13 +45,33 @@ class TestCleanGenerated:
 
         assert count == 0
 
+    def test_clean_dry_run(self, temp_dir):
+        """Test clean with dry-run flag."""
+        grammars = temp_dir / "grammars"
+        prompts = temp_dir / "prompts"
+        grammars.mkdir()
+        prompts.mkdir()
+
+        (grammars / "test.json").write_text("{}")
+        (prompts / "run1").mkdir()
+        (prompts / "run1" / "test.txt").write_text("test")
+
+        with patch("cli.paths") as mock_paths:
+            mock_paths.grammars_dir = grammars
+            mock_paths.prompts_dir = prompts
+            count = clean_generated(dry_run=True)
+            
+        assert count == 2  # Counts are still returned
+        assert (grammars / "test.json").exists() # Should NOT be deleted
+        assert (prompts / "run1" / "test.txt").exists() # Should NOT be deleted
+
     def test_clean_nonexistent_dirs(self, temp_dir):
         """Test clean when dirs don't exist."""
         with patch("cli.paths") as mock_paths:
             mock_paths.grammars_dir = temp_dir / "nonexistent1"
             mock_paths.prompts_dir = temp_dir / "nonexistent2"
             count = clean_generated()
-
+        
         assert count == 0
 
 

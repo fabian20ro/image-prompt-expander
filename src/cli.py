@@ -14,17 +14,23 @@ from image_enhancer import enhance_image, collect_images
 from pipeline import PipelineExecutor
 
 
-def clean_generated():
-    """Remove all generated files (grammars and prompts)."""
+def clean_generated(dry_run: bool = False) -> int:
+    """Remove all generated files (grammas and prompts)."""
     count = 0
     for d in [paths.grammars_dir, paths.prompts_dir]:
         if d.exists():
             for item in d.iterdir():
                 if item.is_file():
-                    item.unlink()
+                    if dry_run:
+                        click.echo(f"[DRY-RUN] Would remove file: {item}")
+                    else:
+                        item.unlink()
                     count += 1
                 elif item.is_dir():
-                    shutil.rmtree(item)
+                    if dry_run:
+                        click.echo(f"[DRY-RUN] Would remove directory: {item}")
+                    else:
+                        shutil.rmtree(item)
                     count += 1
     return count
 
@@ -249,7 +255,7 @@ def main(
     """
     # Handle --clean
     if clean:
-        removed = clean_generated()
+        removed = clean_generated(dry_run=dry_run)
         click.echo(f"Cleaned {removed} items from {paths.generated_dir}")
         if not prompt and not from_grammar and not from_prompts and not enhance_images and not serve:
             return
