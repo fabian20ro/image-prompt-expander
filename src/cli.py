@@ -6,8 +6,17 @@ import sys
 from pathlib import Path
 
 import click
+import requests
 
-from config import paths, settings
+def check_lm_studio(url: str) -> bool:
+    """Check if LM Studio is reachable."""
+    try:
+    	requests.get(f"{url}/models", timeout=2)
+    	return True
+    except requests.exceptions.RequestException:
+    	return False
+
+@click.command()
 from grammar_generator import generate_grammar
 from image_generator import SUPPORTED_MODELS, MODEL_DEFAULTS
 from image_enhancer import enhance_image, collect_images
@@ -253,6 +262,12 @@ def main(
         click.echo(f"Cleaned {removed} items from {paths.generated_dir}")
         if not prompt and not from_grammar and not from_prompts and not enhance_images and not serve:
             return
+
+    # Quick connectivity check if LM Studio is required for this run
+    if (prompt or from_grammar or from_prompts) and not serve and not enhance_images:
+        if not check_lm_studio(base_url):
+            click.echo(f"Error: LM Studio is not reachable at {base_url}. Please ensure the local server is running.", err=True)
+            sys.exit(1)
 
     # Handle --serve: Start web UI server
     if serve:
