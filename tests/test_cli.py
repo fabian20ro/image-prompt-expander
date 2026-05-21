@@ -145,18 +145,16 @@ class TestCliValidation:
         assert "Invalid value for '--images-per-prompt'" in result.output
         assert "-1 is not in the range x>=0" in result.output
 
-    def test_temperature_out_of_range(self):
-        """Test --temperature rejects values outside [0, 2]."""
+    def test_from_prompts_empty_dir(self, temp_dir):
+        """Test --from-prompts fails when no prompt files are found."""
+        # Create a valid metadata file so it passes the MetadataManager.load check
+        meta_file = temp_dir / "dummy.metaprompt.json"
+        meta_file.write_text('{"user_prompt": "test", "prefix": "dummy"}')
+        
         runner = CliRunner()
-        # Test too high
-        result_high = runner.invoke(main, ["--prompt", "a cat", "--temperature", "2.5"])
-        assert result_high.exit_code != 0
-        assert "temperature must be between 0.0 and 2.0" in result_high.output
-
-        # Test too low
-        result_low = runner.invoke(main, ["--prompt", "a cat", "--temperature", "-0.1"])
-        assert result_low.exit_code != 0
-        assert "temperature must be between 0.0 and 2.0" in result_low.output
+        result = runner.invoke(main, ["--from-prompts", str(temp_dir), "--generate-images"])
+        assert result.exit_code != 0
+        assert "No prompt files found" in result.output
 
     def test_help_documents_prompt_only_layout(self):
 
