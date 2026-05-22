@@ -6,18 +6,8 @@ import sys
 from pathlib import Path
 
 import click
-import requests
 
-def check_lm_studio(url: str) -> bool:
-    """Check if LM Studio is reachable and returns 200."""
-    try:
-    	response = requests.get(f"{url}/models", timeout=2)
-    	return response.status_code == 200
-    except requests.exceptions.RequestException:
-    	return False
-
-import click
-from config import settings, paths
+from config import paths, settings
 from grammar_generator import generate_grammar
 from image_generator import SUPPORTED_MODELS, MODEL_DEFAULTS
 from image_enhancer import enhance_image, collect_images
@@ -263,19 +253,6 @@ def main(
         click.echo(f"Cleaned {removed} items from {paths.generated_dir}")
         if not prompt and not from_grammar and not from_prompts and not enhance_images and not serve:
             return
-
-    # Quick connectivity check if LM Studio is required for this run (skip during tests)
-    import sys
-    if not any(m in sys.modules for m in ['pytest', 'unittest']):
-        if (prompt or from_grammar or from_prompts) and not serve and not enhance_images:
-            if not check_lm_studio(base_url):
-                click.echo(f"Error: LM Studio is not reachable at {base_url}. Please ensure the local server is running.", err=True)
-                sys.exit(1)
-    else:
-        # In tests, we still want to check if it's reachable but don't exit if it's not 
-        # so that tests can continue with a mock or just ignore the error.
-        pass
-
 
     # Handle --serve: Start web UI server
     if serve:
