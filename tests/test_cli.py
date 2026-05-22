@@ -274,3 +274,18 @@ class TestCliFullPipeline:
         assert kwargs["width"] == 1024
         assert kwargs["height"] == 768
 
+
+
+class TestCliCleanCommandBug:
+    """Tests for the fix where --clean should not run the pipeline."""
+
+    def test_clean_flag_does_not_run_pipeline(self):
+        """Test that --clean alone does not attempt to run the full pipeline."""
+        runner = CliRunner()
+        with patch("cli.clean_generated", return_value=5), \
+             patch("cli.PipelineExecutor") as mock_executor_cls:
+            result = runner.invoke(main, ["--clean"])
+            assert result.exit_code == 0
+            assert "Cleaned 5 items" in result.output
+            mock_executor_cls.assert_not_called()
+
