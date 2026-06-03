@@ -86,7 +86,7 @@ def create_run_files(run_dir: Path, prefix: str = "test", num_prompts: int = 2,
         grammar = {"origin": ["test"]}
 
     # Create metadata
-    (run_dir / f"{prefix}_metadata.json").write_text(json.dumps(metadata))
+    (run_dir / f"{prefix}.metaprompt.json").write_text(json.dumps(metadata))
 
     # Create grammar
     (run_dir / f"{prefix}_grammar.json").write_text(json.dumps(grammar))

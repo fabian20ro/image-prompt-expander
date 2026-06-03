@@ -12,3 +12,6 @@ generated/
 # IDE
 .idea/
 .vscode/
+
+# Compound Autopilot infrastructure metadata
+.compound-autopilot/

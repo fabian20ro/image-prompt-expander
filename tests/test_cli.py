@@ -246,3 +246,31 @@ class TestCliFullPipeline:
 
         assert result.exit_code == 0
         mock_executor.run_full_pipeline.assert_called_once()
+
+    @patch("cli.PipelineExecutor")
+    def test_prompt_with_dimensions(self, mock_executor_cls):
+        """Test that --width and --height are passed correctly via CLI."""
+        mock_executor = MagicMock()
+        mock_result = MagicMock()
+        mock_result.success = True
+        mock_result.output_dir = Path("/tmp/test")
+        mock_result.prompt_count = 5
+        mock_result.image_count = 0
+        mock_result.error = None
+        mock_executor.run_full_pipeline.return_value = mock_result
+        mock_executor_cls.return_value = mock_executor
+
+        runner = CliRunner()
+        result = runner.invoke(main, [
+            "-p", "a cat", 
+            "-n", "5", 
+            "--width", "1024", 
+            "--height", "768"
+        ])
+
+        assert result.exit_code == 0
+        mock_executor.run_full_pipeline.assert_called_once()
+        args, kwargs = mock_executor.run_full_pipeline.call_args
+        assert kwargs["width"] == 1024
+        assert kwargs["height"] == 768
+

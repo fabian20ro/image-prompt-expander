@@ -360,7 +360,7 @@ class PipelineExecutor:
             }
 
         # Save metadata and grammar
-        metadata_file = output_dir / f"{prefix}_metadata.json"
+        metadata_file = output_dir / f"{prefix}.metaprompt.json"
         metadata_file.write_text(json.dumps(metadata, indent=2))
 
         grammar_file = output_dir / f"{prefix}_grammar.json"
@@ -473,11 +473,24 @@ class PipelineExecutor:
         grammar = grammar_path.read_text()
 
         # Try to find metadata for original prompt
-        meta_path = grammar_path.with_suffix('.metaprompt.json')
+        meta_path = None
+        for p in grammar_path.parent.glob("*.metaprompt.json"):
+            meta_path = p
+            break
+
         user_prompt = "unknown"
-        if meta_path.exists():
+        if meta_path and meta_path.exists():
             meta = json.loads(meta_path.read_text())
             user_prompt = meta.get("user_prompt", "unknown")
+        elif grammar_path.exists(): # fallback to old way if not found by glob
+            try:
+                alt_meta = grammar_path.with_suffix('.metaprompt.json')
+                if alt_meta.exists():
+                    meta = json.loads(alt_meta.read_text())
+                    user_prompt = meta.get("user_prompt", "unknown")
+            except Exception:
+                pass
+
 
         # Try to find raw response
         grammar_hash = grammar_path.stem.replace('.tracery', '')
@@ -600,7 +613,7 @@ class PipelineExecutor:
         }
 
         # Save metadata and grammar
-        metadata_file = output_dir / f"{prefix}_metadata.json"
+        metadata_file = output_dir / f"{prefix}.metaprompt.json"
         metadata_file.write_text(json.dumps(metadata, indent=2))
 
         grammar_file = output_dir / f"{prefix}_grammar.json"

@@ -166,7 +166,7 @@ class TestGalleryEndpoint:
         run_dir = prompts_dir / "20240101_120000_abc123"
         run_dir.mkdir()
 
-        (run_dir / "test_metadata.json").write_text(json.dumps({
+        (run_dir / "test.metaprompt.json").write_text(json.dumps({
             "prefix": "test",
             "count": 1,
             "user_prompt": "test",
@@ -190,7 +190,7 @@ class TestGrammarUpdateEndpoint:
         run_dir = prompts_dir / "20240101_120000_abc123"
         run_dir.mkdir()
 
-        (run_dir / "test_metadata.json").write_text(json.dumps({
+        (run_dir / "test.metaprompt.json").write_text(json.dumps({
             "prefix": "test",
         }))
         (run_dir / "test_grammar.json").write_text(json.dumps({"origin": ["test"]}))
@@ -217,7 +217,7 @@ class TestGrammarUpdateEndpoint:
         run_dir = prompts_dir / "20240101_120000_abc123"
         run_dir.mkdir()
 
-        (run_dir / "test_metadata.json").write_text(json.dumps({
+        (run_dir / "test.metaprompt.json").write_text(json.dumps({
             "prefix": "test",
         }))
         (run_dir / "test_grammar.json").write_text(json.dumps({"origin": ["old"]}))
@@ -239,7 +239,7 @@ class TestGrammarUpdateEndpoint:
         run_dir = prompts_dir / "20240101_120000_abc123"
         run_dir.mkdir()
 
-        (run_dir / "test_metadata.json").write_text(json.dumps({"prefix": "test"}))
+        (run_dir / "test.metaprompt.json").write_text(json.dumps({"prefix": "test"}))
         (run_dir / "test_grammar.json").write_text(json.dumps({"origin": ["old"]}))
 
         response = client.put("/api/gallery/20240101_120000_abc123/grammar", json={
@@ -260,7 +260,7 @@ class TestGrammarHistoryEndpoint:
         run_dir = prompts_dir / "20240101_120000_abc123"
         run_dir.mkdir()
 
-        (run_dir / "test_metadata.json").write_text(json.dumps({"prefix": "test"}))
+        (run_dir / "test.metaprompt.json").write_text(json.dumps({"prefix": "test"}))
         (run_dir / "test_grammar.json").write_text(json.dumps({"origin": ["current"]}))
 
         response = client.get("/api/gallery/20240101_120000_abc123/grammar/history")
@@ -278,7 +278,7 @@ class TestLayoutEndpoint:
         run_dir = prompts_dir / "20240101_120000_abc123"
         run_dir.mkdir()
 
-        (run_dir / "test_metadata.json").write_text(json.dumps({"prefix": "test"}))
+        (run_dir / "test.metaprompt.json").write_text(json.dumps({"prefix": "test"}))
 
         response = client.put("/api/gallery/20240101_120000_abc123/layout", json={
             "images_per_prompt": 0,
@@ -286,7 +286,7 @@ class TestLayoutEndpoint:
         })
 
         assert response.status_code == 200
-        metadata = json.loads((run_dir / "test_metadata.json").read_text())
+        metadata = json.loads((run_dir / "test.metaprompt.json").read_text())
         assert metadata["gallery_layout"] == {"images_per_prompt": 0, "max_prompts": 8}
 
 
@@ -298,7 +298,7 @@ class TestGenerateAllEndpoint:
         run_dir = prompts_dir / "20240101_120000_abc123"
         run_dir.mkdir()
 
-        (run_dir / "test_metadata.json").write_text(json.dumps({"prefix": "test"}))
+        (run_dir / "test.metaprompt.json").write_text(json.dumps({"prefix": "test"}))
 
         response = client.post("/api/gallery/20240101_120000_abc123/generate-all", json={
             "images_per_prompt": 0,
@@ -319,7 +319,7 @@ class TestRegenerateEndpoint:
         run_dir = prompts_dir / "20240101_120000_abc123"
         run_dir.mkdir()
 
-        (run_dir / "test_metadata.json").write_text(json.dumps({
+        (run_dir / "test.metaprompt.json").write_text(json.dumps({
             "prefix": "test",
             "count": 10,
         }))
@@ -354,7 +354,7 @@ class TestDeleteGalleryEndpoint:
         run_dir = prompts_dir / "20240101_120000_abc123"
         run_dir.mkdir()
 
-        (run_dir / "test_metadata.json").write_text(json.dumps({
+        (run_dir / "test.metaprompt.json").write_text(json.dumps({
             "prefix": "test",
             "backup_info": {
                 "is_backup": True,
@@ -373,7 +373,7 @@ class TestDeleteGalleryEndpoint:
         run_dir = prompts_dir / "20240101_120000_abc123"
         run_dir.mkdir()
 
-        (run_dir / "test_metadata.json").write_text(json.dumps({
+        (run_dir / "test.metaprompt.json").write_text(json.dumps({
             "prefix": "test",
             "user_prompt": "a dragon",
         }))
@@ -424,7 +424,7 @@ class TestArchiveGalleryEndpoint:
         run_dir = prompts_dir / "20240101_120000_abc123"
         run_dir.mkdir()
 
-        (run_dir / "test_metadata.json").write_text(json.dumps({
+        (run_dir / "test.metaprompt.json").write_text(json.dumps({
             "prefix": "test",
             "backup_info": {"is_backup": True},
         }))

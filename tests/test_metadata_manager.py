@@ -92,7 +92,7 @@ class TestMetadataManager:
 
     def test_find_metadata_file_exists(self, temp_dir):
         """Test finding existing metadata file."""
-        meta_file = temp_dir / "test_metadata.json"
+        meta_file = temp_dir / "test.metaprompt.json"
         meta_file.write_text('{"prefix": "test"}')
 
         result = MetadataManager.find_metadata_file(temp_dir)
@@ -106,7 +106,7 @@ class TestMetadataManager:
     def test_load_success(self, temp_dir):
         """Test loading metadata successfully."""
         data = {"prefix": "test", "count": 5, "user_prompt": "hello"}
-        (temp_dir / "test_metadata.json").write_text(json.dumps(data))
+        (temp_dir / "test.metaprompt.json").write_text(json.dumps(data))
 
         metadata = MetadataManager.load(temp_dir)
 
@@ -121,7 +121,7 @@ class TestMetadataManager:
 
     def test_load_invalid_json(self, temp_dir):
         """Test loading invalid JSON metadata."""
-        (temp_dir / "test_metadata.json").write_text("{invalid json")
+        (temp_dir / "test.metaprompt.json").write_text("{invalid json")
 
         with pytest.raises(MetadataError, match="Invalid JSON"):
             MetadataManager.load(temp_dir)
@@ -129,7 +129,7 @@ class TestMetadataManager:
     def test_load_raw(self, temp_dir):
         """Test loading raw dictionary."""
         data = {"prefix": "test", "custom": "value"}
-        (temp_dir / "test_metadata.json").write_text(json.dumps(data))
+        (temp_dir / "test.metaprompt.json").write_text(json.dumps(data))
 
         result = MetadataManager.load_raw(temp_dir)
 
@@ -144,7 +144,7 @@ class TestMetadataManager:
         result = MetadataManager.save(temp_dir, data)
 
         assert result.exists()
-        assert result.name == "myprefix_metadata.json"
+        assert result.name == "myprefix.metaprompt.json"
         saved = json.loads(result.read_text())
         assert saved["count"] == 10
 
@@ -154,7 +154,7 @@ class TestMetadataManager:
 
         result = MetadataManager.save(temp_dir, metadata)
 
-        assert result.name == "custom_metadata.json"
+        assert result.name == "custom.metaprompt.json"
         saved = json.loads(result.read_text())
         assert saved["count"] == 20
 
@@ -171,7 +171,7 @@ class TestMetadataManager:
     def test_update(self, temp_dir):
         """Test updating specific fields."""
         initial = {"prefix": "test", "count": 5, "user_prompt": "original"}
-        (temp_dir / "test_metadata.json").write_text(json.dumps(initial))
+        (temp_dir / "test.metaprompt.json").write_text(json.dumps(initial))
 
         result = MetadataManager.update(temp_dir, count=10, user_prompt="updated")
 
@@ -179,7 +179,7 @@ class TestMetadataManager:
         assert result.user_prompt == "updated"
 
         # Verify file was updated
-        saved = json.loads((temp_dir / "test_metadata.json").read_text())
+        saved = json.loads((temp_dir / "test.metaprompt.json").read_text())
         assert saved["count"] == 10
         assert saved["user_prompt"] == "updated"
 
@@ -191,7 +191,7 @@ class TestMetadataManager:
     def test_update_deletion(self, temp_dir):
         """Test deleting a key via update by passing None."""
         initial = {"prefix": "test", "count": 5, "user_prompt": "original"}
-        (temp_dir / "test_metadata.json").write_text(json.dumps(initial))
+        (temp_dir / "test.metaprompt.json").write_text(json.dumps(initial))
 
         # In our implementation, passing None to update deletes the key from the raw dict
         result = MetadataManager.update(temp_dir, user_prompt=None)
@@ -199,15 +199,15 @@ class TestMetadataManager:
         # The object will have default value (empty string), but the file should not have the key
         assert result.user_prompt == ""
         # Check that it's actually gone from the JSON file
-        saved = json.loads((temp_dir / "test_metadata.json").read_text())
+        saved = json.loads((temp_dir / "test.metaprompt.json").read_text())
         assert "user_prompt" not in saved
 
-        (temp_dir / "test_metadata.json").write_text('{"prefix": "test"}')
+        (temp_dir / "test.metaprompt.json").write_text('{"prefix": "test"}')
         assert MetadataManager.exists(temp_dir) is True
 
     def test_get_prefix(self, temp_dir):
         """Test getting prefix from metadata."""
-        (temp_dir / "myprefix_metadata.json").write_text('{"prefix": "myprefix"}')
+        (temp_dir / "myprefix.metaprompt.json").write_text('{"prefix": "myprefix"}')
 
         result = MetadataManager.get_prefix(temp_dir)
         assert result == "myprefix"
@@ -227,7 +227,7 @@ class TestMetadataManager:
                 "model": "z-image-turbo",
             },
         }
-        (temp_dir / "test_metadata.json").write_text(json.dumps(data))
+        (temp_dir / "test.metaprompt.json").write_text(json.dumps(data))
 
         settings = MetadataManager.get_image_settings(temp_dir)
 
@@ -236,7 +236,7 @@ class TestMetadataManager:
 
     def test_get_image_settings_empty(self, temp_dir):
         """Test getting image settings when not present."""
-        (temp_dir / "test_metadata.json").write_text('{"prefix": "test"}')
+        (temp_dir / "test.metaprompt.json").write_text('{"prefix": "test"}')
 
         settings = MetadataManager.get_image_settings(temp_dir)
         assert settings == {}
@@ -266,7 +266,7 @@ class TestConvenienceFunctions:
     def test_load_metadata_success(self, temp_dir):
         """Test load_metadata convenience function."""
         data = {"prefix": "test", "count": 5}
-        (temp_dir / "test_metadata.json").write_text(json.dumps(data))
+        (temp_dir / "test.metaprompt.json").write_text(json.dumps(data))
 
         result = load_metadata(temp_dir)
         assert result["prefix"] == "test"
@@ -287,7 +287,7 @@ class TestConvenienceFunctions:
 
     def test_get_metadata_prefix(self, temp_dir):
         """Test get_metadata_prefix convenience function."""
-        (temp_dir / "myprefix_metadata.json").write_text('{"prefix": "myprefix"}')
+        (temp_dir / "myprefix.metaprompt.json").write_text('{"prefix": "myprefix"}')
 
         result = get_metadata_prefix(temp_dir)
         assert result == "myprefix"
