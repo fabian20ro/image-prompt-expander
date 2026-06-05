@@ -12,6 +12,7 @@ from utils import (
     get_prompts_from_run,
     backup_run,
     is_backup_run,
+    scan_flat_archives,
     get_flat_archive_metadata,
     run_has_images,
     delete_run,
@@ -265,3 +266,61 @@ class TestUtils:
 
         metadata = get_flat_archive_metadata(missing_file)
         assert metadata == {}
+
+    def test_is_backup_run_true(self, temp_dir):
+        """Test is_backup_run returns True when backup_info.is_backup is set."""
+        (temp_dir / "test.metaprompt.json").write_text(json.dumps({
+            "prefix": "test",
+            "backup_info": {"is_backup": True},
+        }))
+        assert is_backup_run(temp_dir) is True
+
+    def test_is_backup_run_false(self, temp_dir):
+        """Test is_backup_run returns False when backup_info.is_backup is absent."""
+        (temp_dir / "test.metaprompt.json").write_text(json.dumps({
+            "prefix": "test",
+        }))
+        assert is_backup_run(temp_dir) is False
+
+    def test_is_backup_run_no_metadata(self, temp_dir):
+        """Test is_backup_run returns False when no metadata file exists."""
+        assert is_backup_run(temp_dir) is False
+
+    def test_scan_flat_archives_empty(self, temp_dir):
+        """Test scan_flat_archives returns empty list for non-existent directory."""
+        result = scan_flat_archives(temp_dir / "nonexistent")
+        assert result == []
+
+    def test_scan_flat_archives_groups_by_prefix_and_timestamp(self, temp_dir):
+        """Test scan_flat_archives groups flat PNG files by prefix+timestamp."""
+        saved_dir = temp_dir / "saved"
+        saved_dir.mkdir()
+
+        # Create flat archive PNGs with the expected naming pattern
+        img = Image.new('RGB', (10, 10), color='blue')
+        img.save(saved_dir / "cat_20240115_143022_0_0.png")
+        img.save(saved_dir / "cat_20240115_143022_0_1.png")
+        img.save(saved_dir / "dog_20240115_143022_0_0.png")
+
+        result = scan_flat_archives(saved_dir)
+        assert len(result) == 2
+
+        # Find the cat archive
+        cat_archive = next(a for a in result if a["prefix"] == "cat")
+        assert cat_archive["timestamp"] == "20240115_143022"
+        assert cat_archive["image_count"] == 2
+
+        # Find the dog archive
+        dog_archive = next(a for a in result if a["prefix"] == "dog")
+        assert dog_archive["image_count"] == 1
+
+    def test_scan_flat_archives_ignores_non_matching_files(self, temp_dir):
+        """Test scan_flat_archives ignores files that don't match the flat pattern."""
+        saved_dir = temp_dir / "saved"
+        saved_dir.mkdir()
+
+        # Create a file that doesn't match the flat archive pattern
+        (saved_dir / "random_file.png").write_bytes(b"fake")
+
+        result = scan_flat_archives(saved_dir)
+        assert len(result) == 0
