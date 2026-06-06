@@ -239,10 +239,18 @@ Let me create a grammar...
         parsed = json.loads(result)
         assert parsed["origin"] == "#prompt#"
 
-    def test_smart_quotes_with_think_tags(self):
-        # Verifies full pipeline: think removal + code block + quote normalization
+    def test_nested_json_in_code_block(self):
+        # Verifies that nested JSON objects inside code blocks are correctly extracted
         # Given
-        input_text = '<think>\nLet me create a grammar with \u201csmart quotes\u201d...\n</think>\n\n```json\n{\u201corigin\u201d: \u201c#prompt#\u201d, \u201cdesc\u201d: \u201ca \u2018fancy\u2019 thing\u201d}\n```'
+        input_text = '''```json
+{
+    "origin": "#prompt#",
+    "payload": {
+        "key": "value",
+        "nested": [1, 2, 3]
+    }
+}
+```'''
 
         # When
         result = clean_grammar_output(input_text)
@@ -251,4 +259,6 @@ Let me create a grammar...
         import json
         parsed = json.loads(result)
         assert parsed["origin"] == "#prompt#"
-        assert parsed["desc"] == "a 'fancy' thing"
+        assert parsed["payload"]["key"] == "value"
+        assert parsed["payload"]["nested"] == [1, 2, 3]
+
