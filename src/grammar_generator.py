@@ -19,7 +19,7 @@ LM_STUDIO_API_KEY = settings.lm_studio.api_key
 CACHE_DIR = paths.grammars_dir
 
 
-def get_system_prompt(model: str | None = None) -> str:
+def get_system_prompt(model: str | None = None, templates_dir: Path | None = None) -> str:
     """
     Load the system prompt from the templates directory.
 
@@ -31,7 +31,7 @@ def get_system_prompt(model: str | None = None) -> str:
     Returns:
         The system prompt content
     """
-    templates_dir = paths.templates_dir
+    templates_dir = templates_dir or paths.templates_dir
 
     # Determine the model-specific prompt filename
     if model:
@@ -242,16 +242,17 @@ def clean_grammar_output(grammar: str) -> str:
         grammar = grammar.replace(smart, straight)
 
     # Try to find the first valid JSON object in the text
+    start_idx = grammar.find('{')
+    end_idx = grammar.rfind('}')
     found_valid = False
-    for match in re.finditer(r'\{[\s\S]*?\}', grammar):
-        extracted = match.group(0)
+    if start_idx != -1 and end_idx != -1 and end_idx > start_idx:
+        extracted = grammar[start_idx:end_idx+1]
         try:
             json.loads(extracted)
             grammar = extracted
             found_valid = True
-            break
         except json.JSONDecodeError:
-            continue
+            pass
     if not found_valid:
         # If no block is valid, we don't change grammar (caller handles error)
         pass
