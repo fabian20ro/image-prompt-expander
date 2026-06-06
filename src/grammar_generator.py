@@ -19,7 +19,7 @@ LM_STUDIO_API_KEY = settings.lm_studio.api_key
 CACHE_DIR = paths.grammars_dir
 
 
-def get_system_prompt(model: str | None = None) -> str:
+def get_system_prompt(model: str | None = None, templates_dir: Path | None = None) -> str:
     """
     Load the system prompt from the templates directory.
 
@@ -31,7 +31,7 @@ def get_system_prompt(model: str | None = None) -> str:
     Returns:
         The system prompt content
     """
-    templates_dir = paths.templates_dir
+    templates_dir = templates_dir or paths.templates_dir
 
     # Determine the model-specific prompt filename
     if model:

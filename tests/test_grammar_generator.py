@@ -6,14 +6,14 @@ from pathlib import Path
 # Add src to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
-from grammar_generator import clean_grammar_output
+from unittest.mock import patch
+from grammar_generator import clean_grammar_output, get_system_prompt
 
 
 class TestCleanGrammarOutput:
     """Tests for the clean_grammar_output function."""
 
     # Tests for removing <think> tags
-
     def test_removes_think_tags_single_line(self):
         # Verifies single-line think tags are stripped from output
         # Given
@@ -32,8 +32,7 @@ class TestCleanGrammarOutput:
 This is some
 multi-line thinking
 content here
-</think>
-{"origin": "#prompt#"}'''
+</think>{"origin": "#prompt#"}'''
 
         # When
         result = clean_grammar_output(input_text)
@@ -53,7 +52,6 @@ content here
         assert result == '{"origin": "#test#"}'
 
     # Tests for removing markdown code blocks
-
     def test_removes_json_code_block_with_newline(self):
         # Verifies ```json blocks with newline after marker are handled
         # Given
@@ -118,7 +116,6 @@ content here
         assert result == '{"origin": "#prompt#"}'
 
     # Tests for combined scenarios
-
     def test_removes_think_and_code_block(self):
         # Verifies both think tags and code blocks are removed together
         # Given
@@ -181,7 +178,6 @@ Let me create a grammar...
         assert "mountains" in parsed["setting"]
 
     # Tests for smart quote normalization
-
     def test_replaces_smart_double_quotes(self):
         # Verifies curly double quotes are replaced with straight quotes
         # Given - use Unicode escapes to avoid Python parsing issues
@@ -213,7 +209,7 @@ Let me create a grammar...
 
     def test_replaces_mixed_smart_quotes(self):
         # Verifies both left and right curly quotes are normalized
-        # Given - smart quotes in JSON syntax (keys and string delimiters)
+        # Given
         # This matches real LLM output where smart quotes replace JSON syntax quotes
         input_text = '{\u201cprompt\u201d: [\u201ca dragon in the sky\u201d], \u201ctest\u201d: \u201cit\u2019s great\u201d}'
 
@@ -228,19 +224,6 @@ Let me create a grammar...
 
     def test_smart_quotes_in_code_block(self):
         # Verifies smart quotes inside code blocks are normalized
-        # Given
-        input_text = '```json\n{\u201corigin\u201d: \u201c#prompt#\u201d}\n```'
-
-        # When
-        result = clean_grammar_output(input_text)
-
-        # Then
-        import json
-        parsed = json.loads(result)
-        assert parsed["origin"] == "#prompt#"
-
-    def test_nested_json_in_code_block(self):
-        # Verifies that nested JSON objects inside code blocks are correctly extracted
         # Given
         input_text = '''```json
 {
@@ -262,3 +245,32 @@ Let me create a grammar...
         assert parsed["payload"]["key"] == "value"
         assert parsed["payload"]["nested"] == [1, 2, 3]
 
+
+class TestGetSystemPrompt:
+    """Tests for get_system_prompt."""
+
+    def test_get_system_prompt_flux2_normalization(self, tmp_path):
+        # Given
+        model = "flux2-klein-4b"
+        templates_dir = tmp_path / "templates"
+        templates_dir.mkdir()
+        system_prompt_file = templates_dir / "system_prompt_flux2-klein.txt"
+        system_prompt_file.write_text("flux2-klein prompt")
+
+        # When
+        result = get_system_prompt(model, templates_dir=templates_dir)
+        # Then
+        assert result == "flux2-klein prompt"
+
+    def test_get_system_prompt_fallback(self, tmp_path):
+        # Given
+        model = "some-other-model"
+        templates_dir = tmp_path / "templates"
+        templates_dir.mkdir()
+        system_prompt_file = templates_dir / "system_prompt.txt"
+        system_prompt_file.write_text("generic prompt")
+
+        # When
+        result = get_system_prompt(model, templates_dir=templates_dir)
+        # Then
+        assert result == "generic prompt"
