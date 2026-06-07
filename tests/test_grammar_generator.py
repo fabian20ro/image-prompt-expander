@@ -7,8 +7,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 from unittest.mock import patch
-from grammar_generator import clean_grammar_output, get_system_prompt
-
+from grammar_generator import clean_grammar_output, get_system_prompt, hash_prompt
 
 class TestCleanGrammarOutput:
     """Tests for the clean_grammar_output function."""
@@ -106,14 +105,14 @@ content here
         # Verifies code blocks with extra whitespace are handled
         # Given
         input_text = '''```json
-{"origin": "#prompt#"}
+{"origin": "#prompt#", "prompt": ["test"]}
 ```'''
 
         # When
         result = clean_grammar_output(input_text)
 
         # Then
-        assert result == '{"origin": "#prompt#"}'
+        assert result == '{"origin": "#prompt#", "prompt": ["test"]}'
 
     # Tests for combined scenarios
     def test_removes_think_and_code_block(self):
@@ -180,14 +179,13 @@ Let me create a grammar...
     # Tests for smart quote normalization
     def test_replaces_smart_double_quotes(self):
         # Verifies curly double quotes are replaced with straight quotes
-        # Given - use Unicode escapes to avoid Python parsing issues
-        # U+201C (left double quote) and U+201D (right double quote)
+        # Given
         input_text = '{\u201corigin\u201d: \u201c#prompt#\u201d}'
 
         # When
         result = clean_grammar_output(input_text)
 
-        # Then - smart quotes should be converted to straight quotes
+        # Then
         assert '\u201c' not in result
         assert '\u201d' not in result
         import json
@@ -196,7 +194,7 @@ Let me create a grammar...
 
     def test_replaces_smart_single_quotes(self):
         # Verifies curly single quotes are replaced with straight quotes
-        # Given - U+2018 (left single) and U+2019 (right single)
+        # Given
         input_text = '{"origin": "#prompt#", "test": "it\u2019s working"}'
 
         # When
@@ -210,7 +208,6 @@ Let me create a grammar...
     def test_replaces_mixed_smart_quotes(self):
         # Verifies both left and right curly quotes are normalized
         # Given
-        # This matches real LLM output where smart quotes replace JSON syntax quotes
         input_text = '{\u201cprompt\u201d: [\u201ca dragon in the sky\u201d], \u201ctest\u201d: \u201cit\u2019s great\u201d}'
 
         # When
@@ -274,3 +271,37 @@ class TestGetSystemPrompt:
         result = get_system_prompt(model, templates_dir=templates_dir)
         # Then
         assert result == "generic prompt"
+
+    def test_get_system_prompt_none(self, tmp_path):
+        # Given
+        templates_dir = tmp_path / "templates"
+        templates_dir.mkdir()
+        system_prompt_file = templates_dir / "system_prompt.txt"
+        system_prompt_file.write_text("generic prompt")
+
+        # When
+        result = get_system_prompt(None, templates_dir=templates_dir)
+        # Then
+        assert result == "generic prompt"
+
+class TestHashPrompt:
+    """Tests for hash_prompt."""
+    def test_hash_prompt_consistency(self):
+        prompt = "a cute cat"
+        model = "flux2-klein"
+        h1 = hash_prompt(prompt, model)
+        h2 = hash_prompt(prompt, model)
+        assert h1 == h2
+        assert len(h1) == 12
+
+    def test_hash_prompt_with_model_change(self):
+        prompt = "a cute cat"
+        h1 = hash_prompt(prompt, "model-a")
+        h2 = hash_prompt(prompt, "model-b")
+        assert h1 != h2
+
+    def test_hash_prompt_no_model(self):
+        prompt = "a cute cat"
+        h1 = hash_prompt(prompt)
+        h2 = hash_prompt(prompt)
+        assert h1 == h2
