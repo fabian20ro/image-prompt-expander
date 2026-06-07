@@ -250,7 +250,6 @@ def clean_grammar_output(grammar: str) -> str:
             decoder = json.JSONDecoder()
             _, end_pos = decoder.raw_decode(grammar[start_idx:])
             grammar = grammar[start_idx:start_idx + end_pos]
-            found_valid = True
         except (json.JSONDecodeError, ValueError):
             pass
 
