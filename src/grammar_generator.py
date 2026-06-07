@@ -243,18 +243,15 @@ def clean_grammar_output(grammar: str) -> str:
 
     # Try to find the first valid JSON object in the text
     start_idx = grammar.find('{')
-    end_idx = grammar.rfind('}')
-    found_valid = False
-    if start_idx != -1 and end_idx != -1 and end_idx > start_idx:
-        extracted = grammar[start_idx:end_idx+1]
+    if start_idx != -1:
         try:
-            json.loads(extracted)
-            grammar = extracted
+            # Use raw_decode to find the first valid JSON object and its end position
+            import json
+            decoder = json.JSONDecoder()
+            _, end_pos = decoder.raw_decode(grammar[start_idx:])
+            grammar = grammar[start_idx:start_idx + end_pos]
             found_valid = True
-        except json.JSONDecodeError:
+        except (json.JSONDecodeError, ValueError):
             pass
-    if not found_valid:
-        # If no block is valid, we don't change grammar (caller handles error)
-        pass
 
     return grammar
