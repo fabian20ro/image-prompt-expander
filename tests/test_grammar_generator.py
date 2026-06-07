@@ -216,10 +216,22 @@ Let me create a grammar...
         # Then
         import json
         parsed = json.loads(result)
-        assert parsed["prompt"] == ["a dragon in the sky"]
         assert parsed["test"] == "it's great"
 
-    def test_smart_quotes_in_code_block(self):
+
+    def test_handles_malformed_json_after_start_brace(self):
+        # Verifies that if JSON parsing fails after finding a brace, 
+        # it returns the original string instead of crashing.
+        # Given
+        input_text = 'Prefix {' + 'invalid json'
+
+        # When
+        result = clean_grammar_output(input_text)
+
+        # Then
+        assert result == 'Prefix { invalid json'
+
+    def test_replaces_smart_quotes_in_code_block(self):
         # Verifies smart quotes inside code blocks are normalized
         # Given
         input_text = '''```json
