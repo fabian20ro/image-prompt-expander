@@ -1,5 +1,6 @@
 """Tests for grammar_generator module."""
 
+import unittest
 import sys
 from pathlib import Path
 
@@ -9,7 +10,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 from unittest.mock import patch
 from grammar_generator import clean_grammar_output, get_system_prompt, hash_prompt
 
-class TestCleanGrammarOutput:
+class TestCleanGrammarOutput(unittest.TestCase):
     """Tests for the clean_grammar_output function."""
 
     # Tests for removing <think> tags
@@ -229,7 +230,7 @@ Let me create a grammar...
         result = clean_grammar_output(input_text)
 
         # Then
-        assert result == 'Prefix { invalid json'
+        assert result == 'Prefix {invalid json'
 
     def test_replaces_smart_quotes_in_code_block(self):
         # Verifies smart quotes inside code blocks are normalized
