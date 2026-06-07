@@ -246,7 +246,6 @@ def clean_grammar_output(grammar: str) -> str:
     if start_idx != -1:
         try:
             # Use raw_decode to find the first valid JSON object and its end position
-            import json
             decoder = json.JSONDecoder()
             _, end_pos = decoder.raw_decode(grammar[start_idx:])
             grammar = grammar[start_idx:start_idx + end_pos]
