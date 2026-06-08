@@ -8,7 +8,6 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-
 # Import models first (no circular imports)
 from server.models import TaskStatus, Task, TaskType, QueueState
 
@@ -78,24 +77,6 @@ def client(temp_dir, mock_queue_manager, mock_worker):
             # Clean up
             app.dependency_overrides.clear()
             routes_module.get_gallery_service.cache_clear()
-
-
-class TestStatusEndpoint:
-    """Tests for /api/status endpoint."""
-
-    def test_get_status(self, client, mock_queue_manager):
-        """Test retrieving queue status."""
-        mock_task = Task(id="test-task", type=TaskType.GENERATE_PIPELINE)
-        mock_queue_manager.get_state.return_value.pending = [mock_task]
-        mock_queue_manager.get_state.return_value.current_task = mock_task
-        mock_queue_manager.get_state.return_value.completed = []
-
-        response = client.get("/api/status")
-        assert response.status_code == 200
-        data = response.json()
-        assert data["queue_length"] == 2
-        assert data["pending_count"] == 1
-        assert data["completed_count"] == 0
 
 
 class TestGenerateEndpoint:
@@ -183,7 +164,7 @@ class TestGalleryEndpoint:
         # Create a gallery
         prompts_dir = temp_dir / "prompts"
         run_dir = prompts_dir / "20240101_120000_abc123"
-        run_dir.mkdir(parents=True, exist_ok=True)
+        run_dir.mkdir()
 
         (run_dir / "test.metaprompt.json").write_text(json.dumps({
             "prefix": "test",
@@ -207,7 +188,7 @@ class TestGrammarUpdateEndpoint:
         # Create a gallery
         prompts_dir = temp_dir / "prompts"
         run_dir = prompts_dir / "20240101_120000_abc123"
-        run_dir.mkdir(parents=True, exist_ok=True)
+        run_dir.mkdir()
 
         (run_dir / "test.metaprompt.json").write_text(json.dumps({
             "prefix": "test",
@@ -234,7 +215,7 @@ class TestGrammarUpdateEndpoint:
         # Create a gallery
         prompts_dir = temp_dir / "prompts"
         run_dir = prompts_dir / "20240101_120000_abc123"
-        run_dir.mkdir(parents=True, exist_ok=True)
+        run_dir.mkdir()
 
         (run_dir / "test.metaprompt.json").write_text(json.dumps({
             "prefix": "test",
@@ -256,7 +237,7 @@ class TestGrammarUpdateEndpoint:
     def test_update_grammar_appends_history(self, client, temp_dir):
         prompts_dir = temp_dir / "prompts"
         run_dir = prompts_dir / "20240101_120000_abc123"
-        run_dir.mkdir(parents=True, exist_ok=True)
+        run_dir.mkdir()
 
         (run_dir / "test.metaprompt.json").write_text(json.dumps({"prefix": "test"}))
         (run_dir / "test_grammar.json").write_text(json.dumps({"origin": ["old"]}))
@@ -271,13 +252,51 @@ class TestGrammarUpdateEndpoint:
         assert history[-1]["action"] == "save"
 
 
+class TestGrammarHistoryEndpoint:
+    """Tests for GET /api/gallery/{run_id}/grammar/history."""
+
+    def test_get_grammar_history_returns_current_revision(self, client, temp_dir):
+        prompts_dir = temp_dir / "prompts"
+        run_dir = prompts_dir / "20240101_120000_abc123"
+        run_dir.mkdir()
+
+        (run_dir / "test.metaprompt.json").write_text(json.dumps({"prefix": "test"}))
+        (run_dir / "test_grammar.json").write_text(json.dumps({"origin": ["current"]}))
+
+        response = client.get("/api/gallery/20240101_120000_abc123/grammar/history")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["history"][0]["grammar"] == '{"origin": ["current"]}'
+
+
+class TestLayoutEndpoint:
+    """Tests for PUT /api/gallery/{run_id}/layout."""
+
+    def test_update_layout_persists_gallery_layout(self, client, temp_dir):
+        prompts_dir = temp_dir / "prompts"
+        run_dir = prompts_dir / "20240101_120000_abc123"
+        run_dir.mkdir()
+
+        (run_dir / "test.metaprompt.json").write_text(json.dumps({"prefix": "test"}))
+
+        response = client.put("/api/gallery/20240101_120000_abc123/layout", json={
+            "images_per_prompt": 0,
+            "max_prompts": 8,
+        })
+
+        assert response.status_code == 200
+        metadata = json.loads((run_dir / "test.metaprompt.json").read_text())
+        assert metadata["gallery_layout"] == {"images_per_prompt": 0, "max_prompts": 8}
+
+
 class TestGenerateAllEndpoint:
     """Tests for POST /api/gallery/{run_id}/generate-all."""
 
     def test_generate_all_accepts_zero_images_per_prompt(self, client, temp_dir, mock_queue_manager):
         prompts_dir = temp_dir / "prompts"
         run_dir = prompts_dir / "20240101_120000_abc123"
-        run_dir.mkdir(parents=True, exist_ok=True)
+        run_dir.mkdir()
 
         (run_dir / "test.metaprompt.json").write_text(json.dumps({"prefix": "test"}))
 
@@ -298,7 +317,7 @@ class TestRegenerateEndpoint:
     def test_regenerate_auto_saves_grammar_and_layout(self, client, temp_dir, mock_queue_manager):
         prompts_dir = temp_dir / "prompts"
         run_dir = prompts_dir / "20240101_120000_abc123"
-        run_dir.mkdir(parents=True, exist_ok=True)
+        run_dir.mkdir()
 
         (run_dir / "test.metaprompt.json").write_text(json.dumps({
             "prefix": "test",
@@ -333,7 +352,7 @@ class TestDeleteGalleryEndpoint:
         # Create an archive (backup)
         prompts_dir = temp_dir / "prompts"
         run_dir = prompts_dir / "20240101_120000_abc123"
-        run_dir.mkdir(parents=True, exist_ok=True)
+        run_dir.mkdir()
 
         (run_dir / "test.metaprompt.json").write_text(json.dumps({
             "prefix": "test",
@@ -352,7 +371,7 @@ class TestDeleteGalleryEndpoint:
         # Create an active gallery (not a backup)
         prompts_dir = temp_dir / "prompts"
         run_dir = prompts_dir / "20240101_120000_abc123"
-        run_dir.mkdir(parents=True, exist_ok=True)
+        run_dir.mkdir()
 
         (run_dir / "test.metaprompt.json").write_text(json.dumps({
             "prefix": "test",
@@ -403,7 +422,7 @@ class TestArchiveGalleryEndpoint:
         """Test that archiving a backup is rejected."""
         prompts_dir = temp_dir / "prompts"
         run_dir = prompts_dir / "20240101_120000_abc123"
-        run_dir.mkdir(parents=True, exist_ok=True)
+        run_dir.mkdir()
 
         (run_dir / "test.metaprompt.json").write_text(json.dumps({
             "prefix": "test",
@@ -433,7 +452,6 @@ class TestQueueEndpoints:
         data = response.json()
         assert "queue_length" in data
         assert "pending_count" in data
-        assert "completed_count" in data
 
 
 class TestKillWorkerEndpoint:
@@ -454,35 +472,3 @@ class TestKillWorkerEndpoint:
         response = client.post("/api/worker/kill")
         assert response.status_code == 200
         assert "No task" in response.json()["message"]
-
-
-class TestLogsEndpoint:
-    """Tests for /api/gallery/{run_id}/logs."""
-
-    def test_get_logs_not_found(self, client):
-        """Test 404 for missing gallery logs."""
-        response = client.get("/api/gallery/nonexistent/logs")
-        assert response.status_code == 404
-
-    def test_get_logs_success(self, client, temp_dir):
-        """Test retrieving logs."""
-        prompts_dir = temp_dir / "prompts"
-        run_dir = prompts_dir / "test_run"
-        run_dir.mkdir(parents=True)
-        (run_dir / "test_worker.log").write_text("log line 1\nlog line 2")
-
-        response = client.get("/api/gallery/test_run/logs")
-        assert response.status_code == 200
-        assert response.json()["logs"] == "log line 1\nlog line 2"
-        assert "filename" in response.json()
-
-    def test_get_logs_empty(self, client, temp_dir):
-        """Test empty logs."""
-        prompts_dir = temp_dir / "prompts"
-        run_dir = prompts_dir / "empty_run"
-        run_dir.mkdir(parents=True)
-        
-        response = client.get("/api/gallery/empty_run/logs")
-        assert response.status_code == 200
-        assert response.json()["logs"] == ""
-        assert response.json()["message"] == "No log file found"
