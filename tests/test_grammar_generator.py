@@ -318,3 +318,83 @@ class TestHashPrompt:
         h1 = hash_prompt(prompt)
         h2 = hash_prompt(prompt)
         assert h1 == h2
+
+    def test_handles_json_array(self):
+        # Verifies that if the LLM returns a JSON array, it is preserved
+        # Given
+        input_text = ''
+        # When
+        result = clean_grammar_output(input_text)
+        # Then
+        assert result == '[1, 2, 3]'
+
+    def test_handles_json_object_with_extra_content(self):
+        # Verifies that content after the JSON object is discarded
+        # Given
+        input_text = '{"a": 1} extra'
+        # When
+        result = clean_grammar_output(input_text)
+        # Then
+        assert result == '{"a": 1}'
+
+    def test_handles_json_in_text_array(self):
+        # Verifies extraction of JSON array from within text
+        # Given
+        input_text = 'Here is an array: [1, 2, 3] and more'
+        # When
+        result = clean_grammar_output(input_text)
+        # Then
+        assert result == '[1, 2, 3]'
+    def test_handles_json_array(self):
+        # Verifies that if the LLM returns a JSON array, it is preserved
+        # Given
+        input_text = ''
+        # When
+        result = clean_grammar_output(input_text)
+        # Then
+        assert result == '[1, 2, 3]'
+
+    def test_handles_json_object_with_extra_content(self):
+        # Verifies that content after the JSON object is discarded
+        # Given
+        input_text = '{"a": 1} extra'
+        # When
+        result = clean_grammar_output(input_text)
+        # Then
+        assert result == '{"a": 1}'
+
+    def test_handles_json_in_text_array(self):
+        # Verifies extraction of JSON array from within text
+        # Given
+        input_text = 'Here is an array: [1, 2, 3] and more'
+        # When
+        result = clean_grammar_output(input_text)
+        # Then
+        assert result == '[1, 2, 3]'
+
+    def test_handles_json_array(self):
+        # Verifies that if the LLM returns a JSON array, it is preserved
+        # Given
+        input_text = '```json\n[1, 2, 3]\n```'
+        # When
+        result = clean_grammar_output(input_text)
+        # Then
+        assert result == '[1, 2, 3]'
+
+    def test_handles_json_object_with_extra_content(self):
+        # Verifies that content after the JSON object is discarded
+        # Given
+        input_text = '{"a": 1} extra'
+        # When
+        result = clean_grammar_output(input_text)
+        # Then
+        assert result == '{"a": 1}'
+
+    def test_handles_json_in_text_array(self):
+        # Verifies extraction of JSON array from within text
+        # Given
+        input_text = 'Here is an array: [1, 2, 3] and more'
+        # When
+        result = clean_grammar_output(input_text)
+        # Then
+        assert result == '[1, 2, 3]'

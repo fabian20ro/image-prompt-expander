@@ -241,11 +241,12 @@ def clean_grammar_output(grammar: str) -> str:
     for smart, straight in quote_replacements.items():
         grammar = grammar.replace(smart, straight)
 
-    # Try to find the first valid JSON object in the text
-    start_idx = grammar.find('{')
-    if start_idx != -1:
+    # Try to find the first valid JSON object or array in the text
+    match = re.search(r'[\{\[]', grammar)
+    if match:
+        start_idx = match.start()
         try:
-            # Use raw_decode to find the first valid JSON object and its end position
+            # Use raw_decode to find the first valid JSON object or array and its end position
             decoder = json.JSONDecoder()
             _, end_pos = decoder.raw_decode(grammar[start_idx:])
             grammar = grammar[start_idx:start_idx + end_pos]
