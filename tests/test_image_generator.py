@@ -5,7 +5,6 @@ import sys
 from types import ModuleType
 from pathlib import Path
 from unittest.mock import MagicMock, patch
-
 import pytest
 
 from image_generator import (
@@ -51,7 +50,7 @@ class TestModelCache:
         clear_model_cache()
         assert len(_model_cache) == 0
 
-    def test_clear_model_cache_calls_gc(self):
+    def test_clear_model_cache_calls_gc(self="called_once"):
         """Test that garbage collection is called on cache clear."""
         import gc
         with patch.object(gc, 'collect') as mock_gc:
@@ -227,4 +226,28 @@ class TestGenerateImage:
         # flux2 returns GeneratedImage, should call .save(path=...)
         mock_result.save.assert_called_once_with(path=str(output_path))
 
+class TestImageGenerationValidation:
+    """Tests for dimension validation in generate_image."""
 
+    @patch("image_generator._get_model")
+    def test_invalid_width_or_height(self, mock_get_model, temp_dir):
+        """Test that invalid dimensions raise ValueError."""
+        mock_flux = MagicMock()
+        mock_get_model.return_value = mock_flux
+        output_path = temp_dir / "test.png"
+        
+        with pytest.raises(ValueError, match="Width and height must be positive"):
+            generate_image("prompt", output_path, width=-1)
+        with pytest.raises(ValueError, match="Width and height must be positive"):
+            generate_image("prompt", output_path, height=0)
+        with pytest.raises(ValueError, match="Width and height must be multiples of 8"):
+            generate_image("prompt", output_path, width=7)
+
+    @patch("image_generator._get_model")
+    def test_valid_dimensions(self, mock_get_model, temp_dir):
+        """Test that valid dimensions pass."""
+        mock_flux = MagicMock()
+        mock_get_model.return_value = mock_flux
+        output_path = temp_dir / "test.png"
+        generate_image("prompt", output_path, width=1024, height=1024)
+        generate_image("prompt", output_path, width=512, height=512)

@@ -118,6 +118,11 @@ def generate_image(
     if model not in SUPPORTED_MODELS:
         raise ValueError(f"Unsupported model: {model}. Choose from: {SUPPORTED_MODELS}")
 
+    if width <= 0 or height <= 0:
+        raise ValueError("Width and height must be positive.")
+    if width % 8 != 0 or height % 8 != 0:
+        raise ValueError("Width and height must be multiples of 8.")
+
     # Use model-specific default steps if not specified
     if steps is None:
         steps = MODEL_DEFAULTS[model]["steps"]
