@@ -36,11 +36,7 @@ def get_system_prompt(model: str | None = None, templates_dir: Path | None = Non
     # Determine the model-specific prompt filename
     if model:
         # Normalize model name for file lookup (e.g., flux2-klein-4b -> flux2-klein)
-        if model.startswith("flux2-klein"):
-            prompt_name = "flux2-klein"
-        else:
-            prompt_name = model
-
+        prompt_name = re.sub(r'-\d+[a-z]?$', '', model)
         model_specific_path = templates_dir / f"system_prompt_{prompt_name}.txt"
         if model_specific_path.exists():
             return model_specific_path.read_text()
