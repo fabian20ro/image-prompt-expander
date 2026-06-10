@@ -222,6 +222,14 @@ class TestCollectImages:
         with pytest.raises(ValueError, match="No images found in directory"):
             collect_images(str(empty))
 
+    def test_collect_directory_with_only_non_images(self, temp_dir):
+        """Test error for directory with only non-image files."""
+        (temp_dir / "test.txt").write_text("text")
+        (temp_dir / "notes.log").write_text("logs")
+
+        with pytest.raises(ValueError, match="No images found in directory"):
+            collect_images(str(temp_dir))
+
     def test_collect_glob_pattern(self, temp_dir):
         """Test collecting images via glob pattern."""
         for name in ["a.png", "b.png", "c.jpg"]:
