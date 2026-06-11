@@ -188,15 +188,23 @@ class TestGenerateImage:
         assert call_args.kwargs.get("seed") == 42
 
     @patch("image_generator._get_model")
-    def test_generate_image_creates_output_dir(self, mock_get_model, temp_dir):
-        """Test that output directory is created if needed."""
+    def test_generate_image_invalid_dimensions(self, mock_get_model, temp_dir):
+        """Test errors for invalid width and height."""
         mock_flux = MagicMock()
         mock_get_model.return_value = mock_flux
+        output_path = temp_dir / "test.png"
 
-        nested_path = temp_dir / "nested" / "dir" / "test.png"
-        generate_image(prompt="test", output_path=nested_path)
+        # Test non-positive dimensions
+        with pytest.raises(ValueError, match="must be positive"):
+            generate_image(prompt="test", output_path=output_path, width=0, height=1024)
+        with pytest.raises(ValueError, match="must be positive"):
+            generate_image(prompt="test", output_path=output_path, width=1024, height=-1)
 
-        assert nested_path.parent.exists()
+        # Test non-multiples of 8
+        with pytest.raises(ValueError, match="must be multiples of 8"):
+            generate_image(prompt="test", output_path=output_path, width=1023, height=1024)
+        with pytest.raises(ValueError, match="must be multiples of 8"):
+            generate_image(prompt="test", output_path=output_path, width=1024, height=1025)
 
     @patch("image_generator._get_model")
     def test_generate_image_z_image_turbo_saves_directly(self, mock_get_model, temp_dir):

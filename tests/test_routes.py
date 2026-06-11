@@ -445,13 +445,19 @@ class TestQueueEndpoints:
         assert response.status_code == 200
         assert "5" in response.json()["message"]
 
-    def test_get_status(self, client, mock_queue_manager):
-        """Test getting queue status."""
+    def test_get_status_detailed(self, client, mock_queue_manager):
+        """Test getting detailed queue status."""
+        mock_queue_manager.get_state.return_value = QueueState(
+            pending=[Task(id="1", type=TaskType.GENERATE_PIPELINE), Task(id="2", type=TaskType.GENERATE_PIPELINE)],
+            current_task=Task(id="3", type=TaskType.GENERATE_PIPELINE),
+            completed=[Task(id="4", type=TaskType.GENERATE_PIPELINE)],
+        )
         response = client.get("/api/status")
         assert response.status_code == 200
         data = response.json()
-        assert "queue_length" in data
-        assert "pending_count" in data
+        assert data["queue_length"] == 3
+        assert data["pending_count"] == 2
+        assert data["completed_count"] == 1
 
 
 class TestKillWorkerEndpoint:
@@ -472,3 +478,26 @@ class TestKillWorkerEndpoint:
         response = client.post("/api/worker/kill")
         assert response.status_code == 200
         assert "No task" in response.json()["message"]
+
+class TestGrammarEndpoints:
+    """Tests for /api/generate-from-grammar endpoint."""
+
+    def test_generate_from_grammar_valid(self, client, mock_queue_manager):
+        """Test generating from a valid JSON grammar."""
+        grammar = '{"item": ["dragon", "unicorn"]}'
+        response = client.post("/api/generate-from-grammar", json={
+            "grammar": grammar,
+            "count": 5
+        })
+        assert response.status_code == 200
+        data = response.json()
+        assert "task_id" in data
+        assert "Grammar gallery queued" in data["message"]
+
+    def test_generate_from_grammar_invalid_json(self, client):
+        """Test that invalid JSON grammar is rejected."""
+        response = client.post("/api/generate-from-grammar", json={
+            "grammar": "{ invalid json }",
+        })
+        assert response.status_code == 400
+        assert "Invalid JSON grammar" in response.json()["detail"]
