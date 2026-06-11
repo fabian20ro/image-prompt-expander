@@ -259,3 +259,20 @@ class TestImageGenerationValidation:
         output_path = temp_dir / "test.png"
         generate_image("prompt", output_path, width=1024, height=1024)
         generate_image("prompt", output_path, width=512, height=512)
+
+
+    @patch("image_generator._get_model")
+    def test_tiled_vae_flag_passed(self, mock_get_model, temp_dir):
+        """Test that tiled_vae flag is passed to _get_model."""
+        mock_flux = MagicMock()
+        mock_get_model.return_value = mock_flux
+        
+        output_path = temp_dir / "test.png"
+        generate_image(prompt="test", output_path=output_path, tiled_vae=True)
+        
+        args, kwargs = mock_get_model.call_args
+        # Check if it's in kwargs or args
+        tiled_vae_val = kwargs.get("tiled_vae", args[2] if len(args) > 2 else None)
+        assert tiled_vae_val is True
+
+
