@@ -445,13 +445,19 @@ class TestQueueEndpoints:
         assert response.status_code == 200
         assert "5" in response.json()["message"]
 
-    def test_get_status(self, client, mock_queue_manager):
-        """Test getting queue status."""
+    def test_get_status_detailed(self, client, mock_queue_manager):
+        """Test getting detailed queue status."""
+        mock_queue_manager.get_state.return_value = QueueState(
+            pending=[Task(id="1", type=TaskType.GENERATE_PIPELINE), Task(id="2", type=TaskType.GENERATE_PIPELINE)],
+            current_task=Task(id="3", type=TaskType.GENERATE_PIPELINE),
+            completed=[Task(id="4", type=TaskType.GENERATE_PIPELINE)],
+        )
         response = client.get("/api/status")
         assert response.status_code == 200
         data = response.json()
-        assert "queue_length" in data
-        assert "pending_count" in data
+        assert data["queue_length"] == 3
+        assert data["pending_count"] == 2
+        assert data["completed_count"] == 1
 
 
 class TestKillWorkerEndpoint:
