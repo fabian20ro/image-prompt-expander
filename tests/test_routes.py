@@ -472,3 +472,26 @@ class TestKillWorkerEndpoint:
         response = client.post("/api/worker/kill")
         assert response.status_code == 200
         assert "No task" in response.json()["message"]
+
+class TestGrammarEndpoints:
+    """Tests for /api/generate-from-grammar endpoint."""
+
+    def test_generate_from_grammar_valid(self, client, mock_queue_manager):
+        """Test generating from a valid JSON grammar."""
+        grammar = '{"item": ["dragon", "unicorn"]}'
+        response = client.post("/api/generate-from-grammar", json={
+            "grammar": grammar,
+            "count": 5
+        })
+        assert response.status_code == 200
+        data = response.json()
+        assert "task_id" in data
+        assert "Grammar gallery queued" in data["message"]
+
+    def test_generate_from_grammar_invalid_json(self, client):
+        """Test that invalid JSON grammar is rejected."""
+        response = client.post("/api/generate-from-grammar", json={
+            "grammar": "{ invalid json }",
+        })
+        assert response.status_code == 400
+        assert "Invalid JSON grammar" in response.json()["detail"]
