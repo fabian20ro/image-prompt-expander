@@ -66,6 +66,14 @@ class TestGetModel:
         clear_model_cache()
 
     @patch("image_generator._model_cache", {})
+    def test_get_model_import_error(self):
+        """Verify that _get_model raises ImportError when mflux is missing."""
+        with patch.dict(sys.modules, {"mflux.models.common.config.model_config": None}):
+            with pytest.raises(ImportError) as excinfo:
+                _get_model("z-image-turbo", quantize=8)
+            assert "mflux is required for image generation" in str(excinfo.value)
+
+    @patch("image_generator._model_cache", {})
     def test_get_model_config_selection(self):
         """Verify that _get_model selects the correct ModelConfig method for each model."""
         mock_config_module = ModuleType("mflux.models.common.config.model_config")
@@ -219,18 +227,15 @@ class TestGenerateImage:
         mock_flux = MagicMock()
         mock_get_model.return_value = mock_flux
         output_path = temp_dir / "test.png"
-
-        # Test non-positive dimensions
-        with pytest.raises(ValueError, match="must be positive"):
-            generate_image(prompt="test", output_path=output_path, width=0, height=1024)
-        with pytest.raises(ValueError, match="must be positive"):
-            generate_image(prompt="test", output_path=output_path, width=1024, height=-1)
-
-        # Test non-multiples of 8
-        with pytest.raises(ValueError, match="must be multiples of 8"):
-            generate_image(prompt="test", output_path=output_path, width=1023, height=1024)
-        with pytest.raises(ValueError, match="must be multiples of 8"):
-            generate_image(prompt="test", output_path=output_path, width=1024, height=1025)
+        
+        with pytest.raises(ValueError, match="Width and height must be positive"):
+            generate_image("prompt", output_path, width=-1)
+        with pytest.raises(ValueError, match="Width and height must be positive"):
+            generate_image("prompt", output_path, height=0)
+        with pytest.raises(ValueError, match="Width and height must be multiples of 8"):
+            generate_image("prompt", output_path, width=1023, height=1024)
+        with pytest.raises(ValueError, match="Width and height must be multiples of 8"):
+            generate_image("prompt", output_path, width=1024, height=1025)
 
     @patch("image_generator._get_model")
     def test_generate_image_z_image_turbo_saves_directly(self, mock_get_model, temp_dir):
@@ -260,6 +265,7 @@ class TestGenerateImage:
         # flux2 returns GeneratedImage, should call .save(path=...)
         mock_result.save.assert_called_once_with(path=str(output_path))
 
+
 class TestImageGenerationValidation:
     """Tests for dimension validation in generate_image."""
 
@@ -286,7 +292,6 @@ class TestImageGenerationValidation:
         generate_image("prompt", output_path, width=1024, height=1024)
         generate_image("prompt", output_path, width=512, height=512)
 
-
     @patch("image_generator._get_model")
     def test_tiled_vae_flag_passed(self, mock_get_model, temp_dir):
         """Test that tiled_vae flag is passed to _get_model."""
@@ -300,5 +305,3 @@ class TestImageGenerationValidation:
         # Check if it's in kwargs or args
         tiled_vae_val = kwargs.get("tiled_vae", args[2] if len(args) > 2 else None)
         assert tiled_vae_val is True
-
-
