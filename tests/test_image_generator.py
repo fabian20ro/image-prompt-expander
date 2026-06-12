@@ -152,7 +152,35 @@ class TestGetModel:
         assert result is mock_instance
 
 
-class TestGenerateImage:
+    @patch("image_generator._model_cache", {})
+    def test_get_model_tiled_vae_configuration(self):
+        """Verify that tiled_vae flag is correctly applied to the model instance."""
+        mock_instance = MagicMock()
+        mock_tiling_instance = MagicMock()
+
+        # Build lightweight fake mflux module tree so importing does not
+        # initialize native MLX/Metal components in tests.
+        module_model_config = ModuleType("mflux.models.common.config.model_config")
+        module_model_config.ModelConfig = MagicMock()
+        module_model_config.ModelConfig.z_image_turbo.return_value = MagicMock()
+
+        module_z_image = ModuleType("mflux.models.z_image")
+        module_z_image.ZImageTurbo = MagicMock(return_value=mock_instance)
+
+        module_tiling = ModuleType("mflux.models.common.vae.tiling_config")
+        module_tiling.TilingConfig = MagicMock(return_value=mock_tiling_instance)
+
+        with patch.dict(sys.modules, {
+            "mflux.models.common.config.model_config": module_model_config,
+            "mflux.models.z_image": module_z_image,
+            "mflux.models.common.vae.tiling_config": module_tiling,
+        }):
+            result = _get_model("z-image-turbo", quantize=8, tiled_vae=True)
+
+        module_z_image.ZImageTurbo.assert_called_once()
+        module_tiling.TilingConfig.assert_called_once()
+        assert result is mock_instance
+
     """Tests for single image generation."""
 
     def teardown_method(self):
