@@ -94,10 +94,11 @@ class TestAppendGrammarRevision:
         history = append_grammar_revision(run_dir, "test", grammar="rule_a", action="initial")
         assert len(history) == 1
 
-    def test_skips_when_only_grammar_unchanged(self, run_dir):
+    def test_appends_when_only_action_changed(self, run_dir):
         append_grammar_revision(run_dir, "test", grammar="rule_a", action="initial")
         history = append_grammar_revision(run_dir, "test", grammar="rule_a", action="update")
-        assert len(history) == 1
+        assert len(history) == 2
+        assert history[1]["action"] == "update"
 
     def test_appends_when_grammar_changes(self, run_dir):
         append_grammar_revision(run_dir, "test", grammar="rule_a", action="initial")

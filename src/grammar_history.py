@@ -58,11 +58,6 @@ def append_grammar_revision(
             save_grammar_history(run_dir, prefix, history)
         return history
 
-    if last and last.get("grammar") == grammar:
-        if not history_exists:
-            save_grammar_history(run_dir, prefix, history)
-        return history
-
     history.append({
         "id": datetime.now().strftime("%Y%m%d%H%M%S%f"),
         "created_at": datetime.now().isoformat(),
