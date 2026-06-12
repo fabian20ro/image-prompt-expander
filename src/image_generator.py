@@ -103,8 +103,8 @@ def generate_image(
         model: Model to use (z-image-turbo, flux2-klein-4b, flux2-klein-9b)
         seed: Random seed for reproducibility (None for random)
         steps: Number of inference steps (None uses model-specific default)
-        width: Image width in pixels (default 1024)
-        height: Image height in pixels (default 1024)
+        width: Image width in pixels (default 864)
+        height: Image height in pixels (default 1152)
         quantize: Quantization level (3, 4, 5, 6, or 8)
         tiled_vae: Enable tiled VAE decoding to reduce memory (default: False)
 
