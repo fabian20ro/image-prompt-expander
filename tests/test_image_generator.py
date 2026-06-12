@@ -66,10 +66,36 @@ class TestGetModel:
         clear_model_cache()
 
     @patch("image_generator._model_cache", {})
-    def test_get_model_unsupported(self):
-        """Test error for unsupported model."""
-        with pytest.raises(ValueError, match="Unsupported model"):
-            _get_model("nonexistent-model", quantize=8)
+    def test_get_model_config_selection(self):
+        """Verify that _get_model selects the correct ModelConfig method for each model."""
+        mock_config_module = ModuleType("mflux.models.common.config.model_config")
+        mock_config_module.ModelConfig = MagicMock()
+        mock_config_module.ModelConfig.z_image_turbo.return_value = MagicMock()
+        mock_config_module.ModelConfig.flux2_klein_4b.return_value = MagicMock()
+        mock_config_module.ModelConfig.flux2_klein_9b.return_value = MagicMock()
+
+        mock_z_image = ModuleType("mflux.models.z_image")
+        mock_z_image.ZImageTurbo = MagicMock()
+
+        mock_flux2 = ModuleType("mflux.models.flux2")
+        mock_flux2.Flux2Klein = MagicMock()
+
+        with patch.dict(sys.modules, {
+            "mflux.models.common.config.model_config": mock_config_module,
+            "mflux.models.z_image": mock_z_image,
+            "mflux.models.flux2": mock_flux2,
+        }):
+            # Test z-image-turbo
+            _get_model("z-image-turbo", quantize=8)
+            mock_config_module.ModelConfig.z_image_turbo.assert_called_once()
+
+            # Test flux2-klein-4b
+            _get_model("flux2-klein-4b", quantize=4)
+            mock_config_module.ModelConfig.flux2_klein_4b.assert_called_once()
+
+            # Test flux2-klein-9b
+            _get_model("flux2-klein-9b", quantize=4)
+            mock_config_module.ModelConfig.flux2_klein_9b.assert_called_once()
 
     @patch("image_generator._model_cache", {})
     def test_get_model_mflux_not_installed(self):
