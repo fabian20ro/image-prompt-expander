@@ -1,5 +1,5 @@
 # Plan: Characterize mflux integration
-## Status: Draft
+## Status: Completed
 ## Lane: characterization
 
 ### Goal
@@ -12,5 +12,5 @@ Ensure the `mflux` import error handling and model loading logic is robust and c
 4. **Verify Tiled VAE Configuration**: Verify that the `tiled_vae` flag is correctly applied to the model instance.
 
 ### Verification (Done-state)
-- Test suite `pytest tests/test_image_generator.py` passes.
-- No regressions in existing tests.
+|- Test suite `pytest tests/test_image_generator.py` passes.
+|- No regressions in existing tests.
