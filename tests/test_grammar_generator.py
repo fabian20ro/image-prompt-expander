@@ -76,6 +76,28 @@ content here
         # Then
         assert result == '{"origin": "#prompt#"}'
 
+    def test_removes_multiple_think_blocks(self):
+        # Verifies multiple think blocks are all removed
+        # Given
+        input_text = '<think>first</think>text<think>second</think>{"origin": "#test#"}'
+
+        # When
+        result = clean_grammar_output(input_text)
+
+        # Then
+        assert result == '{"origin": "#test#"}'
+
+    def test_handles_no_tags(self):
+        # Verifies input with no special tags remains unchanged (except strip)
+        # Given
+        input_text = '{"origin": "#test#"}'
+
+        # When
+        result = clean_grammar_output(input_text)
+
+        # Then
+        assert result == '{"origin": "#test#"}'
+
     def test_removes_tracery_code_block(self):
         # Verifies ```tracery blocks are handled
         # Given
