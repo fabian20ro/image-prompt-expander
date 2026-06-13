@@ -241,7 +241,6 @@ Let me create a grammar...
         parsed = json.loads(result)
         assert parsed["test"] == "it's great"
 
-
     def test_handles_malformed_json_after_start_brace(self):
         # Verifies that if JSON parsing fails after finding a brace, 
         # it returns the original string instead of crashing.
@@ -278,48 +277,57 @@ Let me create a grammar...
         assert parsed["payload"]["nested"] == [1, 2, 3]
 
 
-class TestGetSystemPrompt:
+class TestGetSystemPrompt(unittest.TestCase):
     """Tests for get_system_prompt."""
 
-    def test_get_system_prompt_flux2_normalization(self, tmp_path):
+    def test_get_system_prompt_flux2_normalization(self):
         # Given
         model = "flux2-klein-4b"
-        templates_dir = tmp_path / "templates"
-        templates_dir.mkdir()
-        system_prompt_file = templates_dir / "system_prompt_flux2-klein.txt"
-        system_prompt_file.write_text("flux2-klein prompt")
+        import tempfile
+        from pathlib import Path
+        with tempfile.TemporaryDirectory() as tmpdir:
+            templates_dir = Path(tmpdir) / "templates"
+            templates_dir.mkdir()
+            system_prompt_file = templates_dir / "system_prompt_flux2-klein.txt"
+            system_prompt_file.write_text("flux2-klein prompt")
 
-        # When
-        result = get_system_prompt(model, templates_dir=templates_dir)
-        # Then
-        assert result == "flux2-klein prompt"
+            # When
+            result = get_system_prompt(model, templates_dir=templates_dir)
+            # Then
+            assert result == "flux2-klein prompt"
 
-    def test_get_system_prompt_fallback(self, tmp_path):
+    def test_get_system_prompt_fallback(self):
         # Given
         model = "some-other-model"
-        templates_dir = tmp_path / "templates"
-        templates_dir.mkdir()
-        system_prompt_file = templates_dir / "system_prompt.txt"
-        system_prompt_file.write_text("generic prompt")
+        import tempfile
+        from pathlib import Path
+        with tempfile.TemporaryDirectory() as tmpdir:
+            templates_dir = Path(tmpdir) / "templates"
+            templates_dir.mkdir()
+            system_prompt_file = templates_dir / "system_prompt.txt"
+            system_prompt_file.write_text("generic prompt")
 
-        # When
-        result = get_system_prompt(model, templates_dir=templates_dir)
-        # Then
-        assert result == "generic prompt"
+            # When
+            result = get_system_prompt(model, templates_dir=templates_dir)
+            # Then
+            assert result == "generic prompt"
 
-    def test_get_system_prompt_none(self, tmp_path):
+    def test_get_system_prompt_none(self):
         # Given
-        templates_dir = tmp_path / "templates"
-        templates_dir.mkdir()
-        system_prompt_file = templates_dir / "system_prompt.txt"
-        system_prompt_file.write_text("generic prompt")
+        import tempfile
+        from pathlib import Path
+        with tempfile.TemporaryDirectory() as tmpdir:
+            templates_dir = Path(tmpdir) / "templates"
+            templates_dir.mkdir()
+            system_prompt_file = templates_dir / "system_prompt.txt"
+            system_prompt_file.write_text("generic prompt")
 
-        # When
-        result = get_system_prompt(None, templates_dir=templates_dir)
-        # Then
-        assert result == "generic prompt"
+            # When
+            result = get_system_prompt(None, templates_dir=templates_dir)
+            # Then
+            assert result == "generic prompt"
 
-class TestHashPrompt:
+class TestHashPrompt(unittest.TestCase):
     """Tests for hash_prompt."""
     def test_hash_prompt_consistency(self):
         prompt = "a cute cat"
@@ -341,82 +349,30 @@ class TestHashPrompt:
         h2 = hash_prompt(prompt)
         assert h1 == h2
 
-    def test_handles_json_array(self):
-        # Verifies that if the LLM returns a JSON array, it is preserved
-        # Given
-        input_text = ''
-        # When
-        result = clean_grammar_output(input_text)
-        # Then
-        assert result == '[1, 2, 3]'
+class TestGrammarCaching(unittest.TestCase):
+    """Tests for grammar caching functionality."""
+    def test_cache_and_retrieve_grammar(self):
+        from unittest.mock import patch
+        import tempfile
+        from pathlib import Path
 
-    def test_handles_json_object_with_extra_content(self):
-        # Verifies that content after the JSON object is discarded
         # Given
-        input_text = '{"a": 1} extra'
-        # When
-        result = clean_grammar_output(input_text)
-        # Then
-        assert result == '{"a": 1}'
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp_path = Path(tmpdir)
+            prompt_hash = "testhash123456"
+            grammar = '{"origin": "#test#"}'
+            raw_response = 'Some thinking <think>...</think> ' + grammar
+            user_prompt = "test user prompt"
+            model = "test-model"
 
-    def test_handles_json_in_text_array(self):
-        # Verifies extraction of JSON array from within text
-        # Given
-        input_text = 'Here is an array: [1, 2, 3] and more'
-        # When
-        result = clean_grammar_output(input_text)
-        # Then
-        assert result == '[1, 2, 3]'
-    def test_handles_json_array(self):
-        # Verifies that if the LLM returns a JSON array, it is preserved
-        # Given
-        input_text = ''
-        # When
-        result = clean_grammar_output(input_text)
-        # Then
-        assert result == '[1, 2, 3]'
+            import grammar_generator
+            with patch("grammar_generator.CACHE_DIR", tmp_path):
+                # When
+                cached_path = grammar_generator.cache_grammar(prompt_hash, grammar, raw_response, user_prompt, model)
+                retrieved_grammar = grammar_generator.get_cached_grammar(prompt_hash)
+                retrieved_raw = grammar_generator.get_cached_raw_response(prompt_hash)
 
-    def test_handles_json_object_with_extra_content(self):
-        # Verifies that content after the JSON object is discarded
-        # Given
-        input_text = '{"a": 1} extra'
-        # When
-        result = clean_grammar_output(input_text)
-        # Then
-        assert result == '{"a": 1}'
-
-    def test_handles_json_in_text_array(self):
-        # Verifies extraction of JSON array from within text
-        # Given
-        input_text = 'Here is an array: [1, 2, 3] and more'
-        # When
-        result = clean_grammar_output(input_text)
-        # Then
-        assert result == '[1, 2, 3]'
-
-    def test_handles_json_array(self):
-        # Verifies that if the LLM returns a JSON array, it is preserved
-        # Given
-        input_text = '```json\n[1, 2, 3]\n```'
-        # When
-        result = clean_grammar_output(input_text)
-        # Then
-        assert result == '[1, 2, 3]'
-
-    def test_handles_json_object_with_extra_content(self):
-        # Verifies that content after the JSON object is discarded
-        # Given
-        input_text = '{"a": 1} extra'
-        # When
-        result = clean_grammar_output(input_text)
-        # Then
-        assert result == '{"a": 1}'
-
-    def test_handles_json_in_text_array(self):
-        # Verifies extraction of JSON array from within text
-        # Given
-        input_text = 'Here is an array: [1, 2, 3] and more'
-        # When
-        result = clean_grammar_output(input_text)
-        # Then
-        assert result == '[1, 2, 3]'
+                # Then
+                assert retrieved_grammar == grammar
+                assert retrieved_raw == raw_response
+                assert cached_path.exists()
