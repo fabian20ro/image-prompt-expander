@@ -4,6 +4,7 @@ import os
 from pathlib import Path
 
 import pytest
+from unittest.mock import patch
 
 from config import Settings, LMStudioConfig, paths
 
@@ -25,19 +26,19 @@ class TestConfig:
 
     def test_settings_from_env(self):
         """Test that settings can be loaded from environment variables."""
-        # Save original env vars
-        original = os.environ.get("PROMPT_GEN_LM_STUDIO_URL")
-
-        try:
-            os.environ["PROMPT_GEN_LM_STUDIO_URL"] = "http://test:5000/v1"
+        env_vars = {
+            "PROMPT_GEN_LM_STUDIO_URL": "http://test:5000/v1",
+            "PROMPT_GEN_DEFAULT_WIDTH": "1024",
+            "PROMPT_GEN_DEFAULT_HEIGHT": "768",
+            "PROMPT_GEN_SSE_QUEUE_SIZE": "200",
+        }
+        
+        with patch.dict(os.environ, env_vars):
             settings = Settings.from_env()
             assert settings.lm_studio.base_url == "http://test:5000/v1"
-        finally:
-            # Restore original
-            if original is not None:
-                os.environ["PROMPT_GEN_LM_STUDIO_URL"] = original
-            else:
-                os.environ.pop("PROMPT_GEN_LM_STUDIO_URL", None)
+            assert settings.image_generation.default_width == 1024
+            assert settings.image_generation.default_height == 768
+            assert settings.server.sse_queue_size == 200
 
     def test_immutable_config(self):
         """Test that config dataclasses are immutable."""
