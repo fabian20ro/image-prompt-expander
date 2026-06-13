@@ -185,7 +185,8 @@ def generate_grammar(
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt}
         ],
-        temperature=temperature
+        temperature=temperature,
+        timeout=60.0
     )
 
     raw_response = response.choices[0].message.content
