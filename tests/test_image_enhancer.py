@@ -242,3 +242,16 @@ class TestCollectImages:
         """Test error when glob matches no images."""
         with pytest.raises(ValueError, match="No images found matching pattern"):
             collect_images(str(temp_dir / "*.xyz"))
+
+@pytest.mark.parametrize("softness", [-0.1, 1.1])
+def test_enhance_image_invalid_softness(softness):
+    from image_enhancer import enhance_image
+    from PIL import Image
+    import tempfile
+    with tempfile.TemporaryDirectory() as tmpdir:
+        img_path = Path(tmpdir) / "test.png"
+        out_path = Path(tmpdir) / "out.png"
+        Image.new("RGB", (10, 10)).save(img_path)
+        with pytest.raises(ValueError, match="softness must be between 0.0 and 1.0"):
+            enhance_image(img_path, out_path, softness=softness)
+
