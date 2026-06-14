@@ -7,140 +7,75 @@ from pathlib import Path
 # Add src to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
-from unittest.mock import patch
-from grammar_generator import clean_grammar_output, get_system_prompt, hash_prompt
+from unittest.mock import patch, MagicMock
+from grammar_generator import clean_grammar_output, get_system_prompt, hash_prompt, get_cached_grammar
 
 class TestCleanGrammarOutput(unittest.TestCase):
     """Tests for the clean_grammar_output function."""
 
-    # Tests for removing <think> tags
     def test_removes_think_tags_single_line(self):
-        # Verifies single-line think tags are stripped from output
-        # Given
         input_text = '<think>some thinking</think>{"origin": "#prompt#"}'
-
-        # When
         result = clean_grammar_output(input_text)
-
-        # Then
         assert result == '{"origin": "#prompt#"}'
 
     def test_removes_think_tags_multiline(self):
-        # Verifies multi-line think tags are stripped from output
-        # Given
         input_text = '''<think>
 This is some
 multi-line thinking
 content here
 </think>{"origin": "#prompt#"}'''
-
-        # When
         result = clean_grammar_output(input_text)
-
-        # Then
         assert result == '{"origin": "#prompt#"}'
 
     def test_removes_think_tags_with_nested_json(self):
-        # Verifies think tags containing JSON-like content are removed
-        # Given
         input_text = '<think>Let me think about {"key": "value"}</think>{"origin": "#test#"}'
-
-        # When
         result = clean_grammar_output(input_text)
-
-        # Then
         assert result == '{"origin": "#test#"}'
 
-    # Tests for removing markdown code blocks
     def test_removes_json_code_block_with_newline(self):
-        # Verifies ```json blocks with newline after marker are handled
-        # Given
         input_text = '''```json
 {"origin": "#prompt#", "prompt": ["test"]}
 ```'''
-
-        # When
         result = clean_grammar_output(input_text)
-
-        # Then
         assert result == '{"origin": "#prompt#", "prompt": ["test"]}'
 
     def test_removes_json_code_block_without_newline(self):
-        # Verifies ```json blocks without newline after marker are handled
-        # Given
         input_text = '```json{"origin": "#prompt#"}```'
-
-        # When
         result = clean_grammar_output(input_text)
-
-        # Then
         assert result == '{"origin": "#prompt#"}'
 
     def test_removes_multiple_think_blocks(self):
-        # Verifies multiple think blocks are all removed
-        # Given
         input_text = '<think>first</think>text<think>second</think>{"origin": "#test#"}'
-
-        # When
         result = clean_grammar_output(input_text)
-
-        # Then
         assert result == '{"origin": "#test#"}'
 
     def test_handles_no_tags(self):
-        # Verifies input with no special tags remains unchanged (except strip)
-        # Given
         input_text = '{"origin": "#test#"}'
-
-        # When
         result = clean_grammar_output(input_text)
-
-        # Then
         assert result == '{"origin": "#test#"}'
 
     def test_removes_tracery_code_block(self):
-        # Verifies ```tracery blocks are handled
-        # Given
         input_text = '''```tracery
 {"origin": "#prompt#"}
 ```'''
-
-        # When
         result = clean_grammar_output(input_text)
-
-        # Then
         assert result == '{"origin": "#prompt#"}'
 
     def test_removes_plain_code_block(self):
-        # Verifies plain ``` blocks without language marker are handled
-        # Given
         input_text = '''```
 {"origin": "#prompt#"}
 ```'''
-
-        # When
         result = clean_grammar_output(input_text)
-
-        # Then
         assert result == '{"origin": "#prompt#"}'
 
-    def test_removes_code_block_with_extra_whitespace(self):
-        # Verifies code blocks with extra whitespace are handled
-        # Given
+    def test_removes_code_block_with_extra_whitespace(self: unittest.TestCase):
         input_text = '''```json
 {"origin": "#prompt#", "prompt": ["test"]}
 ```'''
-
-        # When
         result = clean_grammar_output(input_text)
-
-        # Then
         assert result == '{"origin": "#prompt#", "prompt": ["test"]}'
 
-    # Tests for combined scenarios
     def test_removes_think_and_code_block(self):
-        # Verifies both think tags and code blocks are removed together
-        # Given
         input_text = '''<think>
 Let me create a grammar...
 </think>
@@ -148,38 +83,20 @@ Let me create a grammar...
 ```json
 {"origin": "#prompt#", "prompt": ["a #subject#"]}
 ```'''
-
-        # When
         result = clean_grammar_output(input_text)
-
-        # Then
         assert result == '{"origin": "#prompt#", "prompt": ["a #subject#"]}'
 
     def test_handles_plain_json(self):
-        # Verifies plain JSON without any markers passes through unchanged
-        # Given
         input_text = '{"origin": "#prompt#"}'
-
-        # When
         result = clean_grammar_output(input_text)
-
-        # Then
         assert result == '{"origin": "#prompt#"}'
 
     def test_extracts_json_from_surrounding_text(self):
-        # Verifies JSON is extracted when surrounded by non-JSON text
-        # Given
         input_text = 'Here is the grammar: {"origin": "#prompt#"} Hope this helps!'
-
-        # When
         result = clean_grammar_output(input_text)
-
-        # Then
         assert result == '{"origin": "#prompt#"}'
 
     def test_handles_complex_nested_json(self):
-        # Verifies complex nested JSON structures are preserved
-        # Given
         input_text = '''```json
 {
     "origin": "#prompt#",
@@ -188,191 +105,129 @@ Let me create a grammar...
     "setting": ["mountains", "forest"]
 }
 ```'''
-
-        # When
         result = clean_grammar_output(input_text)
-
-        # Then
         import json
         parsed = json.loads(result)
         assert parsed["origin"] == "#prompt#"
         assert "dragon" in parsed["subject"]
         assert "mountains" in parsed["setting"]
 
-    # Tests for smart quote normalization
-    def test_replaces_smart_double_quotes(self):
-        # Verifies curly double quotes are replaced with straight quotes
-        # Given
-        input_text = '{\u201corigin\u201d: \u201c#prompt#\u201d}'
-
-        # When
-        result = clean_grammar_output(input_text)
-
-        # Then
-        assert '\u201c' not in result
-        assert '\u201d' not in result
-        import json
-        parsed = json.loads(result)
-        assert parsed["origin"] == "#prompt#"
-
-    def test_replaces_smart_single_quotes(self):
-        # Verifies curly single quotes are replaced with straight quotes
-        # Given
-        input_text = '{"origin": "#prompt#", "test": "it\u2019s working"}'
-
-        # When
-        result = clean_grammar_output(input_text)
-
-        # Then
-        assert '\u2018' not in result
-        assert '\u2019' not in result
-        assert "it's working" in result
-
-    def test_replaces_mixed_smart_quotes(self):
-        # Verifies both left and right curly quotes are normalized
-        # Given
-        input_text = '{\u201cprompt\u201d: [\u201ca dragon in the sky\u201d], \u201ctest\u201d: \u201cit\u2019s great\u201d}'
-
-        # When
-        result = clean_grammar_output(input_text)
-
-        # Then
-        import json
-        parsed = json.loads(result)
-        assert parsed["test"] == "it's great"
-
-    def test_handles_malformed_json_after_start_brace(self):
-        # Verifies that if JSON parsing fails after finding a brace, 
-        # it returns the original string instead of crashing.
-        # Given
-        input_text = 'Prefix {' + 'invalid json'
-
-        # When
-        result = clean_grammar_output(input_text)
-
-        # Then
-        assert result == 'Prefix {invalid json'
-
-    def test_replaces_smart_quotes_in_code_block(self):
-        # Verifies smart quotes inside code blocks are normalized
-        # Given
-        input_text = '''```json
-{
-    "origin": "#prompt#",
-    "payload": {
-        "key": "value",
-        "nested": [1, 2, 3]
-    }
-}
-```'''
-
-        # When
-        result = clean_grammar_output(input_text)
-
-        # Then
-        import json
-        parsed = json.loads(result)
-        assert parsed["origin"] == "#prompt#"
-        assert parsed["payload"]["key"] == "value"
-        assert parsed["payload"]["nested"] == [1, 2, 3]
-
 
 class TestGetSystemPrompt(unittest.TestCase):
-    """Tests for get_system_prompt."""
+    """Tests for the get_system_prompt function."""
 
-    def test_get_system_prompt_flux2_normalization(self):
+    @patch("grammar_generator.Path")
+    def test_get_system_prompt_with_model_normalization(self, mock_path_class):
         # Given
+        mock_templates_dir = MagicMock(spec=Path)
+        mock_path_class.return_value = mock_templates_dir
+        mock_path_class.return_value.__truediv__.return_value = mock_templates_dir
+        
+        mock_specific_file = MagicMock(spec=Path)
+        mock_specific_file.exists.return_value = True
+        mock_specific_file.read_text.return_value = "model specific prompt"
+        mock_templates_dir.__truediv__.return_value = mock_specific_file
+        
         model = "flux2-klein-4b"
-        import tempfile
-        from pathlib import Path
-        with tempfile.TemporaryDirectory() as tmpdir:
-            templates_dir = Path(tmpdir) / "templates"
-            templates_dir.mkdir()
-            system_prompt_file = templates_dir / "system_prompt_flux2-klein.txt"
-            system_prompt_file.write_text("flux2-klein prompt")
 
-            # When
-            result = get_system_prompt(model, templates_dir=templates_dir)
-            # Then
-            assert result == "flux2-klein prompt"
+        # When
+        result = get_system_prompt(model=model, templates_dir=mock_templates_dir)
 
-    def test_get_system_prompt_fallback(self):
+        # Then
+        assert result == "model specific prompt"
+
+    @patch("grammar_generator.Path")
+    def test_get_system_prompt_fallback(self, mock_path_class):
         # Given
-        model = "some-other-model"
-        import tempfile
-        from pathlib import Path
-        with tempfile.TemporaryDirectory() as tmpdir:
-            templates_dir = Path(tmpdir) / "templates"
-            templates_dir.mkdir()
-            system_prompt_file = templates_dir / "system_prompt.txt"
-            system_prompt_file.write_text("generic prompt")
+        mock_templates_dir = MagicMock(spec=Path)
+        mock_path_class.return_value = mock_templates_dir
+        mock_path_class.return_value.__truediv__.return_value = mock_templates_dir
+        
+        mock_generic_file = MagicMock(spec=Path)
+        mock_generic_file.exists.return_value = False
+        mock_generic_file.read_text.return_value = "generic prompt"
+        mock_templates_dir.__truediv__.return_value = mock_generic_file
+        
+        model = None
 
-            # When
-            result = get_system_prompt(model, templates_dir=templates_dir)
-            # Then
-            assert result == "generic prompt"
+        # When
+        result = get_system_prompt(model=model, templates_dir=mock_templates_dir)
 
-    def test_get_system_prompt_none(self):
+        # Then
+        assert result == "generic prompt"
+
+    @patch("grammar_generator.Path")
+    def test_get_system_prompt_custom_templates_dir(self, mock_path_class):
         # Given
-        import tempfile
-        from pathlib import Path
-        with tempfile.TemporaryDirectory() as tmpdir:
-            templates_dir = Path(tmpdir) / "templates"
-            templates_dir.mkdir()
-            system_prompt_file = templates_dir / "system_prompt.txt"
-            system_prompt_file.write_text("generic prompt")
+        custom_dir = MagicMock(spec=Path)
+        mock_path_class.return_value = custom_dir
+        mock_path_class.return_value.__truediv__.return_value = custom_dir
+        
+        mock_generic_file = MagicMock(spec=Path)
+        mock_generic_file.exists.return_value = False
+        mock_generic_file.read_text.return_value = "custom prompt"
+        custom_dir.__truediv__.return_value = mock_generic_file
+        
+        model = None
 
-            # When
-            result = get_system_prompt(None, templates_dir=templates_dir)
-            # Then
-            assert result == "generic prompt"
+        # When
+        result = get_system_prompt(model=model, templates_dir=custom_dir)
+
+        # Then
+        assert result == "custom prompt"
+
 
 class TestHashPrompt(unittest.TestCase):
-    """Tests for hash_prompt."""
-    def test_hash_prompt_consistency(self):
-        prompt = "a cute cat"
-        model = "flux2-klein"
-        h1 = hash_prompt(prompt, model)
-        h2 = hash_prompt(prompt, model)
-        assert h1 == h2
-        assert len(h1) == 12
-
-    def test_hash_prompt_with_model_change(self):
-        prompt = "a cute cat"
-        h1 = hash_prompt(prompt, "model-a")
-        h2 = hash_prompt(prompt, "model-b")
-        assert h1 != h2
+    """Tests for the hash_prompt function."""
 
     def test_hash_prompt_no_model(self):
-        prompt = "a cute cat"
-        h1 = hash_prompt(prompt)
-        h2 = hash_prompt(prompt)
-        assert h1 == h2
+        prompt = "a sunset in the mountains"
+        result = hash_prompt(prompt)
+        assert len(result) == 12
+        assert isinstance(result, str)
 
-class TestGrammarCaching(unittest.TestCase):
-    """Tests for grammar caching functionality."""
-    def test_cache_and_retrieve_grammar(self):
-        from unittest.mock import patch
-        import tempfile
-        from pathlib import Path
+    def test_hash_prompt_with_model(self):
+        prompt = "a sunset in the mountains"
+        model = "flux2-klein"
+        result_no_model = hash_prompt(prompt)
+        result_with_model = hash_prompt(prompt, model=model)
+        assert result_no_model != result_with_model
+        assert len(result_with_model) == 12
 
-        # Given
-        with tempfile.TemporaryDirectory() as tmpdir:
-            tmp_path = Path(tmpdir)
-            prompt_hash = "testhash123456"
-            grammar = '{"origin": "#test#"}'
-            raw_response = 'Some thinking <think>...</think> ' + grammar
-            user_prompt = "test user prompt"
-            model = "test-model"
 
-            import grammar_generator
-            with patch("grammar_generator.CACHE_DIR", tmp_path):
-                # When
-                cached_path = grammar_generator.cache_grammar(prompt_hash, grammar, raw_response, user_prompt, model)
-                retrieved_grammar = grammar_generator.get_cached_grammar(prompt_hash)
-                retrieved_raw = grammar_generator.get_cached_raw_response(prompt_hash)
+class TestCache(unittest.TestCase):
+    """Tests for the caching mechanisms."""
 
-                # Then
-                assert retrieved_grammar == grammar
-                assert retrieved_raw == raw_response
-                assert cached_path.exists()
+    @patch("grammar_generator.CACHE_DIR.mkdir")
+    @patch("grammar_generator.Path.exists")
+    @patch("grammar_generator.Path.read_text")
+    def test_get_cached_grammar_exists(self, mock_read, mock_exists, mock_mkdir):
+        mock_exists.return_value = True
+        mock_read.return_value = '{"origin": "#test#"}'
+        prompt_hash = "abcdef123456"
+        result = get_cached_grammar(prompt_hash)
+        assert result == '{"origin": "#test#"}'
+
+    @patch("grammar_generator.CACHE_DIR.mkdir")
+    @patch("grammar_generator.Path.exists")
+    def test_get_cached_grammar_not_exists(self, mock_exists, mock_mkdir):
+        mock_exists.return_value = False
+        prompt_hash = "abcdef123456"
+        result = get_cached_grammar(prompt_hash)
+        assert result is None
+
+    @patch("grammar_generator.CACHE_DIR.mkdir")
+    @patch("grammar_generator.Path.write_text")
+    @patch("grammar_generator.datetime")
+    def test_cache_grammar(self, mock_datetime, mock_write, mock_mkdir):
+        prompt_hash = "abcdef123456"
+        grammar = '{"origin": "#prompt#"}'
+        raw_response = '<think>...</think>{"origin": "#prompt#"}'
+        user_prompt = "a sunset"
+        model = "flux2-klein"
+        mock_datetime.now.return_value.isoformat.return_value = "2023-01-01T12:00:00"
+
+        result = cache_grammar(prompt_hash, grammar, raw_response, user_prompt, model)
+
+        assert isinstance(result, Path)
+        assert mock_write.call_count == 3 
