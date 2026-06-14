@@ -42,6 +42,10 @@ class RunMetadata:
     gallery_layout: dict = field(default_factory=dict)
     _raw: dict = field(default_factory=dict, repr=False)
 
+    def __post_init__(self):
+        if self.count < 0:
+            raise ValueError("count must be non-negative")
+
     @classmethod
     def from_dict(cls, data: dict) -> "RunMetadata":
         """Create RunMetadata from a dictionary."""
