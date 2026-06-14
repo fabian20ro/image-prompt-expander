@@ -87,7 +87,7 @@ def cache_grammar(
     raw_response: str,
     user_prompt: str,
     model: str | None = None,
-) -> Path:
+) -> tuple[str, bool, str]:
     """
     Save a grammar to the cache.
 
@@ -99,7 +99,7 @@ def cache_grammar(
         model: The image model used (for metadata)
 
     Returns:
-        Path to the cached grammar file
+        A tuple of (grammar, was_cached, raw_response)
     """
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -121,7 +121,7 @@ def cache_grammar(
     }
     metadata_file.write_text(json.dumps(metadata, indent=2))
 
-    return cache_file
+    return grammar, False, raw_response
 
 
 def get_cached_raw_response(prompt_hash: str) -> str | None:
