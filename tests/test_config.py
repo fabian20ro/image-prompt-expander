@@ -46,8 +46,15 @@ class TestConfig:
         with pytest.raises(Exception):  # FrozenInstanceError
             config.base_url = "http://changed"
 
-    def test_path_config(self):
-        """Test that path configuration provides correct paths."""
+    def test_invalid_env_vars(self):
+        """Test that invalid environment variables fall back to defaults."""
+        env_vars = {
+            "PROMPT_GEN_DEFAULT_WIDTH": "not-an-integer",
+        }
+        
+        with patch.dict(os.environ, env_vars):
+            settings = Settings.from_env()
+            assert settings.image_generation.default_width == 864
         # Verify paths are Path objects
         assert isinstance(paths.root_dir, Path)
         assert isinstance(paths.generated_dir, Path)
