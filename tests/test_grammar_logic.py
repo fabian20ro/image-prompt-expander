@@ -7,7 +7,7 @@ import sys
 # Add src to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
-from grammar_generator import get_system_prompt, hash_prompt
+from grammar_generator import get_system_prompt, hash_prompt, clean_grammar_output
 
 def test_get_system_prompt_default(tmp_path):
     # Given
@@ -58,3 +58,19 @@ def test_hash_prompt():
     assert h1 == h2
     assert h1 != h3
     assert len(h1) == 12
+
+def test_clean_grammar_output_multiple_blocks():
+    # Given
+    raw = "Some text\n```json\n{\"a\": 1}\n```\nMore text\n```tracery\n{\"b\": 2}\n```"
+    # When
+    result = clean_grammar_output(raw)
+    # Then
+    assert result == '{"a": 1}'
+
+def test_clean_grammar_output_no_blocks():
+    # Given
+    raw = "Just some text with {\"a\": 1} inside"
+    # When
+    result = clean_grammar_output(raw)
+    # Then
+    assert result == '{"a": 1}'
