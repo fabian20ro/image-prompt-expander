@@ -2,6 +2,9 @@
 
 import random
 from pathlib import Path
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 # Default steps per model (based on mflux recommendations)
@@ -41,6 +44,7 @@ def _get_model(model: str, quantize: int, tiled_vae: bool = False):
     if cache_key in _model_cache:
         return _model_cache[cache_key]
 
+    logger.info("Loading model: %s (quantize=%d, tiled_vae=%s)", model, quantize, tiled_vae)
     try:
         from mflux.models.common.config.model_config import ModelConfig
     except ImportError as e:
