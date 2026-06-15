@@ -6,7 +6,14 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 from unittest.mock import patch, MagicMock
-from grammar_generator import clean_grammar_output, get_system_prompt, hash_prompt, get_cached_grammar, cache_grammar, get_cached_raw_response
+from grammar_generator import (
+    clean_grammar_output, 
+    get_system_prompt, 
+    hash_prompt, 
+    get_cached_grammar, 
+    cache_grammar, 
+    get_cached_raw_response
+)
 
 class TestCache(unittest.TestCase):
     """Tests for the caching mechanisms."""
@@ -51,3 +58,47 @@ class TestCache(unittest.TestCase):
         assert result[0] == grammar
         assert result[1] is False
         assert result[2] == raw_response
+
+class TestGrammarTools(unittest.TestCase):
+    """Tests for grammar utility functions."""
+
+    def test_clean_grammar_output_with_thinking_and_code_blocks(self):
+        input_str = '<think>some thought</think>```json\n{"key": "value"}\n```'
+        expected = '{"key": "value"}'
+        self.assertEqual(clean_grammar_output(input_str), expected)
+
+    def test_clean_grammar_output_with_smart_quotes(self):
+        # Test with smart double quotes to ensure valid JSON output
+        input_str = '{\u201ckey\u201d: \u201cvalue\u201d}'
+        expected = '{"key": "value"}'
+        self.assertEqual(clean_grammar_output(input_str), expected)
+
+    def test_clean_grammar_output_extracts_json(self):
+        input_str = 'Some noise here {"a": 1} and some noise there'
+        expected = '{"a": 1}'
+        self.assertEqual(clean_grammar_output(input_str), expected)
+
+    def test_hash_prompt(self):
+        prompt = "a beautiful sunset"
+        model = "flux2-klein"
+        h1 = hash_prompt(prompt, model)
+        h2 = hash_prompt(prompt, model)
+        h3 = hash_prompt(prompt, "other-model")
+        
+        self.assertEqual(len(h1), 12)
+        self.assertEqual(h1, h2)
+        self.assertNotEqual(h1, h3)
+
+    @patch("grammar_generator.Path.exists")
+    @patch("grammar_generator.Path.read_text")
+    @patch("grammar_generator.paths")
+    def test_get_system_prompt(self, mock_paths, mock_read_text, mock_exists):
+        mock_paths.templates_dir = Path("/tmp/templates")
+        mock_exists.return_value = True
+        mock_read_text.return_value = "system prompt content"
+        
+        result = get_system_prompt(model="flux2-klein")
+        self.assertEqual(result, "system prompt content")
+
+if __name__ == "__main__":
+    unittest.main()
