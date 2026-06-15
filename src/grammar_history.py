@@ -53,7 +53,8 @@ def append_grammar_revision(
     history_exists = history_path.exists()
     history = load_grammar_history(run_dir, prefix)
     last = history[-1] if history else None
-    if last and last.get("grammar") == grammar and last.get("action") == action:
+    if last and last.get("grammar", "").strip() == grammar.strip() and last.get("action") == action:
+
         if not history_exists:
             save_grammar_history(run_dir, prefix, history)
         return history

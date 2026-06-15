@@ -58,6 +58,7 @@ class TestLoadGrammarHistory:
         result = load_grammar_history(run_dir, "test", current_grammar=grammar_text)
         assert len(result) == 1
         assert result[0]["id"] == "initial"
+        assert result[0]["grammar"] == grammar_text
 
     def test_returns_empty_when_current_grammar_is_empty_string(self, run_dir):
         result = load_grammar_history(run_dir, "test", current_grammar="")
@@ -106,10 +107,16 @@ class TestAppendGrammarRevision:
         assert len(history) == 2
         assert history[1]["grammar"] == "rule_b"
 
+    def test_skips_when_grammar_has_whitespace_differences(self, run_dir):
+        append_grammar_revision(run_dir, "test", grammar="rule_a", action="initial")
+        history = append_grammar_revision(run_dir, "test", grammar="rule_a  ", action="initial")
+        assert len(history) == 1
+
     def test_creates_history_file_on_first_append(self, run_dir):
         history = append_grammar_revision(run_dir, "test", grammar="rule_a", action="initial")
         path = _history_path(run_dir, "test")
         assert path.exists()
+
 
 class TestLoadGrammarHistoryEdgeCases:
     """Tests for edge cases in load_grammar_history."""
