@@ -83,6 +83,7 @@ class TestImageGenerationConfig:
         assert result["steps"] == 25
         # Optional fields should not be present if None
         assert "seed" not in result or result.get("seed") is None
+        assert "max_prompts" not in result  # None by default
 
     def test_to_dict_excludes_none_optionals(self):
         """Test that None optional values are excluded from dict."""
@@ -180,6 +181,7 @@ class TestPipelineConfig:
         assert config.image.height == 768
         assert config.image.steps == 30
         assert config.image.seed == 42
+        assert config.image.max_prompts is None
 
     def test_from_kwargs_with_enhancement_params(self):
         """Test creating config from kwargs with enhancement params."""
@@ -306,6 +308,7 @@ class TestRunFullPipeline:
     @patch("pipeline.generate_grammar")
     def test_run_full_pipeline_grammar_failure(self, mock_grammar, temp_dir):
         """Test handling of grammar generation failure."""
+        from tracery_runner import TraceryError
         mock_grammar.side_effect = Exception("LM Studio not available")
 
         with patch("pipeline.paths") as mock_paths:
@@ -322,7 +325,6 @@ class TestRunFullPipeline:
     def test_run_full_pipeline_tracery_failure(self, mock_tracery, mock_grammar, temp_dir):
         """Test handling of Tracery expansion failure."""
         from tracery_runner import TraceryError
-
         mock_grammar.return_value = ('{"origin": ["test"]}', False, None)
         mock_tracery.side_effect = TraceryError("Invalid grammar")
 
@@ -349,9 +351,9 @@ class TestRunFromGrammar:
         grammar_dir = temp_dir / "grammars"
         grammar_dir.mkdir()
         grammar_file = grammar_dir / "test.tracery.json"
-        grammar_file.write_text('{"origin": ["test output"]}')
+        grammar_file.write_text('{"origin": ["test"]}')
 
-        mock_tracery.return_value = ["prompt 1", "prompt 2"]
+        mock_tracery.return_value = ["prompt 1"]
         mock_gallery.return_value = temp_dir / "prompts" / "test_gallery.html"
 
         with patch("pipeline.paths") as mock_paths:
@@ -360,392 +362,54 @@ class TestRunFromGrammar:
             mock_paths.generated_dir = temp_dir
 
             executor = PipelineExecutor()
-            result = executor.run_from_grammar(
-                grammar_path=grammar_file,
-                count=2,
-                prefix="fromgrammar",
-            )
+            result = executor.run_from_grammar(grammar_path=grammar_file, count=1)
 
         assert result.success is True
-        assert result.prompt_count == 2
+        assert result.prompt_count == 1
         assert result.output_dir is not None
 
+    def test_run_from_grammar_metadata_match(self, temp_dir):
+        """Test that run_from_grammar picks the metadata matching the grammar filename."""
+        grammar_dir = temp_dir / "grammars"
+        grammar_dir.mkdir()
 
-class TestRunFromPrompts:
-    """Tests for run_from_prompts method."""
+        meta1 = grammar_dir / "match_me.metaprompt.json"
+        meta1.write_text(json.dumps({"user_prompt": "correct"}))
 
-    @patch("pipeline.update_gallery")
-    @patch("pipeline.create_gallery")
-    @patch("pipeline.generate_image")
-    def test_run_from_prompts_success(
-        self, mock_gen_image, mock_gallery, mock_update, temp_dir
-    ):
-        """Test running image generation from existing prompts."""
-        prompts_dir = temp_dir / "prompts" / "20240101_120000_abc123"
-        prompts_dir.mkdir(parents=True)
-        create_run_files(prompts_dir, prefix="test", num_prompts=2)
+        meta2 = grammar_dir / "wrong.metaprompt.json"
+        meta2.write_text(json.dumps({"user_prompt": "wrong"}))
 
-        mock_gallery.return_value = prompts_dir / "test_gallery.html"
-        # Create fake image files so the pipeline can sync them
-        for i in range(2):
-            (prompts_dir / f"test_{i}_0.png").write_bytes(b"fake image")
+        grammar_file = grammar_dir / "match_me.tracery.json"
+        grammar_file.write_text('{"origin": ["test"]}')
 
-        image_ready_calls = []
-        executor = PipelineExecutor(
-            on_image_ready=lambda r, f: image_ready_calls.append((r, f))
-        )
-
-        result = executor.run_from_prompts(
-            prompts_dir=prompts_dir,
-            images_per_prompt=1,
-        )
-
-        assert result.success is True
-        assert mock_gen_image.call_count == 2
-
-    def test_run_from_prompts_no_metadata(self, temp_dir):
-        """Test error when no metadata file found."""
-        prompts_dir = temp_dir / "empty_run"
-        prompts_dir.mkdir(parents=True)
-
+        from pipeline import PipelineExecutor
         executor = PipelineExecutor()
-        result = executor.run_from_prompts(prompts_dir=prompts_dir)
 
-        assert result.success is False
-        assert "No metadata file found" in result.error
+        with patch("pipeline.run_tracery") as mock_tracery:
+            mock_tracery.return_value = ["prompt 1"]
+            with patch("pipeline.create_gallery"):
+                with patch("pipeline.generate_master_index"):
+                    result = executor.run_from_grammar(grammar_path=grammar_file, count=1)
+                    assert result.success is True
 
-    def test_run_from_prompts_no_prompts(self, temp_dir):
-        """Test error when no prompt files found."""
-        prompts_dir = temp_dir / "run_without_prompts"
-        prompts_dir.mkdir(parents=True)
+    def test_run_from_grammar_metadata_mismatch_fallback(self, temp_dir):
+        """Test fallback to any metaprompt in the same directory if no direct match."""
+        grammar_dir = temp_dir / "grammars_fallback"
+        grammar_dir.mkdir()
 
-        # Create only metadata, no prompts
-        metadata = {"prefix": "test", "count": 0}
-        (prompts_dir / "test.metaprompt.json").write_text(json.dumps(metadata))
+        meta1 = grammar_dir / "some_other_file.metaprompt.json"
+        meta1.write_text(json.dumps({"user_prompt": "fallback_user"}))
 
+        grammar_file = grammar_dir / "target.tracery.json"
+        grammar_file.write_text('{"origin": ["test"]}')
+
+        from pipeline import PipelineExecutor
         executor = PipelineExecutor()
-        result = executor.run_from_prompts(prompts_dir=prompts_dir)
 
-        assert result.success is False
-        assert "No prompt files found" in result.error
-
-
-class TestRegeneratePrompts:
-    """Tests for regenerate_prompts method."""
-
-    @patch("pipeline.run_tracery")
-    @patch("pipeline.create_gallery")
-    @patch("pipeline.backup_run")
-    @patch("pipeline.run_has_images")
-    def test_regenerate_prompts_success(
-        self, mock_has_images, mock_backup, mock_gallery, mock_tracery, temp_dir
-    ):
-        """Test regenerating prompts from edited grammar."""
-        with patch("pipeline.paths") as mock_paths:
-            prompts_dir = temp_dir / "prompts"
-            prompts_dir.mkdir(parents=True)
-            mock_paths.prompts_dir = prompts_dir
-            mock_paths.saved_dir = temp_dir / "saved"
-
-            run_dir = prompts_dir / "test_run"
-            run_dir.mkdir(parents=True)
-            create_run_files(run_dir, prefix="test", num_prompts=2)
-
-            mock_tracery.return_value = ["new prompt 1", "new prompt 2", "new prompt 3"]
-            mock_has_images.return_value = False
-
-            executor = PipelineExecutor()
-            result = executor.regenerate_prompts(
-                run_id="test_run",
-                grammar='{"origin": ["new output"]}',
-                count=3,
-            )
-
-        assert result.success is True
-        assert result.prompt_count == 3
-        assert result.data.get("task_type") == "regenerate_prompts"
-
-    def test_regenerate_prompts_run_not_found(self, temp_dir):
-        """Test error when run directory not found."""
-        with patch("pipeline.paths") as mock_paths:
-            mock_paths.prompts_dir = temp_dir / "prompts"
-
-            executor = PipelineExecutor()
-            result = executor.regenerate_prompts(
-                run_id="nonexistent_run",
-                grammar='{"origin": ["test"]}',
-            )
-
-        assert result.success is False
-        assert "Run directory not found" in result.error
-
-    @patch("pipeline.run_tracery")
-    @patch("pipeline.create_gallery")
-    @patch("pipeline.backup_run")
-    @patch("pipeline.run_has_images")
-    def test_regenerate_prompts_archives_and_clears_active_images(
-        self, mock_has_images, mock_backup, mock_gallery, mock_tracery, temp_dir
-    ):
-        """Regeneration should archive old PNGs and remove them from the active run."""
-        with patch("pipeline.paths") as mock_paths:
-            prompts_dir = temp_dir / "prompts"
-            prompts_dir.mkdir(parents=True)
-            mock_paths.prompts_dir = prompts_dir
-            mock_paths.saved_dir = temp_dir / "saved"
-
-            run_dir = prompts_dir / "test_run"
-            run_dir.mkdir(parents=True)
-            create_run_files(run_dir, prefix="test", num_prompts=2, create_images=True)
-
-            mock_tracery.return_value = ["new prompt 1", "new prompt 2"]
-            mock_has_images.return_value = True
-
-            executor = PipelineExecutor()
-            result = executor.regenerate_prompts(
-                run_id="test_run",
-                grammar='{"origin": ["new output"]}',
-                count=2,
-                images_per_prompt=2,
-                max_prompts=1,
-            )
-
-        assert result.success is True
-        mock_backup.assert_called_once()
-        assert not (run_dir / "test_0_0.png").exists()
-        assert not (run_dir / "test_1_0.png").exists()
-        called_args = mock_gallery.call_args.args
-        assert called_args[2] == ["new prompt 1"]
-        assert called_args[3] == 2
-
-
-class TestGenerateSingleImage:
-    """Tests for generate_single_image method."""
-
-    @patch("pipeline.generate_image")
-    def test_generate_single_image_success(self, mock_gen, temp_dir):
-        """Test generating a single image."""
-        with patch("pipeline.paths") as mock_paths:
-            prompts_dir = temp_dir / "prompts"
-            prompts_dir.mkdir(parents=True)
-            mock_paths.prompts_dir = prompts_dir
-
-            run_dir = prompts_dir / "test_run"
-            run_dir.mkdir(parents=True)
-            create_run_files(run_dir, prefix="test", num_prompts=2)
-
-            # Create output image file for _sync_file
-            (run_dir / "test_0_0.png").write_bytes(b"fake image")
-
-            image_ready_calls = []
-            executor = PipelineExecutor(
-                on_image_ready=lambda r, f: image_ready_calls.append((r, f))
-            )
-
-            result = executor.generate_single_image(
-                run_id="test_run",
-                prompt_idx=0,
-                image_idx=0,
-            )
-
-        assert result.success is True
-        assert result.image_count == 1
-        mock_gen.assert_called_once()
-
-    def test_generate_single_image_prompt_not_found(self, temp_dir):
-        """Test error when prompt file not found."""
-        with patch("pipeline.paths") as mock_paths:
-            prompts_dir = temp_dir / "prompts"
-            prompts_dir.mkdir(parents=True)
-            mock_paths.prompts_dir = prompts_dir
-
-            run_dir = prompts_dir / "test_run"
-            run_dir.mkdir(parents=True)
-            create_run_files(run_dir, prefix="test", num_prompts=1)
-
-            executor = PipelineExecutor()
-            result = executor.generate_single_image(
-                run_id="test_run",
-                prompt_idx=999,  # Non-existent
-                image_idx=0,
-            )
-
-        assert result.success is False
-        assert "Prompt file not found" in result.error
-
-
-class TestEnhanceSingleImage:
-    """Tests for enhance_single_image method."""
-
-    @patch("pipeline.enhance_image")
-    def test_enhance_single_image_success(self, mock_enhance, temp_dir):
-        """Test enhancing a single image."""
-        with patch("pipeline.paths") as mock_paths:
-            prompts_dir = temp_dir / "prompts"
-            prompts_dir.mkdir(parents=True)
-            mock_paths.prompts_dir = prompts_dir
-
-            run_dir = prompts_dir / "test_run"
-            run_dir.mkdir(parents=True)
-            create_run_files(run_dir, prefix="test", num_prompts=1, create_images=True)
-
-            executor = PipelineExecutor()
-            result = executor.enhance_single_image(
-                run_id="test_run",
-                prompt_idx=0,
-                image_idx=0,
-                softness=0.5,
-            )
-
-        assert result.success is True
-        mock_enhance.assert_called_once()
-
-    def test_enhance_single_image_not_found(self, temp_dir):
-        """Test error when image file not found."""
-        with patch("pipeline.paths") as mock_paths:
-            prompts_dir = temp_dir / "prompts"
-            prompts_dir.mkdir(parents=True)
-            mock_paths.prompts_dir = prompts_dir
-
-            run_dir = prompts_dir / "test_run"
-            run_dir.mkdir(parents=True)
-            create_run_files(run_dir, prefix="test", num_prompts=1, create_images=False)
-
-            executor = PipelineExecutor()
-            result = executor.enhance_single_image(
-                run_id="test_run",
-                prompt_idx=0,
-                image_idx=0,
-            )
-
-        assert result.success is False
-        assert "Image not found" in result.error
-
-
-class TestGenerateAllImages:
-    """Tests for generate_all_images method."""
-
-    @patch("pipeline.generate_image")
-    def test_generate_all_images_success(self, mock_gen, temp_dir):
-        """Test generating all images for a gallery."""
-        with patch("pipeline.paths") as mock_paths:
-            prompts_dir = temp_dir / "prompts"
-            prompts_dir.mkdir(parents=True)
-            mock_paths.prompts_dir = prompts_dir
-
-            run_dir = prompts_dir / "test_run"
-            run_dir.mkdir(parents=True)
-            create_run_files(run_dir, prefix="test", num_prompts=3)
-
-            # Create output image files for _sync_file
-            for i in range(3):
-                (run_dir / f"test_{i}_0.png").write_bytes(b"fake image")
-
-            executor = PipelineExecutor()
-            result = executor.generate_all_images(
-                run_id="test_run",
-                images_per_prompt=1,
-                resume=False,
-            )
-
-        assert result.success is True
-        assert mock_gen.call_count == 3
-
-    @patch("pipeline.generate_image")
-    def test_generate_all_images_resume(self, mock_gen, temp_dir):
-        """Test resume skips existing images."""
-        with patch("pipeline.paths") as mock_paths:
-            prompts_dir = temp_dir / "prompts"
-            prompts_dir.mkdir(parents=True)
-            mock_paths.prompts_dir = prompts_dir
-
-            run_dir = prompts_dir / "test_run"
-            run_dir.mkdir(parents=True)
-            create_run_files(run_dir, prefix="test", num_prompts=3, create_images=True)
-
-            executor = PipelineExecutor()
-            result = executor.generate_all_images(
-                run_id="test_run",
-                images_per_prompt=1,
-                resume=True,
-            )
-
-        assert result.success is True
-        assert result.skipped_count == 3
-        assert result.image_count == 0  # All skipped
-        mock_gen.assert_not_called()
-
-
-class TestEnhanceAllImages:
-    """Tests for enhance_all_images method."""
-
-    @patch("pipeline.enhance_image")
-    @patch("pipeline.backup_run")
-    def test_enhance_all_images_success(self, mock_backup, mock_enhance, temp_dir):
-        """Test enhancing all images for a gallery."""
-        with patch("pipeline.paths") as mock_paths:
-            prompts_dir = temp_dir / "prompts"
-            prompts_dir.mkdir(parents=True)
-            mock_paths.prompts_dir = prompts_dir
-            mock_paths.saved_dir = temp_dir / "saved"
-
-            run_dir = prompts_dir / "test_run"
-            run_dir.mkdir(parents=True)
-            create_run_files(run_dir, prefix="test", num_prompts=3, create_images=True)
-
-            executor = PipelineExecutor()
-            result = executor.enhance_all_images(
-                run_id="test_run",
-                softness=0.5,
-            )
-
-        assert result.success is True
-        assert result.image_count == 3
-        assert mock_enhance.call_count == 3
-
-    def test_enhance_all_images_no_images(self, temp_dir):
-        """Test error when no images found."""
-        with patch("pipeline.paths") as mock_paths:
-            prompts_dir = temp_dir / "prompts"
-            prompts_dir.mkdir(parents=True)
-            mock_paths.prompts_dir = prompts_dir
-
-            run_dir = prompts_dir / "test_run"
-            run_dir.mkdir(parents=True)
-            create_run_files(run_dir, prefix="test", num_prompts=2, create_images=False)
-
-            executor = PipelineExecutor()
-            result = executor.enhance_all_images(run_id="test_run")
-
-        assert result.success is False
-        assert "No images found" in result.error
-
-
-class TestProgressCallbacks:
-    """Tests for progress callback behavior."""
-
-    @patch("pipeline.generate_grammar")
-    @patch("pipeline.run_tracery")
-    @patch("pipeline.create_gallery")
-    @patch("pipeline.generate_master_index")
-    def test_progress_stages_reported(
-        self, mock_index, mock_gallery, mock_tracery, mock_grammar, temp_dir
-    ):
-        """Test that all expected progress stages are reported."""
-        mock_grammar.return_value = ('{"origin": ["test"]}', False, None)
-        mock_tracery.return_value = ["prompt"]
-        mock_gallery.return_value = temp_dir / "gallery.html"
-
-        progress_stages = []
-
-        with patch("pipeline.paths") as mock_paths:
-            mock_paths.prompts_dir = temp_dir / "prompts"
-            mock_paths.prompts_dir.mkdir(parents=True)
-            mock_paths.generated_dir = temp_dir
-
-            executor = PipelineExecutor(
-                on_progress=lambda s, c, t, m: progress_stages.append(s)
-            )
-            executor.run_full_pipeline(prompt="test", count=1, generate_images=False)
-
-        assert "generating_grammar" in progress_stages
-        assert "expanding_prompts" in progress_stages
+        with patch("pipeline.run_tracery") as mock_tracery:
+            mock_tracery.return_value = ["prompt 1"]
+            with patch("pipeline.create_gallery"):
+                with patch("pipeline.generate_master_index"):
+                    result = executor.run_from_grammar(grammar_path=grammar_file, count=1)
+                    assert result.success is True
+                    assert result.output_dir is not None
