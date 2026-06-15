@@ -62,6 +62,10 @@ class TestCache(unittest.TestCase):
 class TestGrammarTools(unittest.TestCase):
     """Tests for grammar utility functions."""
 
+    def test_clean_grammar_output_empty(self):
+        self.assertEqual(clean_grammar_output(""), "")
+        self.assertEqual(clean_grammar_output("   "), "")
+
     def test_clean_grammar_output_with_thinking_and_code_blocks(self):
         input_str = '<think>some thought</think>```json\n{"key": "value"}\n```'
         expected = '{"key": "value"}'
