@@ -116,7 +116,9 @@ def get_prompts_from_run(run_dir: Path, prefix: str | None = None) -> list[str]:
 
     prompt_files = sorted(run_dir.glob(f"{prefix}_*.txt"))
     # Filter to only prompt files (prefix_N.txt), not metadata or other files
-    prompt_files = [f for f in prompt_files if f.stem.count('_') == 1]
+    import re
+    pattern = re.compile(rf"^{re.escape(prefix)}_\d+\.txt$")
+    prompt_files = [f for f in prompt_files if pattern.match(f.name)]
 
     return [f.read_text() for f in prompt_files]
 

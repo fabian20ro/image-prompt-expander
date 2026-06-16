@@ -58,6 +58,7 @@ class TestLoadGrammarHistory:
         result = load_grammar_history(run_dir, "test", current_grammar=grammar_text)
         assert len(result) == 1
         assert result[0]["id"] == "initial"
+        assert result[0]["grammar"] == grammar_text
 
     def test_returns_empty_when_current_grammar_is_empty_string(self, run_dir):
         result = load_grammar_history(run_dir, "test", current_grammar="")
@@ -94,10 +95,11 @@ class TestAppendGrammarRevision:
         history = append_grammar_revision(run_dir, "test", grammar="rule_a", action="initial")
         assert len(history) == 1
 
-    def test_skips_when_only_grammar_unchanged(self, run_dir):
+    def test_appends_when_only_action_changed(self, run_dir):
         append_grammar_revision(run_dir, "test", grammar="rule_a", action="initial")
         history = append_grammar_revision(run_dir, "test", grammar="rule_a", action="update")
-        assert len(history) == 1
+        assert len(history) == 2
+        assert history[1]["action"] == "update"
 
     def test_appends_when_grammar_changes(self, run_dir):
         append_grammar_revision(run_dir, "test", grammar="rule_a", action="initial")
@@ -105,7 +107,23 @@ class TestAppendGrammarRevision:
         assert len(history) == 2
         assert history[1]["grammar"] == "rule_b"
 
+    def test_skips_when_grammar_has_whitespace_differences(self, run_dir):
+        append_grammar_revision(run_dir, "test", grammar="rule_a", action="initial")
+        history = append_grammar_revision(run_dir, "test", grammar="rule_a  ", action="initial")
+        assert len(history) == 1
+
     def test_creates_history_file_on_first_append(self, run_dir):
         history = append_grammar_revision(run_dir, "test", grammar="rule_a", action="initial")
         path = _history_path(run_dir, "test")
         assert path.exists()
+
+
+class TestLoadGrammarHistoryEdgeCases:
+    """Tests for edge cases in load_grammar_history."""
+    def test_returns_empty_when_json_is_dict_instead_of_list(self, run_dir):
+        """Verify that if history file is a valid JSON dict instead of a list, it is ignored."""
+        path = _history_path(run_dir, "dict_instead_of_list")
+        path.write_text(json.dumps({"not": "a list"}))
+        
+        result = load_grammar_history(run_dir, "dict_instead_of_list")
+        assert result == []

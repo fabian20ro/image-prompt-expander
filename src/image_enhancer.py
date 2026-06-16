@@ -70,6 +70,10 @@ def enhance_image(
     if not image_path.exists():
         raise FileNotFoundError(f"Image not found: {image_path}")
 
+    if not (0.0 <= softness <= 1.0):
+        raise ValueError("softness must be between 0.0 and 1.0")
+
+
     # Import ScaleFactor for 2x upscaling
     try:
         from mflux.utils.scale_factor import ScaleFactor

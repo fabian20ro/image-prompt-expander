@@ -473,10 +473,14 @@ class PipelineExecutor:
         grammar = grammar_path.read_text()
 
         # Try to find metadata for original prompt
-        meta_path = None
-        for p in grammar_path.parent.glob("*.metaprompt.json"):
-            meta_path = p
-            break
+        # Match metadata specifically to the grammar file name
+        meta_path = grammar_path.with_suffix('.metaprompt.json')
+        if not meta_path.exists():
+            # Fallback to any metaprompt in directory if not a direct match
+            for p in grammar_path.parent.glob("*.metaprompt.json"):
+                if p != meta_path:
+                    meta_path = p
+                    break
 
         user_prompt = "unknown"
         if meta_path and meta_path.exists():

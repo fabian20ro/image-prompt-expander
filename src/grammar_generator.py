@@ -87,7 +87,7 @@ def cache_grammar(
     raw_response: str,
     user_prompt: str,
     model: str | None = None,
-) -> Path:
+) -> tuple[str, bool, str]:
     """
     Save a grammar to the cache.
 
@@ -99,7 +99,7 @@ def cache_grammar(
         model: The image model used (for metadata)
 
     Returns:
-        Path to the cached grammar file
+        A tuple of (grammar, was_cached, raw_response)
     """
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -121,7 +121,7 @@ def cache_grammar(
     }
     metadata_file.write_text(json.dumps(metadata, indent=2))
 
-    return cache_file
+    return grammar, False, raw_response
 
 
 def get_cached_raw_response(prompt_hash: str) -> str | None:
@@ -185,7 +185,8 @@ def generate_grammar(
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt}
         ],
-        temperature=temperature
+        temperature=temperature,
+        timeout=60.0
     )
 
     raw_response = response.choices[0].message.content
@@ -219,9 +220,9 @@ def clean_grammar_output(grammar: str) -> str:
     # Remove <think>...</think> blocks (including multiline)
     grammar = re.sub(r'<think>.*?</think>', '', grammar, flags=re.DOTALL)
 
-    # Remove markdown code block markers and extract content
+    # Remove markdown code blocks and extract content
     # Handle ```json, ```tracery, or plain ``` markers (with or without newline)
-    code_block_match = re.search(r'```(?:json|tracery)?\s*(.*?)```', grammar, flags=re.DOTALL)
+    code_block_match = re.search(r'```(?:json|tracery)?\s*(.*?)```', grammar, flags=re.DOTALL | re.IGNORECASE)
     if code_block_match:
         grammar = code_block_match.group(1)
 

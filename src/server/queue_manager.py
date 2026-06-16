@@ -16,12 +16,13 @@ class QueueManager:
 
     def __init__(self, queue_path: Path):
         """Initialize queue manager.
-
+        
         Args:
-            queue_path: Path to the queue.json file
+            queue_path: Path to the queue.
         """
         self.queue_path = queue_path
         self._lock = Lock()
+        self._state = self._load_state()
         self._listeners: list[Callable[[str, dict], None]] = []
 
     def _load_state(self) -> QueueState:
@@ -82,7 +83,7 @@ class QueueManager:
             The created task
         """
         with self._lock:
-            state = self._load_state()
+            state = self._state
 
             task = Task(
                 id=str(uuid.uuid4()),
@@ -107,7 +108,7 @@ class QueueManager:
             The next task, or None if queue is empty or a task is running
         """
         with self._lock:
-            state = self._load_state()
+            state = self._state
 
             # Don't start new task if one is running
             if state.current_task and state.current_task.status == TaskStatus.RUNNING:
@@ -134,7 +135,7 @@ class QueueManager:
             progress: Progress information
         """
         with self._lock:
-            state = self._load_state()
+            state = self._state
 
             if state.current_task and state.current_task.id == task_id:
                 state.current_task.progress = progress
@@ -156,7 +157,7 @@ class QueueManager:
             pid: Process ID of the worker subprocess
         """
         with self._lock:
-            state = self._load_state()
+            state = self._state
 
             if state.current_task and state.current_task.id == task_id:
                 state.current_task.pid = pid
@@ -170,7 +171,7 @@ class QueueManager:
             result: Optional result data
         """
         with self._lock:
-            state = self._load_state()
+            state = self._state
 
             if state.current_task and state.current_task.id == task_id:
                 state.current_task.status = TaskStatus.COMPLETED
@@ -197,7 +198,7 @@ class QueueManager:
             error: Error message
         """
         with self._lock:
-            state = self._load_state()
+            state = self._state
 
             if state.current_task and state.current_task.id == task_id:
                 state.current_task.status = TaskStatus.FAILED
@@ -226,7 +227,7 @@ class QueueManager:
             True if task was found and cancelled
         """
         with self._lock:
-            state = self._load_state()
+            state = self._state
 
             # Check if it's the current task
             if state.current_task and state.current_task.id == task_id:
@@ -264,7 +265,7 @@ class QueueManager:
             Number of tasks cleared
         """
         with self._lock:
-            state = self._load_state()
+            state = self._state
             count = len(state.pending)
             state.pending = []
             self._save_state(state)
@@ -285,7 +286,7 @@ class QueueManager:
             Current queue state
         """
         with self._lock:
-            return self._load_state()
+            return self._state
 
     def get_current_task_pid(self) -> int | None:
         """Get the PID of the currently running task.
@@ -294,7 +295,7 @@ class QueueManager:
             PID if a task is running, None otherwise
         """
         with self._lock:
-            state = self._load_state()
+            state = self._state
             if state.current_task and state.current_task.status == TaskStatus.RUNNING:
                 return state.current_task.pid
             return None

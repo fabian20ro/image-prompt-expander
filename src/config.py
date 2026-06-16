@@ -1,16 +1,35 @@
-"""Centralized configuration for the image-prompt-expander application."""
-
 import os
+import logging
 from dataclasses import dataclass, field
 from pathlib import Path
 
+logger = logging.getLogger(__name__)
+
+def _get_env_int(key: str, default: int) -> int:
+    val = os.environ.get(key)
+    if val is None:
+        return default
+    try:
+        return int(val)
+    except ValueError:
+        logger.warning("Invalid value for %s: %s. Using default: %d", key, val, default)
+        return default
+
+def _get_env_float(key: str, default: float) -> float:
+    val = os.environ.get(key)
+    if val is None:
+        return default
+    try:
+        return float(val)
+    except ValueError:
+        logger.warning("Invalid value for %s: %s. Using default: %f", key, val, default)
+        return default
 
 @dataclass(frozen=True)
 class LMStudioConfig:
     """Configuration for LM Studio connection."""
     base_url: str = "http://localhost:1234/v1"
     api_key: str = "lm-studio"
-
 
 @dataclass(frozen=True)
 class ImageGenerationConfig:
@@ -21,7 +40,6 @@ class ImageGenerationConfig:
     default_quantize: int = 8
     default_model: str = "flux2-klein-4b"
 
-
 @dataclass(frozen=True)
 class ServerConfig:
     """Configuration for the web server."""
@@ -29,13 +47,11 @@ class ServerConfig:
     sse_timeout: float = 5.0  # seconds between keepalives
     worker_timeout: float = 300.0  # seconds
 
-
 @dataclass(frozen=True)
 class EnhancementConfig:
     """Configuration for image enhancement."""
     default_softness: float = 0.5
     default_scale: int = 2
-
 
 @dataclass(frozen=True)
 class PathConfig:
@@ -81,10 +97,8 @@ class PathConfig:
         """Directory for system prompt templates."""
         return self.root_dir / "templates"
 
-
 # Singleton path configuration instance
 paths = PathConfig()
-
 
 @dataclass
 class Settings:
@@ -102,20 +116,20 @@ class Settings:
             api_key=os.environ.get("PROMPT_GEN_LM_STUDIO_API_KEY", LMStudioConfig.api_key),
         )
         image_generation = ImageGenerationConfig(
-            default_width=int(os.environ.get("PROMPT_GEN_DEFAULT_WIDTH", ImageGenerationConfig.default_width)),
-            default_height=int(os.environ.get("PROMPT_GEN_DEFAULT_HEIGHT", ImageGenerationConfig.default_height)),
-            default_steps=int(os.environ.get("PROMPT_GEN_DEFAULT_STEPS", ImageGenerationConfig.default_steps)),
-            default_quantize=int(os.environ.get("PROMPT_GEN_DEFAULT_QUANTIZE", ImageGenerationConfig.default_quantize)),
+            default_width=_get_env_int("PROMPT_GEN_DEFAULT_WIDTH", ImageGenerationConfig.default_width),
+            default_height=_get_env_int("PROMPT_GEN_DEFAULT_HEIGHT", ImageGenerationConfig.default_height),
+            default_steps=_get_env_int("PROMPT_GEN_DEFAULT_STEPS", ImageGenerationConfig.default_steps),
+            default_quantize=_get_env_int("PROMPT_GEN_DEFAULT_QUANTIZE", ImageGenerationConfig.default_quantize),
             default_model=os.environ.get("PROMPT_GEN_DEFAULT_MODEL", ImageGenerationConfig.default_model),
         )
         server = ServerConfig(
-            sse_queue_size=int(os.environ.get("PROMPT_GEN_SSE_QUEUE_SIZE", ServerConfig.sse_queue_size)),
-            sse_timeout=float(os.environ.get("PROMPT_GEN_SSE_TIMEOUT", ServerConfig.sse_timeout)),
-            worker_timeout=float(os.environ.get("PROMPT_GEN_WORKER_TIMEOUT", ServerConfig.worker_timeout)),
+            sse_queue_size=_get_env_int("PROMPT_GEN_SSE_QUEUE_SIZE", ServerConfig.sse_queue_size),
+            sse_timeout=_get_env_float("PROMPT_GEN_SSE_TIMEOUT", ServerConfig.sse_timeout),
+            worker_timeout=_get_env_float("PROMPT_GEN_WORKER_TIMEOUT", ServerConfig.worker_timeout),
         )
         enhancement = EnhancementConfig(
-            default_softness=float(os.environ.get("PROMPT_GEN_ENHANCE_SOFTNESS", EnhancementConfig.default_softness)),
-            default_scale=int(os.environ.get("PROMPT_GEN_ENHANCE_SCALE", EnhancementConfig.default_scale)),
+            default_softness=_get_env_float("PROMPT_GEN_ENHANCE_SOFTNESS", EnhancementConfig.default_softness),
+            default_scale=_get_env_int("PROMPT_GEN_ENHANCE_SCALE", EnhancementConfig.default_scale),
         )
         return cls(
             lm_studio=lm_studio,
@@ -123,7 +137,6 @@ class Settings:
             server=server,
             enhancement=enhancement,
         )
-
 
 # Global settings instance - use from_env() for environment-aware settings
 settings = Settings.from_env()

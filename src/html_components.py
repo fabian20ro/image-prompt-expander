@@ -139,7 +139,7 @@ class ProgressBar:
     @staticmethod
     def html() -> str:
         """Build the fixed progress bar HTML."""
-        return '''
+        return f'''
   <div id="progress-bar" class="progress-bar-fixed hidden">
     <div class="progress-info">
       <span id="progress-message">Idle</span>
@@ -148,7 +148,7 @@ class ProgressBar:
       <div class="progress-track">
         <div id="progress-fill" class="progress-fill" style="width: 0%"></div>
       </div>
-      <span id="progress-text">0/0</span>
+      <span id="progress-text">Generated: 0 / 0 images</span>
     </div>
   </div>'''
 

@@ -44,8 +44,11 @@ class TestRunMetadata:
         assert metadata.count == 0
         assert metadata.model == "flux2-klein-4b"
 
-    def test_from_dict_with_image_generation(self):
-        """Test preserving image_generation settings."""
+    def test_run_metadata_invalid_count(self):
+        """Test that negative count raises ValueError."""
+        with pytest.raises(ValueError, match="count must be non-negative"):
+            RunMetadata(count=-1)
+
         data = {
             "prefix": "test",
             "image_generation": {

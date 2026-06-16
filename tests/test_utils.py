@@ -91,14 +91,18 @@ class TestUtils:
         count = count_images_in_run(temp_dir)
         assert count == 3
 
-    def test_get_prompts_from_run(self, temp_dir):
-        """Test loading prompts from a run directory."""
+    def test_get_prompts_from_run_filtering(self, temp_dir):
+        """Test that non-prompt files are filtered out."""
         (temp_dir / "test.metaprompt.json").write_text(json.dumps({"prefix": "test"}))
         (temp_dir / "test_0.txt").write_text("First prompt")
         (temp_dir / "test_1.txt").write_text("Second prompt")
         (temp_dir / "test_2.txt").write_text("Third prompt")
+        (temp_dir / "test_metadata.json").write_text("{}")
+        (temp_dir / "test_0.raw.txt").write_text("raw")
+        (temp_dir / "test_1_image.png").write_text("image")
 
         prompts = get_prompts_from_run(temp_dir)
+        assert prompts == ["First prompt", "Second prompt", "Third prompt"]
         assert len(prompts) == 3
         assert prompts[0] == "First prompt"
         assert prompts[2] == "Third prompt"
