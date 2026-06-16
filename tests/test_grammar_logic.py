@@ -67,6 +67,33 @@ def test_clean_grammar_output_multiple_blocks():
     # Then
     assert result == '{"a": 1}'
 
+def test_handles_json_array():
+    # Verifies that if the LLM returns a JSON array, it is preserved
+    # Given
+    input_text = '```json\n[1, 2, 3]\n```'
+    # When
+    result = clean_grammar_output(input_text)
+    # Then
+    assert result == '[1, 2, 3]'
+
+def test_handles_json_object_with_extra_content():
+    # Verifies that content after the JSON object is discarded
+    # Given
+    input_text = '{"a": 1} extra'
+    # When
+    result = clean_grammar_output(input_text)
+    # Then
+    assert result == '{"a": 1}'
+
+def test_handles_json_in_text_array():
+    # Verifies extraction of JSON array from within text
+    # Given
+    input_text = 'Here is an array: [1, 2, 3] and more'
+    # When
+    result = clean_grammar_output(input_text)
+    # Then
+    assert result == '[1, 2, 3]'
+
 def test_clean_grammar_output_no_blocks():
     # Given
     raw = "Just some text with {\"a\": 1} inside"
