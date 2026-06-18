@@ -49,12 +49,13 @@ def append_grammar_revision(
     action: str,
 ) -> list[dict]:
     """Append a revision if the grammar changed or action is new."""
+    if not grammar.strip():
+        return load_grammar_history(run_dir, prefix)
     history_path = _history_path(run_dir, prefix)
     history_exists = history_path.exists()
     history = load_grammar_history(run_dir, prefix)
     last = history[-1] if history else None
     if last and last.get("grammar", "").strip() == grammar.strip() and last.get("action") == action:
-
         if not history_exists:
             save_grammar_history(run_dir, prefix, history)
         return history

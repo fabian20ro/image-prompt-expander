@@ -127,3 +127,10 @@ class TestLoadGrammarHistoryEdgeCases:
         
         result = load_grammar_history(run_dir, "dict_instead_of_list")
         assert result == []
+
+    def test_skips_when_grammar_is_empty_or_whitespace(self, run_dir):
+        """Verify that empty or whitespace-only grammars are not appended to history."""
+        append_grammar_revision(run_dir, "test", grammar="initial", action="initial")
+        history = append_grammar_revision(run_dir, "test", grammar="   ", action="initial")
+        assert len(history) == 1
+        assert history[0]["grammar"] == "initial"
