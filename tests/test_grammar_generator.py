@@ -105,6 +105,18 @@ class TestGrammarTools(unittest.TestCase):
         result = get_system_prompt(model="flux2-klein")
         self.assertEqual(result, "system prompt content")
 
+    def test_get_system_prompt_normalization(self):
+        from grammar_generator import get_system_prompt
+        from pathlib import Path
+        from unittest.mock import patch
+        with patch("grammar_generator.Path.exists") as mock_exists, \
+             patch("grammar_generator.Path.read_text") as mock_read_text, \
+             patch("grammar_generator.paths") as mock_paths:
+            mock_paths.templates_dir = Path("/tmp/templates")
+            mock_exists.side_effect = lambda *args, **kwargs: str(args[0] if args else None) == str(Path("/tmp/templates/system_prompt_flux2-klein.txt"))
+            mock_read_text.return_value = "model_specific_content"
+            self.assertEqual(get_system_prompt(model="flux2-klein-4b"), "model_specific_content")
+
 class TestGenerateGrammar(unittest.TestCase):
     @patch("grammar_generator.OpenAI")
     @patch("grammar_generator.get_system_prompt")
