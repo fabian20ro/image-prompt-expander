@@ -7,12 +7,13 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 from unittest.mock import patch, MagicMock
 from grammar_generator import (
-    clean_grammar_output, 
-    get_system_prompt, 
-    hash_prompt, 
-    get_cached_grammar, 
-    cache_grammar, 
-    get_cached_raw_response
+    clean_grammar_output,
+    get_system_prompt,
+    hash_prompt,
+    get_cached_grammar,
+    cache_grammar,
+    get_cached_raw_response,
+    generate_grammar
 )
 
 class TestCache(unittest.TestCase):
@@ -25,7 +26,7 @@ class TestCache(unittest.TestCase):
         mock_file.exists.return_value = True
         mock_file.read_text.return_value = '{"origin": "#test#"}'
         mock_cache_dir.__truediv__.return_value = mock_file
-        
+
         prompt_hash = "abcdef123456"
         result = get_cached_grammar(prompt_hash)
         assert result == '{"origin": "#test#"}'
@@ -36,7 +37,7 @@ class TestCache(unittest.TestCase):
         mock_file = MagicMock(spec=Path)
         mock_file.exists.return_value = False
         mock_cache_dir.__truediv__.return_value = mock_file
-        
+
         prompt_hash = "abcdef123456"
         result = get_cached_grammar(prompt_hash)
         assert result is None
@@ -51,7 +52,7 @@ class TestCache(unittest.TestCase):
         user_prompt = "a sunset"
         model = "flux2-klein"
         mock_datetime.now.return_value.isoformat.return_value = "2023-01-01T12:00:00"
-        
+
         result = cache_grammar(prompt_hash, grammar, raw_response, user_prompt, model)
 
         assert isinstance(result, tuple)
@@ -88,7 +89,7 @@ class TestGrammarTools(unittest.TestCase):
         h1 = hash_prompt(prompt, model)
         h2 = hash_prompt(prompt, model)
         h3 = hash_prompt(prompt, "other-model")
-        
+
         self.assertEqual(len(h1), 12)
         self.assertEqual(h1, h2)
         self.assertNotEqual(h1, h3)
@@ -100,9 +101,31 @@ class TestGrammarTools(unittest.TestCase):
         mock_paths.templates_dir = Path("/tmp/templates")
         mock_exists.return_value = True
         mock_read_text.return_value = "system prompt content"
-        
+
         result = get_system_prompt(model="flux2-klein")
         self.assertEqual(result, "system prompt content")
+
+class TestGenerateGrammar(unittest.TestCase):
+    @patch("grammar_generator.OpenAI")
+    @patch("grammar_generator.get_system_prompt")
+    @patch("grammar_generator.cache_grammar")
+    @patch("grammar_generator.get_cached_grammar")
+    def test_generate_grammar_invalid_json(self, mock_get_cached, mock_cache, mock_get_prompt, mock_openai):
+        # Setup
+        mock_get_cached.return_value = None
+        mock_get_prompt.return_value = '{"test": "prompt"}'
+
+        # Mock OpenAI response
+        mock_client = MagicMock()
+        mock_openai.return_value = mock_client
+        mock_response = MagicMock()
+        mock_response.choices[0].message.content = "Not JSON"
+        mock_client.chat.completions.create.return_value = mock_response
+
+        with self.assertRaises(ValueError) as context:
+            generate_grammar("test prompt")
+
+        self.assertIn("LLM returned invalid JSON grammar after cleaning", str(context.exception))
 
 if __name__ == "__main__":
     unittest.main()
