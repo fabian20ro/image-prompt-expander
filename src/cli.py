@@ -7,11 +7,13 @@ from pathlib import Path
 
 import click
 
-from config import paths, settings
+import click
+from config import settings, paths
 from grammar_generator import generate_grammar
 from image_generator import SUPPORTED_MODELS, MODEL_DEFAULTS
 from image_enhancer import enhance_image, collect_images
 from pipeline import PipelineExecutor
+from utils import check_lm_studio
 
 
 def clean_generated():
@@ -229,8 +231,8 @@ def main(
         uv run python src/cli.py --clean  # Remove all generated files
 
     With image generation:
-        uv run python src/cli.py -p "a dragon flying over mountains" -n 5 \\
-            --generate-images --images-per-prompt 3 --prefix dragon
+        uv run python src/cli.py -p "a dragon flying over mountains" -n 5 \
+            --generate-images --images_per_prompt 3 --prefix dragon
 
     With image generation + SeedVR2 2x enhancement:
         uv run python src/cli.py -p "a cat" -n 1 --generate-images --enhance --prefix test
@@ -239,7 +241,7 @@ def main(
         uv run python src/cli.py --from-grammar generated/grammars/abc123.tracery.json -n 100
 
     Resume from existing prompts (images only):
-        uv run python src/cli.py --from-prompts generated/prompts/abc123_20260124_122208 \\
+        uvrun python src/cli.py --from-prompts generated/prompts/abc123_20260124_122208 \
             --generate-images --images-per-prompt 2
 
     Standalone enhancement (no image generation):
@@ -247,6 +249,11 @@ def main(
         uv run python src/cli.py --enhance-images path/to/folder/
         uv run python src/cli.py --enhance-images "generated/prompts/*/test_*.png"
     """
+    # Check LM Studio connectivity
+    if not check_lm_studio(base_url):
+        click.echo(f"Error: LM Studio is not reachable at {base_url}. Please ensure it is running.", err=True)
+        sys.exit(1)
+
     # Handle --clean
     if clean:
         removed = clean_generated()

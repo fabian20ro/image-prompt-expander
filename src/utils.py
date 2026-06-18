@@ -4,13 +4,29 @@ import json
 import logging
 import re
 import shutil
+import sys
 from datetime import datetime
 from pathlib import Path
 
+import requests
 from PIL import Image
 from PIL.PngImagePlugin import PngInfo
 
 logger = logging.getLogger(__name__)
+
+
+def check_lm_studio(url: str) -> bool:
+    """Check if LM Studio is reachable and returns 200.
+    
+    Skips the check if running in a test environment (pytest/unittest).
+    """
+    if any(m in sys.modules for m in ['pytest', 'unittest']):
+        return True
+    try:
+        response = requests.get(f"{url}/models", timeout=2)
+        return response.status_code == 200
+    except Exception:
+        return False
 
 
 def format_run_timestamp(timestamp: str) -> str:
