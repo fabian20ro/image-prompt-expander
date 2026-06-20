@@ -3,6 +3,8 @@
 import random
 from pathlib import Path
 
+from lm_studio import unload_all_models
+
 
 # Cache for loaded enhancer model (expensive to load)
 _enhancer_cache: dict = {}
@@ -16,9 +18,9 @@ def clear_enhancer_cache():
     gc.collect()
 
 
-def _get_enhancer(quantize: int, tiled_vae: bool = False):
+def _get_enhancer(tiled_vae: bool = False):
     """Get or create a cached SeedVR2 enhancer instance."""
-    cache_key = (quantize, tiled_vae)
+    cache_key = tiled_vae
     if cache_key in _enhancer_cache:
         return _enhancer_cache[cache_key]
 
@@ -31,7 +33,7 @@ def _get_enhancer(quantize: int, tiled_vae: bool = False):
             "Note: mflux requires macOS with Apple Silicon (M1/M2/M3/M4)."
         ) from e
 
-    instance = SeedVR2(quantize=quantize)
+    instance = SeedVR2(quantize=8)
 
     # SeedVR2 has tiling enabled by default; disable if requested
     if not tiled_vae:
@@ -46,7 +48,6 @@ def enhance_image(
     output_path: Path,
     softness: float = 0.5,
     seed: int | None = None,
-    quantize: int = 8,
     tiled_vae: bool = False,
 ) -> Path:
     """
@@ -57,7 +58,6 @@ def enhance_image(
         output_path: Path where the enhanced image will be saved
         softness: Enhancement softness (0.0-1.0, default 0.5)
         seed: Random seed for reproducibility (None for random)
-        quantize: Quantization level (3, 4, 5, 6, or 8)
         tiled_vae: Enable tiled VAE decoding to reduce memory (default: False)
 
     Returns:
@@ -90,8 +90,9 @@ def enhance_image(
     # Ensure output directory exists
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    # Get or create the enhancer
-    enhancer = _get_enhancer(quantize, tiled_vae)
+    # Reclaim LM Studio memory before every SeedVR2 operation, including cache hits.
+    unload_all_models()
+    enhancer = _get_enhancer(tiled_vae)
 
     # Enhance the image with 2x upscaling
     result = enhancer.generate_image(

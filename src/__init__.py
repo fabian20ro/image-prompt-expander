@@ -1,1 +1,1 @@
-"""FLUX.2 Klein image prompt generator using LLM-powered Dada Engine grammars."""
+"""ERNIE-Image-Turbo prompt generator using local LLM-powered Tracery grammars."""

@@ -46,10 +46,10 @@ class TestGetEnhancer:
     def test_get_enhancer_cache_hit(self):
         """Test that cached enhancers are reused."""
         mock_enhancer = MagicMock()
-        cache_key = (8, True)
+        cache_key = True
         _enhancer_cache[cache_key] = mock_enhancer
 
-        result = _get_enhancer(quantize=8, tiled_vae=True)
+        result = _get_enhancer(tiled_vae=True)
         assert result is mock_enhancer
 
     def test_get_enhancer_mflux_not_installed(self):
@@ -57,7 +57,7 @@ class TestGetEnhancer:
         with patch.dict("sys.modules", {"mflux.models.seedvr2.variants.upscale.seedvr2": None}):
             with patch("builtins.__import__", side_effect=ImportError("No module named 'mflux'")):
                 with pytest.raises(ImportError, match="mflux is required"):
-                    _get_enhancer(quantize=8)
+                    _get_enhancer()
 
     @patch("image_enhancer._enhancer_cache", {})
     def test_get_enhancer_creation(self):
@@ -70,7 +70,7 @@ class TestGetEnhancer:
         with patch.dict(sys.modules, {
             "mflux.models.seedvr2.variants.upscale.seedvr2": module_seedvr2,
         }):
-            result = _get_enhancer(quantize=8, tiled_vae=True)
+            result = _get_enhancer(tiled_vae=True)
 
         module_seedvr2.SeedVR2.assert_called_once_with(quantize=8)
         assert result is mock_instance
@@ -87,7 +87,7 @@ class TestGetEnhancer:
         with patch.dict(sys.modules, {
             "mflux.models.seedvr2.variants.upscale.seedvr2": module_seedvr2,
         }):
-            result = _get_enhancer(quantize=8, tiled_vae=False)
+            result = _get_enhancer(tiled_vae=False)
 
         assert result.tiling_config is None
 
@@ -106,7 +106,8 @@ class TestEnhanceImage:
             enhance_image(image_path=missing, output_path=missing)
 
     @patch("image_enhancer._get_enhancer")
-    def test_enhance_image_basic(self, mock_get_enhancer, temp_dir):
+    @patch("image_enhancer.unload_all_models")
+    def test_enhance_image_basic(self, mock_unload, mock_get_enhancer, temp_dir):
         """Test basic image enhancement."""
         # Create a real image file
         img = Image.new("RGB", (100, 100), color="red")
@@ -129,10 +130,10 @@ class TestEnhanceImage:
                 output_path=output_path,
                 softness=0.7,
                 seed=42,
-                quantize=8,
             )
 
         assert result == output_path
+        mock_unload.assert_called_once_with()
         mock_enhancer.generate_image.assert_called_once()
         call_kwargs = mock_enhancer.generate_image.call_args.kwargs
         assert call_kwargs["seed"] == 42
@@ -141,7 +142,8 @@ class TestEnhanceImage:
         mock_result.save.assert_called_once_with(path=str(output_path), overwrite=True)
 
     @patch("image_enhancer._get_enhancer")
-    def test_enhance_image_random_seed(self, mock_get_enhancer, temp_dir):
+    @patch("image_enhancer.unload_all_models")
+    def test_enhance_image_random_seed(self, _mock_unload, mock_get_enhancer, temp_dir):
         """Test that a random seed is used when none specified."""
         img = Image.new("RGB", (100, 100))
         image_path = temp_dir / "test.png"
@@ -160,7 +162,8 @@ class TestEnhanceImage:
         assert isinstance(call_kwargs["seed"], int)
 
     @patch("image_enhancer._get_enhancer")
-    def test_enhance_image_creates_output_dir(self, mock_get_enhancer, temp_dir):
+    @patch("image_enhancer.unload_all_models")
+    def test_enhance_image_creates_output_dir(self, _mock_unload, mock_get_enhancer, temp_dir):
         """Test that output directory is created."""
         img = Image.new("RGB", (100, 100))
         image_path = temp_dir / "test.png"
@@ -254,4 +257,3 @@ def test_enhance_image_invalid_softness(softness):
         Image.new("RGB", (10, 10)).save(img_path)
         with pytest.raises(ValueError, match="softness must be between 0.0 and 1.0"):
             enhance_image(img_path, out_path, softness=softness)
-

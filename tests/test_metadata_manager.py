@@ -26,14 +26,14 @@ class TestRunMetadata:
             "prefix": "test",
             "count": 10,
             "user_prompt": "test prompt",
-            "model": "z-image-turbo",
+            "model": "ernie-image-turbo",
         }
         metadata = RunMetadata.from_dict(data)
 
         assert metadata.prefix == "test"
         assert metadata.count == 10
         assert metadata.user_prompt == "test prompt"
-        assert metadata.model == "z-image-turbo"
+        assert metadata.model == "ernie-image-turbo"
 
     def test_from_dict_with_defaults(self):
         """Test that defaults are used for missing fields."""
@@ -42,7 +42,7 @@ class TestRunMetadata:
 
         assert metadata.prefix == "image"
         assert metadata.count == 0
-        assert metadata.model == "flux2-klein-4b"
+        assert metadata.model == "ernie-image-turbo"
 
     def test_run_metadata_invalid_count(self):
         """Test that negative count raises ValueError."""
@@ -68,7 +68,7 @@ class TestRunMetadata:
             "prefix": "test",
             "count": 5,
             "user_prompt": "test",
-            "model": "z-image-turbo",
+            "model": "ernie-image-turbo",
             "created_at": "2024-01-01",
             "grammar_cached": True,
             "image_generation": {"enabled": True},
@@ -227,7 +227,7 @@ class TestMetadataManager:
             "image_generation": {
                 "enabled": True,
                 "width": 1024,
-                "model": "z-image-turbo",
+                "model": "ernie-image-turbo",
             },
         }
         (temp_dir / "test.metaprompt.json").write_text(json.dumps(data))

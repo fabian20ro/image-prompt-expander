@@ -17,10 +17,10 @@ class TestConfig:
         settings = Settings()
 
         assert settings.lm_studio.base_url == "http://localhost:1234/v1"
-        assert settings.lm_studio.api_key == "lm-studio"
         assert settings.image_generation.default_width == 864
         assert settings.image_generation.default_height == 1152
-        assert settings.image_generation.default_model == "flux2-klein-4b"
+        assert settings.lm_studio.model == "google/gemma-4-26b-a4b-qat"
+        assert settings.image_generation.model_path.name == "ernie-image-turbo-4bit"
         assert settings.server.sse_queue_size == 100
         assert settings.enhancement.default_softness == 0.5
 

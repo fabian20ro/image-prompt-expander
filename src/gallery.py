@@ -295,10 +295,8 @@ def _build_interactive_grammar_section(grammar: str, run_id: str) -> str:
 
 def _build_image_settings_section(image_settings: dict, layout_settings: dict) -> str:
     """Build the collapsible image settings section."""
-    model = image_settings.get("model", "flux2-klein-4b")
     width = image_settings.get("width", 864)
     height = image_settings.get("height", 1152)
-    steps = image_settings.get("steps")
     seed = image_settings.get("seed")
     enhance = "checked" if image_settings.get("enhance", False) else ""
     enhance_softness = image_settings.get("enhance_softness", 0.5) or 0.5
@@ -309,14 +307,6 @@ def _build_image_settings_section(image_settings: dict, layout_settings: dict) -
     <summary>Image Settings</summary>
     <div class="settings-form">
       <div class="form-row">
-        <div class="form-group">
-          <label for="img-model">Model</label>
-          <select id="img-model" name="model">
-            <option value="z-image-turbo"{" selected" if model == "z-image-turbo" else ""}>z-image-turbo</option>
-            <option value="flux2-klein-4b"{" selected" if model == "flux2-klein-4b" else ""}>flux2-klein-4b</option>
-            <option value="flux2-klein-9b"{" selected" if model == "flux2-klein-9b" else ""}>flux2-klein-9b</option>
-          </select>
-        </div>
         <div class="form-group">
           <label for="img-images-per-prompt">Images/Prompt (0 = prompt-only layout)</label>
           <input type="number" id="img-images-per-prompt" name="images_per_prompt" value="{images_per_prompt}" min="0">
@@ -334,10 +324,6 @@ def _build_image_settings_section(image_settings: dict, layout_settings: dict) -
         <div class="form-group">
           <label for="img-height">Height</label>
           <input type="number" id="img-height" name="height" value="{height}" step="8">
-        </div>
-        <div class="form-group">
-          <label for="img-steps">Steps</label>
-          <input type="number" id="img-steps" name="steps" value="{'' if steps is None else steps}" placeholder="auto" min="1">
         </div>
       </div>
       <div class="form-row">
@@ -727,10 +713,8 @@ def _build_interactive_js(run_id: str, grammar_history: list[dict]) -> str:
       const data = {{
         images_per_prompt: readImagesPerPrompt(),
         resume: true,
-        model: document.getElementById('img-model')?.value || null,
         width: parseInt(document.getElementById('img-width')?.value) || null,
         height: parseInt(document.getElementById('img-height')?.value) || null,
-        steps: document.getElementById('img-steps')?.value ? parseInt(document.getElementById('img-steps').value) : null,
         seed: document.getElementById('img-seed')?.value ? parseInt(document.getElementById('img-seed').value) : null,
         max_prompts: document.getElementById('img-max-prompts')?.value ? parseInt(document.getElementById('img-max-prompts').value) : null,
         enhance: document.getElementById('img-enhance')?.checked || false,

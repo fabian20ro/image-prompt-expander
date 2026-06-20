@@ -144,15 +144,12 @@ def run_generate_pipeline(params: dict):
     prompt = params["prompt"]
     count = params.get("count", 50)
     prefix = params.get("prefix", "image")
-    model = params.get("model", "flux2-klein-4b")
     temperature = params.get("temperature", 0.7)
     no_cache = params.get("no_cache", False)
     generate_images = params.get("generate_images", False)
     images_per_prompt = params.get("images_per_prompt", 1)
     width = params.get("width", 864)
     height = params.get("height", 1152)
-    steps = params.get("steps")
-    quantize = params.get("quantize", 8)
     seed = params.get("seed")
     max_prompts = params.get("max_prompts")
     tiled_vae = params.get("tiled_vae", False)
@@ -173,15 +170,12 @@ def run_generate_pipeline(params: dict):
             prompt=prompt,
             count=count,
             prefix=prefix,
-            model=model,
             temperature=temperature,
             no_cache=no_cache,
             generate_images=generate_images,
             images_per_prompt=images_per_prompt,
             width=width,
             height=height,
-            steps=steps,
-            quantize=quantize,
             seed=seed,
             max_prompts=max_prompts,
             tiled_vae=tiled_vae,
@@ -207,12 +201,10 @@ def run_generate_from_grammar(params: dict):
     title = params.get("title") or "Grammar import"
     prefix = params.get("prefix", "image")
     count = params.get("count", 50)
-    model = params.get("model", "flux2-klein-4b")
     images_per_prompt = params.get("images_per_prompt", 1)
     max_prompts = params.get("max_prompts")
     width = params.get("width", 864)
     height = params.get("height", 1152)
-    steps = params.get("steps")
     seed = params.get("seed")
 
     run_timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -227,11 +219,9 @@ def run_generate_from_grammar(params: dict):
             grammar=grammar,
             count=count,
             prefix=prefix,
-            model=model,
             images_per_prompt=images_per_prompt,
             width=width,
             height=height,
-            steps=steps,
             seed=seed,
             max_prompts=max_prompts,
             output_dir=run_output_dir,
@@ -388,11 +378,8 @@ def run_generate_all_images(params: dict):
     resume = params.get("resume", True)
 
     # Optional image settings (passed from gallery form)
-    model = params.get("model")
     width = params.get("width")
     height = params.get("height")
-    steps = params.get("steps")
-    quantize = params.get("quantize")
     seed = params.get("seed")
     max_prompts = params.get("max_prompts")
     enhance = params.get("enhance", False)
@@ -410,7 +397,7 @@ def run_generate_all_images(params: dict):
         prefix = metadata.prefix
         set_log_file(output_dir / f"{prefix}_worker.log")
         log_to_file(f"Generating all images: images_per_prompt={images_per_prompt}, resume={resume}, "
-                    f"model={model}, width={width}, height={height}, enhance={enhance}")
+                    f"width={width}, height={height}, enhance={enhance}")
     except MetadataError as e:
         log_to_file(f"Warning: Could not load metadata: {e}")
         prefix = "image"
@@ -423,11 +410,8 @@ def run_generate_all_images(params: dict):
             run_id=run_id,
             images_per_prompt=images_per_prompt,
             resume=resume,
-            model=model,
             width=width,
             height=height,
-            steps=steps,
-            quantize=quantize,
             seed=seed,
             max_prompts=max_prompts,
             enhance=enhance,

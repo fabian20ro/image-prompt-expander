@@ -12,7 +12,9 @@ from grammar_generator import (
     hash_prompt, 
     get_cached_grammar, 
     cache_grammar, 
-    get_cached_raw_response
+    get_cached_raw_response,
+    generate_grammar,
+    ensure_lm_model_loaded,
 )
 
 class TestCache(unittest.TestCase):
@@ -49,10 +51,9 @@ class TestCache(unittest.TestCase):
         grammar = '{"origin": "#prompt#"}'
         raw_response = '<think>...</think>{"origin": "#prompt#"}'
         user_prompt = "a sunset"
-        model = "flux2-klein"
         mock_datetime.now.return_value.isoformat.return_value = "2023-01-01T12:00:00"
         
-        result = cache_grammar(prompt_hash, grammar, raw_response, user_prompt, model)
+        result = cache_grammar(prompt_hash, grammar, raw_response, user_prompt)
 
         assert isinstance(result, tuple)
         assert result[0] == grammar
@@ -84,10 +85,9 @@ class TestGrammarTools(unittest.TestCase):
 
     def test_hash_prompt(self):
         prompt = "a beautiful sunset"
-        model = "flux2-klein"
-        h1 = hash_prompt(prompt, model)
-        h2 = hash_prompt(prompt, model)
-        h3 = hash_prompt(prompt, "other-model")
+        h1 = hash_prompt(prompt)
+        h2 = hash_prompt(prompt)
+        h3 = hash_prompt("another prompt")
         
         self.assertEqual(len(h1), 12)
         self.assertEqual(h1, h2)
@@ -101,8 +101,95 @@ class TestGrammarTools(unittest.TestCase):
         mock_exists.return_value = True
         mock_read_text.return_value = "system prompt content"
         
-        result = get_system_prompt(model="flux2-klein")
+        result = get_system_prompt()
         self.assertEqual(result, "system prompt content")
+
+    @patch("grammar_generator.get_system_prompt", return_value="ERNIE instructions")
+    @patch("grammar_generator.requests.get")
+    @patch("grammar_generator.requests.post")
+    def test_generate_grammar_uses_native_chat_without_reasoning(
+        self, mock_post, mock_get, _mock_prompt
+    ):
+        mock_get.return_value.json.return_value = {
+            "models": [
+                {
+                    "key": "google/gemma-4-26b-a4b-qat",
+                    "loaded_instances": [{"id": "google/gemma-4-26b-a4b-qat"}],
+                }
+            ]
+        }
+        mock_post.return_value.json.return_value = {
+            "output": [{"type": "message", "content": '{"origin":["a cat"]}'}]
+        }
+
+        grammar, was_cached, raw = generate_grammar(
+            "a cat",
+            base_url="http://localhost:1234/v1",
+            use_cache=False,
+        )
+
+        assert grammar == '{"origin":["a cat"]}'
+        assert raw == grammar
+        assert was_cached is False
+        mock_post.assert_called_once_with(
+            "http://localhost:1234/api/v1/chat",
+            json={
+                "model": "google/gemma-4-26b-a4b-qat",
+                "input": "a cat",
+                "system_prompt": "ERNIE instructions",
+                "temperature": 0.7,
+                "max_output_tokens": 4096,
+                "reasoning": "off",
+                "store": False,
+            },
+            timeout=180.0,
+        )
+        mock_get.assert_called_once_with("http://localhost:1234/api/v1/models", timeout=180.0)
+        mock_get.return_value.raise_for_status.assert_called_once_with()
+        mock_post.return_value.raise_for_status.assert_called_once_with()
+
+    @patch("grammar_generator.requests.get")
+    @patch("grammar_generator.requests.post")
+    def test_ensure_lm_model_loaded_waits_for_native_load(self, mock_post, mock_get):
+        mock_get.return_value.json.return_value = {
+            "models": [
+                {"key": "google/gemma-4-26b-a4b-qat", "loaded_instances": []}
+            ]
+        }
+        mock_post.return_value.json.return_value = {"status": "loaded"}
+
+        ensure_lm_model_loaded("http://localhost:1234/v1")
+
+        mock_post.assert_called_once_with(
+            "http://localhost:1234/api/v1/models/load",
+            json={"model": "google/gemma-4-26b-a4b-qat", "context_length": 8192},
+            timeout=180.0,
+        )
+        mock_post.return_value.raise_for_status.assert_called_once_with()
+
+    @patch("grammar_generator.time.sleep")
+    @patch("grammar_generator.requests.get")
+    @patch("grammar_generator.requests.post")
+    def test_ensure_lm_model_loaded_retries_transient_failure(
+        self, mock_post, mock_get, mock_sleep
+    ):
+        import requests
+
+        mock_get.return_value.json.return_value = {
+            "models": [
+                {"key": "google/gemma-4-26b-a4b-qat", "loaded_instances": []}
+            ]
+        }
+        failed = MagicMock()
+        failed.raise_for_status.side_effect = requests.HTTPError("load canceled")
+        loaded = MagicMock()
+        loaded.json.return_value = {"status": "loaded"}
+        mock_post.side_effect = [failed, loaded]
+
+        ensure_lm_model_loaded("http://localhost:1234/v1")
+
+        assert mock_post.call_count == 2
+        mock_sleep.assert_called_once_with(2.0)
 
 if __name__ == "__main__":
     unittest.main()

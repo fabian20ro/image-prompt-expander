@@ -16,7 +16,14 @@ logger = logging.getLogger(__name__)
 from config import paths, settings
 from grammar_generator import generate_grammar, hash_prompt
 from tracery_runner import run_tracery, TraceryError
-from image_generator import generate_image, clear_model_cache, MODEL_DEFAULTS
+from image_generator import (
+    GUIDANCE,
+    INFERENCE_STEPS,
+    MODEL_NAME,
+    QUANTIZATION,
+    clear_model_cache,
+    generate_image,
+)
 from image_enhancer import enhance_image
 from gallery import create_gallery, update_gallery
 from gallery_index import generate_master_index
@@ -89,8 +96,6 @@ class ImageGenerationConfig:
     images_per_prompt: int = 1
     width: int = 864
     height: int = 1152
-    steps: int | None = None  # Uses model default if None
-    quantize: int = 8
     seed: int | None = None
     max_prompts: int | None = None  # Limit prompts to render
     tiled_vae: bool = False
@@ -103,11 +108,8 @@ class ImageGenerationConfig:
             "images_per_prompt": self.images_per_prompt,
             "width": self.width,
             "height": self.height,
-            "quantize": self.quantize,
             "tiled_vae": self.tiled_vae,
         }
-        if self.steps is not None:
-            result["steps"] = self.steps
         if self.seed is not None:
             result["seed"] = self.seed
         if self.max_prompts is not None:
@@ -155,7 +157,6 @@ class PipelineConfig:
     # Grammar/Prompt settings
     count: int = 50
     prefix: str = "image"
-    model: str = "flux2-klein-4b"  # Must match config.ImageGenerationConfig.default_model
     temperature: float = 0.7
     no_cache: bool = False
 
@@ -167,46 +168,6 @@ class PipelineConfig:
 
     # Output settings
     output_dir: Path | None = None
-
-    @classmethod
-    def from_kwargs(cls, **kwargs) -> "PipelineConfig":
-        """Create config from flat kwargs (for backwards compatibility).
-
-        Maps old-style parameters to the new config structure.
-        """
-        # Extract image config params
-        image_config = ImageGenerationConfig(
-            enabled=kwargs.pop("generate_images", False),
-            images_per_prompt=kwargs.pop("images_per_prompt", 1),
-            width=kwargs.pop("width", 864),
-            height=kwargs.pop("height", 1152),
-            steps=kwargs.pop("steps", None),
-            quantize=kwargs.pop("quantize", 8),
-            seed=kwargs.pop("seed", None),
-            max_prompts=kwargs.pop("max_prompts", None),
-            tiled_vae=kwargs.pop("tiled_vae", True),
-            resume=kwargs.pop("resume", False),
-        )
-
-        # Extract enhancement config params
-        enhancement_config = EnhancementConfig(
-            enabled=kwargs.pop("enhance", False),
-            softness=kwargs.pop("enhance_softness", 0.5),
-            batch_after=kwargs.pop("enhance_after", False),
-        )
-
-        return cls(
-            prompt=kwargs.pop("prompt", ""),
-            count=kwargs.pop("count", 50),
-            prefix=kwargs.pop("prefix", "image"),
-            model=kwargs.pop("model", "flux2-klein-4b"),
-            temperature=kwargs.pop("temperature", 0.7),
-            no_cache=kwargs.pop("no_cache", False),
-            image=image_config,
-            enhancement=enhancement_config,
-            output_dir=kwargs.pop("output_dir", None),
-        )
-
 
 def _null_progress(stage: str, current: int = 0, total: int = 0, message: str = "") -> None:
     """No-op progress callback."""
@@ -240,15 +201,12 @@ class PipelineExecutor:
         prompt: str,
         count: int = 50,
         prefix: str = "image",
-        model: str = "flux2-klein-4b",
         temperature: float = 0.7,
         no_cache: bool = False,
         generate_images: bool = False,
         images_per_prompt: int = 1,
         width: int = 864,
         height: int = 1152,
-        steps: int | None = None,
-        quantize: int = 8,
         seed: int | None = None,
         max_prompts: int | None = None,
         tiled_vae: bool = True,
@@ -264,15 +222,12 @@ class PipelineExecutor:
             prompt: User's image description
             count: Number of prompt variations to generate
             prefix: Prefix for output files
-            model: Image model to use
             temperature: LLM temperature for grammar generation
             no_cache: Skip grammar cache
             generate_images: Whether to generate images
             images_per_prompt: Number of images per prompt
             width: Image width
             height: Image height
-            steps: Inference steps (model-specific default if None)
-            quantize: Quantization level
             seed: Random seed
             max_prompts: Limit prompts to render
             tiled_vae: Use tiled VAE decoding
@@ -297,7 +252,6 @@ class PipelineExecutor:
                 user_prompt=prompt,
                 use_cache=not no_cache,
                 temperature=temperature,
-                model=model,
             )
         except Exception as e:
             return PipelineResult(success=False, error=f"Grammar generation failed: {e}")
@@ -329,14 +283,13 @@ class PipelineExecutor:
             output_file.write_text(text)
 
         # Build metadata
-        effective_steps = steps if steps is not None else MODEL_DEFAULTS[model]["steps"]
         metadata = {
             "user_prompt": prompt,
             "count": len(outputs),
             "created_at": datetime.now().isoformat(),
             "grammar_cached": was_cached,
             "prefix": prefix,
-            "model": model,
+            "model": MODEL_NAME,
             "display_title": prompt,
             "gallery_layout": {
                 "images_per_prompt": images_per_prompt,
@@ -347,11 +300,12 @@ class PipelineExecutor:
         if generate_images:
             metadata["image_generation"] = {
                 "enabled": True,
-                "model": model,
-                "steps": effective_steps,
+                "model": MODEL_NAME,
+                "steps": INFERENCE_STEPS,
+                "guidance": GUIDANCE,
                 "width": width,
                 "height": height,
-                "quantize": quantize,
+                "quantize": QUANTIZATION,
                 "images_per_prompt": images_per_prompt,
                 "max_prompts": max_prompts,
                 "seed": seed,
@@ -397,11 +351,8 @@ class PipelineExecutor:
                 prefix=prefix,
                 prompts=prompts_to_render,
                 images_per_prompt=images_per_prompt,
-                model=model,
-                steps=steps,
                 width=width,
                 height=height,
-                quantize=quantize,
                 seed=seed,
                 tiled_vae=tiled_vae,
                 enhance=enhance,
@@ -429,13 +380,10 @@ class PipelineExecutor:
         grammar_path: Path,
         count: int = 50,
         prefix: str = "image",
-        model: str = "flux2-klein-4b",
         generate_images: bool = False,
         images_per_prompt: int = 1,
         width: int = 864,
         height: int = 1152,
-        steps: int | None = None,
-        quantize: int = 8,
         seed: int | None = None,
         max_prompts: int | None = None,
         tiled_vae: bool = True,
@@ -451,13 +399,10 @@ class PipelineExecutor:
             grammar_path: Path to existing grammar file
             count: Number of prompt variations
             prefix: Prefix for output files
-            model: Image model for generation
             generate_images: Whether to generate images
             images_per_prompt: Images per prompt
             width: Image width
             height: Image height
-            steps: Inference steps
-            quantize: Quantization level
             seed: Random seed
             max_prompts: Limit prompts to render
             tiled_vae: Use tiled VAE
@@ -505,13 +450,10 @@ class PipelineExecutor:
             grammar=grammar,
             count=count,
             prefix=prefix,
-            model=model,
             generate_images=generate_images,
             images_per_prompt=images_per_prompt,
             width=width,
             height=height,
-            steps=steps,
-            quantize=quantize,
             seed=seed,
             max_prompts=max_prompts,
             tiled_vae=tiled_vae,
@@ -532,13 +474,10 @@ class PipelineExecutor:
         grammar: str,
         count: int = 50,
         prefix: str = "image",
-        model: str = "flux2-klein-4b",
         generate_images: bool = False,
         images_per_prompt: int = 1,
         width: int = 864,
         height: int = 1152,
-        steps: int | None = None,
-        quantize: int = 8,
         seed: int | None = None,
         max_prompts: int | None = None,
         tiled_vae: bool = True,
@@ -583,7 +522,6 @@ class PipelineExecutor:
             output_file.write_text(text)
 
         # Build metadata
-        effective_steps = steps if steps is not None else MODEL_DEFAULTS[model]["steps"]
         metadata = {
             "source": source,
             "user_prompt": user_prompt,
@@ -591,7 +529,7 @@ class PipelineExecutor:
             "created_at": datetime.now().isoformat(),
             "grammar_cached": True,
             "prefix": prefix,
-            "model": model,
+            "model": MODEL_NAME,
             "display_title": display_title or user_prompt,
             "gallery_layout": {
                 "images_per_prompt": images_per_prompt,
@@ -603,11 +541,12 @@ class PipelineExecutor:
 
         metadata["image_generation"] = {
             "enabled": generate_images,
-            "model": model,
-            "steps": effective_steps,
+            "model": MODEL_NAME,
+            "steps": INFERENCE_STEPS,
+            "guidance": GUIDANCE,
             "width": width,
             "height": height,
-            "quantize": quantize,
+            "quantize": QUANTIZATION,
             "images_per_prompt": images_per_prompt,
             "max_prompts": max_prompts,
             "seed": seed,
@@ -654,11 +593,8 @@ class PipelineExecutor:
                 prefix=prefix,
                 prompts=prompts_to_render,
                 images_per_prompt=images_per_prompt,
-                model=model,
-                steps=steps,
                 width=width,
                 height=height,
-                quantize=quantize,
                 seed=seed,
                 tiled_vae=tiled_vae,
                 enhance=enhance,
@@ -685,11 +621,8 @@ class PipelineExecutor:
         self,
         prompts_dir: Path,
         images_per_prompt: int = 1,
-        model: str | None = None,
         width: int | None = None,
         height: int | None = None,
-        steps: int | None = None,
-        quantize: int | None = None,
         seed: int | None = None,
         max_prompts: int | None = None,
         tiled_vae: bool = True,
@@ -703,11 +636,8 @@ class PipelineExecutor:
         Args:
             prompts_dir: Path to existing prompts directory
             images_per_prompt: Images per prompt
-            model: Image model (uses metadata default if None)
             width: Image width (uses metadata default if None)
             height: Image height (uses metadata default if None)
-            steps: Inference steps (uses metadata default if None)
-            quantize: Quantization level (uses metadata default if None)
             seed: Random seed
             max_prompts: Limit prompts to render
             tiled_vae: Use tiled VAE
@@ -729,11 +659,8 @@ class PipelineExecutor:
         existing_settings = meta.image_generation
 
         # Use existing settings as defaults
-        model = model or existing_settings.get("model", "flux2-klein-4b")
         width = width or existing_settings.get("width", 864)
         height = height or existing_settings.get("height", 1152)
-        steps = steps or existing_settings.get("steps")
-        quantize = quantize or existing_settings.get("quantize", 8)
 
         # Load prompts
         prompt_files = sorted(prompts_dir.glob(f"{prefix}_*.txt"))
@@ -748,14 +675,14 @@ class PipelineExecutor:
         run_id = prompts_dir.name
 
         # Update metadata
-        effective_steps = steps if steps is not None else MODEL_DEFAULTS[model]["steps"]
         new_image_settings = {
             "enabled": True,
-            "model": model,
-            "steps": effective_steps,
+            "model": MODEL_NAME,
+            "steps": INFERENCE_STEPS,
+            "guidance": GUIDANCE,
             "width": width,
             "height": height,
-            "quantize": quantize,
+            "quantize": QUANTIZATION,
             "images_per_prompt": images_per_prompt,
             "max_prompts": max_prompts,
             "seed": seed,
@@ -800,11 +727,8 @@ class PipelineExecutor:
             prefix=prefix,
             prompts=prompts_to_render,
             images_per_prompt=images_per_prompt,
-            model=model,
-            steps=steps,
             width=width,
             height=height,
-            quantize=quantize,
             seed=seed,
             tiled_vae=tiled_vae,
             enhance=enhance,
@@ -973,17 +897,13 @@ class PipelineExecutor:
 
         self.on_progress("generating_image", 0, 1, f"Generating {output_path.name}...")
 
-        model = image_settings.get("model", "flux2-klein-4b")
         try:
             generate_image(
                 prompt=prompt_text,
                 output_path=output_path,
-                model=model,
                 seed=image_settings.get("seed"),
-                steps=image_settings.get("steps"),
                 width=image_settings.get("width", 864),
                 height=image_settings.get("height", 1152),
-                quantize=image_settings.get("quantize", 8),
                 tiled_vae=image_settings.get("tiled_vae", True),
             )
         except Exception as e:
@@ -1043,7 +963,6 @@ class PipelineExecutor:
                 image_path=image_path,
                 output_path=image_path,
                 softness=softness,
-                quantize=image_settings.get("quantize", 8),
                 tiled_vae=image_settings.get("tiled_vae", True),
             )
         except Exception as e:
@@ -1065,11 +984,8 @@ class PipelineExecutor:
         run_id: str,
         images_per_prompt: int = 1,
         resume: bool = True,
-        model: str | None = None,
         width: int | None = None,
         height: int | None = None,
-        steps: int | None = None,
-        quantize: int | None = None,
         seed: int | None = None,
         max_prompts: int | None = None,
         enhance: bool = False,
@@ -1081,11 +997,8 @@ class PipelineExecutor:
             run_id: Run directory name
             images_per_prompt: Images per prompt
             resume: Skip existing images
-            model: Image model (uses metadata default if None)
             width: Image width (uses metadata default if None)
             height: Image height (uses metadata default if None)
-            steps: Inference steps (uses metadata default if None)
-            quantize: Quantization level (uses metadata default if None)
             seed: Random seed (uses metadata default if None)
             max_prompts: Limit prompts to render
             enhance: Enable enhancement after generation
@@ -1110,11 +1023,8 @@ class PipelineExecutor:
         layout_settings = resolve_gallery_layout(meta, prompt_count=meta.count)
 
         # Use passed settings or fall back to metadata defaults
-        effective_model = model or image_settings.get("model") or meta.model
         effective_width = width or image_settings.get("width", 864)
         effective_height = height or image_settings.get("height", 1152)
-        effective_steps = steps or image_settings.get("steps")
-        effective_quantize = quantize or image_settings.get("quantize", 8)
         effective_seed = seed if seed is not None else image_settings.get("seed")
         effective_tiled_vae = image_settings.get("tiled_vae", True)
 
@@ -1137,11 +1047,12 @@ class PipelineExecutor:
         # Update metadata with effective settings
         new_image_settings = {
             "enabled": True,
-            "model": effective_model,
+            "model": MODEL_NAME,
             "width": effective_width,
             "height": effective_height,
-            "steps": effective_steps,
-            "quantize": effective_quantize,
+            "steps": INFERENCE_STEPS,
+            "guidance": GUIDANCE,
+            "quantize": QUANTIZATION,
             "seed": effective_seed,
             "images_per_prompt": images_per_prompt,
             "max_prompts": max_prompts,
@@ -1193,11 +1104,8 @@ class PipelineExecutor:
             prefix=prefix,
             prompts=prompts,
             images_per_prompt=images_per_prompt,
-            model=effective_model,
-            steps=effective_steps,
             width=effective_width,
             height=effective_height,
-            quantize=effective_quantize,
             seed=effective_seed,
             tiled_vae=effective_tiled_vae,
             enhance=enhance,
@@ -1267,7 +1175,6 @@ class PipelineExecutor:
                     image_path=image_path,
                     output_path=image_path,
                     softness=softness,
-                    quantize=image_settings.get("quantize", 8),
                     tiled_vae=image_settings.get("tiled_vae", True),
                 )
             except Exception as e:
@@ -1292,11 +1199,8 @@ class PipelineExecutor:
         prefix: str,
         prompts: list[str],
         images_per_prompt: int,
-        model: str,
-        steps: int | None,
         width: int,
         height: int,
-        quantize: int,
         seed: int | None,
         tiled_vae: bool,
         enhance: bool,
@@ -1337,12 +1241,9 @@ class PipelineExecutor:
                     generate_image(
                         prompt=prompt_text,
                         output_path=output_path,
-                        model=model,
                         seed=current_seed,
-                        steps=steps,
                         width=width,
                         height=height,
-                        quantize=quantize,
                         tiled_vae=tiled_vae,
                     )
                 except Exception as e:
@@ -1369,7 +1270,6 @@ class PipelineExecutor:
                             output_path=output_path,
                             softness=enhance_softness,
                             seed=current_seed,
-                            quantize=quantize,
                             tiled_vae=tiled_vae,
                         )
                     except Exception as e:
@@ -1407,7 +1307,6 @@ class PipelineExecutor:
                         output_path=image_path,
                         softness=enhance_softness,
                         seed=image_seed,
-                        quantize=quantize,
                         tiled_vae=tiled_vae,
                     )
                 except Exception as e:

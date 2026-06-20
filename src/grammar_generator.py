@@ -3,63 +3,83 @@
 import hashlib
 import json
 import re
+import time
 from datetime import datetime
 from pathlib import Path
 
-from openai import OpenAI
+import requests
 
 from config import settings, paths
 
 
 # Default LM Studio endpoint (from centralized config)
 LM_STUDIO_BASE_URL = settings.lm_studio.base_url
-LM_STUDIO_API_KEY = settings.lm_studio.api_key
 
 # Cache directory for generated grammars (from centralized paths)
 CACHE_DIR = paths.grammars_dir
+PROMPT_SCHEMA_VERSION = "ernie-v1"
+LM_CONTEXT_LENGTH = 8192
+LM_LOAD_ATTEMPTS = 3
 
 
-def get_system_prompt(model: str | None = None, templates_dir: Path | None = None) -> str:
+def _api_root(base_url: str) -> str:
+    """Convert the OpenAI-compatible base URL to LM Studio's server root."""
+    root = base_url.rstrip("/")
+    return root[:-3] if root.endswith("/v1") else root
+
+
+def ensure_lm_model_loaded(base_url: str, timeout: float = 180.0) -> None:
+    """Synchronously load the pinned Gemma model when LM Studio has unloaded it."""
+    root = _api_root(base_url)
+    response = requests.get(f"{root}/api/v1/models", timeout=timeout)
+    response.raise_for_status()
+    models = response.json().get("models", [])
+    model = next((item for item in models if item.get("key") == settings.lm_studio.model), None)
+    if model is None:
+        raise ValueError(f"LM Studio model is not installed: {settings.lm_studio.model}")
+    if model.get("loaded_instances"):
+        return
+
+    for attempt in range(LM_LOAD_ATTEMPTS):
+        try:
+            response = requests.post(
+                f"{root}/api/v1/models/load",
+                json={"model": settings.lm_studio.model, "context_length": LM_CONTEXT_LENGTH},
+                timeout=timeout,
+            )
+            response.raise_for_status()
+            if response.json().get("status") == "loaded":
+                return
+        except requests.RequestException:
+            if attempt == LM_LOAD_ATTEMPTS - 1:
+                raise
+        if attempt < LM_LOAD_ATTEMPTS - 1:
+            time.sleep(2.0)
+    raise ValueError(f"LM Studio did not load model: {settings.lm_studio.model}")
+
+
+def get_system_prompt(templates_dir: Path | None = None) -> str:
     """
     Load the system prompt from the templates directory.
 
     Args:
-        model: Model name to select appropriate system prompt.
-               Supports z-image-turbo (camera-first) and flux2-klein (prose-based).
-               Falls back to generic system_prompt.txt if model-specific not found.
-
     Returns:
         The system prompt content
     """
     templates_dir = templates_dir or paths.templates_dir
 
-    # Determine the model-specific prompt filename
-    if model:
-        # Normalize model name for file lookup (e.g., flux2-klein-4b -> flux2-klein)
-        prompt_name = re.sub(r'-\d+[a-z]?$', '', model)
-        model_specific_path = templates_dir / f"system_prompt_{prompt_name}.txt"
-        if model_specific_path.exists():
-            return model_specific_path.read_text()
-
-    # Fallback to generic system prompt
-    generic_path = templates_dir / "system_prompt.txt"
-    return generic_path.read_text()
+    return (templates_dir / "system_prompt.txt").read_text()
 
 
-def hash_prompt(user_prompt: str, model: str | None = None) -> str:
-    """Generate a short hash for caching grammars by prompt and model.
+def hash_prompt(user_prompt: str) -> str:
+    """Generate a schema-versioned hash for caching ERNIE grammars.
 
     Args:
         user_prompt: The user's image description
-        model: Image model name (included in hash to avoid using cached grammars
-               generated for different models with different system prompts)
-
     Returns:
         A 12-character hex hash
     """
-    key = user_prompt
-    if model:
-        key = f"{model}:{user_prompt}"
+    key = f"{PROMPT_SCHEMA_VERSION}:{user_prompt}"
     return hashlib.sha256(key.encode()).hexdigest()[:12]
 
 
@@ -86,7 +106,6 @@ def cache_grammar(
     grammar: str,
     raw_response: str,
     user_prompt: str,
-    model: str | None = None,
 ) -> tuple[str, bool, str]:
     """
     Save a grammar to the cache.
@@ -96,7 +115,6 @@ def cache_grammar(
         grammar: The cleaned grammar content
         raw_response: The raw LLM response (including thinking blocks)
         user_prompt: The original user prompt (for metadata)
-        model: The image model used (for metadata)
 
     Returns:
         A tuple of (grammar, was_cached, raw_response)
@@ -117,7 +135,8 @@ def cache_grammar(
         "user_prompt": user_prompt,
         "created_at": datetime.now().isoformat(),
         "hash": prompt_hash,
-        "model": model,
+        "prompt_schema": PROMPT_SCHEMA_VERSION,
+        "lm_model": settings.lm_studio.model,
     }
     metadata_file.write_text(json.dumps(metadata, indent=2))
 
@@ -143,10 +162,8 @@ def get_cached_raw_response(prompt_hash: str) -> str | None:
 def generate_grammar(
     user_prompt: str,
     base_url: str = LM_STUDIO_BASE_URL,
-    api_key: str = LM_STUDIO_API_KEY,
     use_cache: bool = True,
     temperature: float = 0.7,
-    model: str | None = None,
 ) -> tuple[str, bool, str | None]:
     """
     Generate a Dada Engine grammar for the given prompt using LM Studio.
@@ -154,15 +171,13 @@ def generate_grammar(
     Args:
         user_prompt: The user's image description
         base_url: LM Studio API base URL
-        api_key: API key (LM Studio doesn't require a real key)
         use_cache: Whether to check/use cached grammars
         temperature: LLM temperature for generation
-        model: Image model name to select appropriate system prompt
 
     Returns:
         Tuple of (grammar content, was_cached, raw_response)
     """
-    prompt_hash = hash_prompt(user_prompt, model)
+    prompt_hash = hash_prompt(user_prompt)
 
     # Check cache first
     if use_cache:
@@ -171,25 +186,31 @@ def generate_grammar(
             raw_response = get_cached_raw_response(prompt_hash)
             return cached, True, raw_response
 
-    # Generate new grammar via LM Studio
-    client = OpenAI(
-        base_url=base_url,
-        api_key=api_key
+    system_prompt = get_system_prompt()
+    api_root = _api_root(base_url)
+    ensure_lm_model_loaded(base_url)
+    response = requests.post(
+        f"{api_root}/api/v1/chat",
+        json={
+            "model": settings.lm_studio.model,
+            "input": user_prompt,
+            "system_prompt": system_prompt,
+            "temperature": temperature,
+            "max_output_tokens": 4096,
+            "reasoning": "off",
+            "store": False,
+        },
+        timeout=180.0,
     )
-
-    system_prompt = get_system_prompt(model)
-
-    response = client.chat.completions.create(
-        model="local-model",  # LM Studio uses whatever model is loaded
-        messages=[
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt}
-        ],
-        temperature=temperature,
-        timeout=60.0
-    )
-
-    raw_response = response.choices[0].message.content
+    response.raise_for_status()
+    output = response.json().get("output", [])
+    raw_response = "\n".join(
+        item["content"]
+        for item in output
+        if item.get("type") == "message" and isinstance(item.get("content"), str)
+    ).strip()
+    if not raw_response:
+        raise ValueError("LM Studio returned no message content")
 
     # Clean up the grammar (remove markdown code blocks if present)
     grammar = clean_grammar_output(raw_response)
@@ -202,7 +223,7 @@ def generate_grammar(
 
     # Cache the result
     if use_cache:
-        cache_grammar(prompt_hash, grammar, raw_response, user_prompt, model)
+        cache_grammar(prompt_hash, grammar, raw_response, user_prompt)
 
     return grammar, False, raw_response
 

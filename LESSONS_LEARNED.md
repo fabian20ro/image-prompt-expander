@@ -35,7 +35,6 @@ move it to the Archive section at the bottom with a date and reason.
 **[2026-02-07]** Keep docs and signatures aligned - Drift between documented defaults and implementation defaults (`tiled_vae`) causes repeated operator mistake
 **[2026-02-24]** Prefer MetadataManager for metadata operations — Direct JSON manipulation of run metadata bypasses validation and path logic; use MetadataManager consistently.s.
 **[2026-05-11]** Preserve explicit zero-value gallery layouts — `images_per_prompt: 0` is a real prompt-only layout, so normalize `None` separately instead of coercing all falsy values to 1.
-**[2026-05-14]** Surface shared quantize behavior in docs/help — `--quantize` defaults to 8 and applies to both prompt generation and standalone image enhancement, so the CLI help and README should call out both surfaces explicitly.
 **[2026-05-15]** `uv run` may warn about a mismatched `VIRTUAL_ENV` under Hermes — the project command still uses the repo environment and `uv run pytest --collect-only -q` completed successfully with the warning present.
 
 ## Testing & Quality
@@ -52,6 +51,9 @@ move it to the Archive section at the bottom with a date and reason.
 
 ## Dependencies & External Services
 
+**[2026-06-20]** mflux caches model families separately — Generated-model weights use `~/.cache/huggingface/hub`, while downloaded LoRAs use `~/Library/Caches/mflux/loras`; inspect both when retiring a model family.
+**[2026-06-20]** Use LM Studio's native chat API for Gemma reasoning control — `/api/v1/chat` with `reasoning: "off"` suppresses reasoning output reliably; the OpenAI-compatible endpoint ignored `chat_template_kwargs.enable_thinking` for `google/gemma-4-26b-a4b-qat`.
+**[2026-06-20]** Explicitly load LM Studio models after image-memory handoff — just-in-time chat can race a recent unload and return “model has not started loading/has been unloaded”; query `/api/v1/models`, synchronously call `/api/v1/models/load`, and retry transient load cancellation before chat.
 **[2026-04-03]** Use `tool.uv.package = false` for this repo’s flat imports — The code and tests rely on `src/` being executed directly (`uv run python src/cli.py`, pytest path injection). During `uv` migration, keep the repo non-packaged instead of switching to module entrypoints unless imports are refactored first.
 **[2026-05-08]** When uv wheel extraction fails with `Operation not permitted` in the default cache, point `UV_CACHE_DIR` at a writable local path like `/tmp/uv-cache` before retrying.
 
@@ -63,6 +65,8 @@ move it to the Archive section at the bottom with a date and reason.
 ---
 
 ## Archive
+
+**[2026-05-14] Archived 2026-06-20** Surface shared quantize behavior in docs/help — Obsolete after the ERNIE-only migration removed public quantization controls and fixed ERNIE q4 plus SeedVR2 q8 internally.
 
 <!-- Lessons that are no longer applicable. Keep for historical context. -->
 <!-- Format: **[YYYY-MM-DD] Archived [YYYY-MM-DD]** Title — Reason for archival -->

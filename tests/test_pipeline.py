@@ -48,8 +48,6 @@ class TestImageGenerationConfig:
         assert config.images_per_prompt == 1
         assert config.width == 864
         assert config.height == 1152
-        assert config.steps is None
-        assert config.quantize == 8
         assert config.seed is None
         assert config.tiled_vae is False
         assert config.resume is False
@@ -60,12 +58,10 @@ class TestImageGenerationConfig:
             enabled=True,
             width=1024,
             height=1024,
-            steps=30,
             seed=42,
         )
         assert config.enabled is True
         assert config.width == 1024
-        assert config.steps == 30
         assert config.seed == 42
 
     def test_to_dict(self):
@@ -74,13 +70,11 @@ class TestImageGenerationConfig:
             enabled=True,
             width=1024,
             height=768,
-            steps=25,
         )
         result = config.to_dict()
         assert result["enabled"] is True
         assert result["width"] == 1024
         assert result["height"] == 768
-        assert result["steps"] == 25
         # Optional fields should not be present if None
         assert "seed" not in result or result.get("seed") is None
         assert "max_prompts" not in result  # None by default
@@ -89,7 +83,6 @@ class TestImageGenerationConfig:
         """Test that None optional values are excluded from dict."""
         config = ImageGenerationConfig()
         result = config.to_dict()
-        assert "steps" not in result  # None by default
         assert "seed" not in result  # None by default
         assert "max_prompts" not in result  # None by default
 
@@ -133,7 +126,6 @@ class TestPipelineConfig:
         assert config.prompt == ""
         assert config.count == 50
         assert config.prefix == "image"
-        assert config.model == "flux2-klein-4b"
         assert config.temperature == 0.7
         assert config.no_cache is False
         assert isinstance(config.image, ImageGenerationConfig)
@@ -145,7 +137,6 @@ class TestPipelineConfig:
             prompt="a dragon flying",
             count=100,
             prefix="dragon",
-            model="z-image",
             image=ImageGenerationConfig(enabled=True, width=1024),
             enhancement=EnhancementConfig(enabled=True),
         )
@@ -154,93 +145,6 @@ class TestPipelineConfig:
         assert config.image.enabled is True
         assert config.image.width == 1024
         assert config.enhancement.enabled is True
-
-    def test_from_kwargs_basic(self):
-        """Test creating config from flat kwargs."""
-        config = PipelineConfig.from_kwargs(
-            prompt="test prompt",
-            count=25,
-            prefix="test",
-        )
-        assert config.prompt == "test prompt"
-        assert config.count == 25
-        assert config.prefix == "test"
-
-    def test_from_kwargs_with_image_params(self):
-        """Test creating config from kwargs with image generation params."""
-        config = PipelineConfig.from_kwargs(
-            prompt="test",
-            generate_images=True,
-            width=1024,
-            height=768,
-            steps=30,
-            seed=42,
-        )
-        assert config.image.enabled is True
-        assert config.image.width == 1024
-        assert config.image.height == 768
-        assert config.image.steps == 30
-        assert config.image.seed == 42
-        assert config.image.max_prompts is None
-
-    def test_from_kwargs_with_enhancement_params(self):
-        """Test creating config from kwargs with enhancement params."""
-        config = PipelineConfig.from_kwargs(
-            prompt="test",
-            enhance=True,
-            enhance_softness=0.3,
-            enhance_after=True,
-        )
-        assert config.enhancement.enabled is True
-        assert config.enhancement.softness == 0.3
-        assert config.enhancement.batch_after is True
-
-    def test_from_kwargs_full_example(self):
-        """Test creating config with all old-style params."""
-        config = PipelineConfig.from_kwargs(
-            prompt="a dragon",
-            count=50,
-            prefix="dragon",
-            model="z-image",
-            temperature=0.8,
-            no_cache=True,
-            generate_images=True,
-            images_per_prompt=2,
-            width=1024,
-            height=1024,
-            steps=25,
-            quantize=4,
-            seed=123,
-            max_prompts=10,
-            tiled_vae=False,
-            enhance=True,
-            enhance_softness=0.4,
-            enhance_after=True,
-            resume=True,
-        )
-        # Main config
-        assert config.prompt == "a dragon"
-        assert config.count == 50
-        assert config.model == "z-image"
-        assert config.temperature == 0.8
-        assert config.no_cache is True
-
-        # Image config
-        assert config.image.enabled is True
-        assert config.image.images_per_prompt == 2
-        assert config.image.width == 1024
-        assert config.image.steps == 25
-        assert config.image.quantize == 4
-        assert config.image.seed == 123
-        assert config.image.max_prompts == 10
-        assert config.image.tiled_vae is False
-        assert config.image.resume is True
-
-        # Enhancement config
-        assert config.enhancement.enabled is True
-        assert config.enhancement.softness == 0.4
-        assert config.enhancement.batch_after is True
-
 
 class TestPipelineExecutorInit:
     """Tests for PipelineExecutor initialization."""

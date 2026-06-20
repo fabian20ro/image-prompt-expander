@@ -14,7 +14,6 @@ def test_grammar_cache_lifecycle(tmp_path, monkeypatch):
     grammar_content = '{"prompt": "test"}'
     raw_response = "```json\n" + grammar_content + "\n```"
     user_prompt = "test prompt"
-    model = "test-model"
     
     # Act: Cache it
     cache_grammar(
@@ -22,7 +21,6 @@ def test_grammar_cache_lifecycle(tmp_path, monkeypatch):
         grammar=grammar_content,
         raw_response=raw_response,
         user_prompt=user_prompt,
-        model=model
     )
     
     # Assert: File exists

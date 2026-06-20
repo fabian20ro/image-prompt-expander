@@ -3,7 +3,7 @@
 from datetime import datetime
 from enum import Enum
 from typing import Any
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class TaskType(str, Enum):
@@ -62,17 +62,17 @@ class QueueState(BaseModel):
 
 class GenerateRequest(BaseModel):
     """Request to start a new generation pipeline."""
+    model_config = ConfigDict(extra="forbid")
+
     prompt: str = Field(..., min_length=1, max_length=5000)
     count: int = Field(50, ge=1, le=10000)
     prefix: str = Field("image", min_length=1, max_length=100, pattern=r'^[a-zA-Z0-9_-]+$')
-    model: str = Field("flux2-klein-4b")
     temperature: float = Field(0.7, ge=0.0, le=2.0)
     no_cache: bool = False
     generate_images: bool = False
     images_per_prompt: int = Field(1, ge=1, le=100)
     width: int = Field(864, ge=64, le=4096)
     height: int = Field(1152, ge=64, le=4096)
-    steps: int | None = Field(None, ge=1, le=100)
     seed: int | None = Field(None, ge=0)
     max_prompts: int | None = Field(None, ge=1)
     tiled_vae: bool = False
@@ -114,13 +114,13 @@ class EnhanceImageRequest(BaseModel):
 
 class GenerateAllImagesRequest(BaseModel):
     """Request to generate all images for a gallery."""
+    model_config = ConfigDict(extra="forbid")
+
     images_per_prompt: int = Field(1, ge=0, le=100)
     resume: bool = True
     # Image generation settings (override metadata defaults)
-    model: str | None = None
     width: int | None = Field(None, ge=64, le=4096)
     height: int | None = Field(None, ge=64, le=4096)
-    steps: int | None = Field(None, ge=1, le=100)
     seed: int | None = Field(None, ge=0)
     max_prompts: int | None = Field(None, ge=1)
     # Enhancement settings
@@ -136,16 +136,16 @@ class GalleryLayoutUpdateRequest(BaseModel):
 
 class GenerateFromGrammarRequest(BaseModel):
     """Request to create a run directly from pasted Tracery grammar."""
+    model_config = ConfigDict(extra="forbid")
+
     grammar: str = Field(..., min_length=2)
     title: str | None = Field(None, max_length=500)
     count: int = Field(50, ge=1, le=10000)
     prefix: str = Field("image", min_length=1, max_length=100, pattern=r'^[a-zA-Z0-9_-]+$')
-    model: str = Field("flux2-klein-4b")
     images_per_prompt: int = Field(1, ge=0, le=100)
     max_prompts: int | None = Field(None, ge=1)
     width: int = Field(864, ge=64, le=4096)
     height: int = Field(1152, ge=64, le=4096)
-    steps: int | None = Field(None, ge=1, le=100)
     seed: int | None = Field(None, ge=0)
 
 

@@ -76,7 +76,6 @@ class TestModels:
         assert req.prompt == "a dragon"
         assert req.count == 50
         assert req.prefix == "image"
-        assert req.model == "flux2-klein-4b"
         assert req.temperature == 0.7
         assert req.no_cache is False
         assert req.generate_images is False
@@ -91,7 +90,6 @@ class TestModels:
             prompt="a cat",
             count=10,
             prefix="cat",
-            model="flux2-klein-4b",
             generate_images=True,
             enhance=True,
             enhance_softness=0.3,
@@ -99,10 +97,16 @@ class TestModels:
         assert req.prompt == "a cat"
         assert req.count == 10
         assert req.prefix == "cat"
-        assert req.model == "flux2-klein-4b"
         assert req.generate_images is True
         assert req.enhance is True
         assert req.enhance_softness == 0.3
+
+    @pytest.mark.parametrize("legacy_field", ["model", "steps", "quantize", "lora_paths"])
+    def test_generate_request_rejects_removed_model_controls(self, legacy_field):
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError):
+            GenerateRequest(prompt="a cat", **{legacy_field: 4})
 
     def test_generate_from_grammar_request_defaults(self):
         req = GenerateFromGrammarRequest(grammar='{"origin": ["test"]}')
