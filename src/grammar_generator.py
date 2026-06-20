@@ -17,7 +17,7 @@ LM_STUDIO_BASE_URL = settings.lm_studio.base_url
 
 # Cache directory for generated grammars (from centralized paths)
 CACHE_DIR = paths.grammars_dir
-PROMPT_SCHEMA_VERSION = "ernie-v1"
+PROMPT_SCHEMA_VERSION = "ernie-v2"
 LM_CONTEXT_LENGTH = 8192
 LM_LOAD_ATTEMPTS = 3
 
@@ -215,17 +215,55 @@ def generate_grammar(
     # Clean up the grammar (remove markdown code blocks if present)
     grammar = clean_grammar_output(raw_response)
 
-    # Validate that the cleaned output is actually valid JSON
+    # Validate JSON and the ERNIE/Tracery structure before caching it.
     try:
-        json.loads(grammar)
+        parsed = json.loads(grammar)
     except json.JSONDecodeError as e:
         raise ValueError(f"LLM returned invalid JSON grammar after cleaning: {e}")
+    validate_grammar_structure(parsed)
 
     # Cache the result
     if use_cache:
         cache_grammar(prompt_hash, grammar, raw_response, user_prompt)
 
     return grammar, False, raw_response
+
+
+def validate_grammar_structure(grammar: object) -> None:
+    """Reject grammars that cannot provide useful 5–7 option Tracery variation."""
+    if not isinstance(grammar, dict) or "origin" not in grammar:
+        raise ValueError('Grammar must be a JSON object containing an "origin" rule')
+    if len(grammar) > 8:
+        raise ValueError("Grammar must contain at most 8 rules")
+
+    varying_rules = 0
+    for name, options in grammar.items():
+        if not isinstance(name, str) or not isinstance(options, list) or not options:
+            raise ValueError(f"Grammar rule {name!r} must be a non-empty array")
+        if not all(isinstance(option, str) and option.strip() for option in options):
+            raise ValueError(f"Grammar rule {name!r} must contain non-empty strings")
+        if len(set(options)) != len(options):
+            raise ValueError(f"Grammar rule {name!r} contains duplicate alternatives")
+        if len(options) > 1:
+            varying_rules += 1
+            if not 5 <= len(options) <= 7:
+                raise ValueError(
+                    f"Varying grammar rule {name!r} must contain 5–7 alternatives; "
+                    f"received {len(options)}"
+                )
+
+    if not varying_rules:
+        raise ValueError("Grammar must contain at least one varying rule with 5–7 alternatives")
+
+    references = {
+        reference
+        for options in grammar.values()
+        for option in options
+        for reference in re.findall(r"#([A-Za-z_][A-Za-z0-9_]*)#", option)
+    }
+    missing = references - grammar.keys()
+    if missing:
+        raise ValueError(f"Grammar references missing rules: {', '.join(sorted(missing))}")
 
 
 def clean_grammar_output(grammar: str) -> str:

@@ -159,12 +159,12 @@ Open `http://localhost:8000`. The UI provides:
 
 Gemma returns strict Tracery JSON. Expanded ERNIE prompts follow:
 
-1. image type and primary subject
-2. scene and explicit spatial relationships
-3. concrete visible details
-4. composition and aspect-ratio-aware layout
-5. visual style or medium
-6. lighting, color, atmosphere, and finish
+1. exact subject
+2. concrete description, visible details, and spatial relationships
+3. one clear style and medium
+4. technical/capture finish: composition, viewpoint, lighting, palette, focus, texture
+
+Structured posters, infographics, interfaces, and comics lead with their overall layout. Each varying Tracery rule normally contains seven distinct alternatives; five or six are accepted when additional choices would reduce quality. Rules with two to four alternatives are rejected.
 
 Visible text is instantiated rather than represented by placeholders. User-provided text remains exact and quoted. Grammar cache keys include the ERNIE prompt-schema version, preventing reuse of obsolete prompt formats.
 
