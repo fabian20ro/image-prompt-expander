@@ -27,7 +27,7 @@ class TestCache(unittest.TestCase):
         mock_file.exists.return_value = True
         mock_file.read_text.return_value = '{"origin": "#test#"}'
         mock_cache_dir.__truediv__.return_value = mock_file
-        
+
         prompt_hash = "abcdef123456"
         result = get_cached_grammar(prompt_hash)
         assert result == '{"origin": "#test#"}'
@@ -38,7 +38,7 @@ class TestCache(unittest.TestCase):
         mock_file = MagicMock(spec=Path)
         mock_file.exists.return_value = False
         mock_cache_dir.__truediv__.return_value = mock_file
-        
+
         prompt_hash = "abcdef123456"
         result = get_cached_grammar(prompt_hash)
         assert result is None

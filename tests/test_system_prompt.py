@@ -1,5 +1,6 @@
 from pathlib import Path
-from src.grammar_generator import get_system_prompt
+from src.grammar_generator import get_system_prompt, hash_prompt, get_cached_grammar, cache_grammar, get_cached_raw_response
+import json
 
 def test_get_system_prompt_default(tmp_path):
     # Setup: create a dummy template file
