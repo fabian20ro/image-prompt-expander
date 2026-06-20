@@ -7,8 +7,8 @@ from pathlib import Path
 
 import pytest
 
-# Add project root directory to path for imports
-sys.path.insert(0, str(Path(__file__).parent.parent))
+# Match the flat-module runtime used by `uv run python src/cli.py`.
+sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 
 @pytest.fixture
@@ -47,7 +47,7 @@ def sample_metadata():
         "prefix": "test",
         "count": 10,
         "user_prompt": "a dragon flying over mountains",
-        "model": "z-image-turbo",
+        "model": "ernie-image-turbo",
         "image_generation": {"images_per_prompt": 1},
     }
 

@@ -15,31 +15,7 @@ def test_get_system_prompt_default(tmp_path):
     (tmp_path / "system_prompt.txt").write_text(generic_content)
     
     # When
-    result = get_system_prompt(model=None, templates_dir=tmp_path)
-    
-    # Then
-    assert result == generic_content
-
-def test_get_system_prompt_model_specific(tmp_path):
-    # Given
-    model_name = "flux2-klein-4b"
-    model_prefix = "flux2-klein"
-    specific_content = "specific content"
-    (tmp_path / f"system_prompt_{model_prefix}.txt").write_text(specific_content)
-    
-    # When
-    result = get_system_prompt(model=model_name, templates_dir=tmp_path)
-    
-    # Then
-    assert result == specific_content
-
-def test_get_system_prompt_fallback(tmp_path):
-    # Given
-    generic_content = "generic content"
-    (tmp_path / "system_prompt.txt").write_text(generic_content)
-    
-    # When
-    result = get_system_prompt(model="unknown-model", templates_dir=tmp_path)
+    result = get_system_prompt(templates_dir=tmp_path)
     
     # Then
     assert result == generic_content
@@ -47,12 +23,10 @@ def test_get_system_prompt_fallback(tmp_path):
 def test_hash_prompt():
     # Given
     prompt = "a cat"
-    model = "model-a"
-    
     # When
-    h1 = hash_prompt(prompt, model)
-    h2 = hash_prompt(prompt, model)
-    h3 = hash_prompt(prompt)
+    h1 = hash_prompt(prompt)
+    h2 = hash_prompt(prompt)
+    h3 = hash_prompt("a dog")
     
     # Then
     assert h1 == h2

@@ -1,400 +1,220 @@
-# image-prompt-expander
+# ERNIE Image Prompt Expander
 
-**[View Live Demo](https://fabian20ro.github.io/image-prompt-expander/)** — See example outputs from the generator
+Local procedural prompt generation and image rendering for ERNIE-Image-Turbo on Apple Silicon.
 
-A procedural image prompt generator that creates varied, high-quality prompts for FLUX.2 image models, with optional local image generation using mflux.
+The application asks a local Gemma model in LM Studio to create an ERNIE-oriented Tracery grammar, expands that grammar into prompt variations, and optionally renders them with a persistent 4-bit ERNIE-Image-Turbo checkpoint through mflux. SeedVR2 2× enhancement is available as a second local stage.
 
-```
-User prompt → LLM generates Tracery grammar → Tracery produces N prompts → (optional) mflux generates images
-```
+No paid or hosted inference API is used.
 
 ## Requirements
 
-**System:**
+- macOS on Apple Silicon
 - Python 3.10+
-- macOS with Apple Silicon (M1/M2/M3/M4) for image generation
-- [LM Studio](https://lmstudio.ai/) running locally (default: http://localhost:1234/v1)
-
-**Recommended Hardware:**
-- **M4 Max with 36GB+ unified memory** for concurrent generation + enhancement
-- M1/M2/M3 with 16GB+ works but may require `--enhance-after` for large batches
-- Generation speed: ~2-4 images/minute (z-image-turbo, 864x1152)
-
-**Python Dependencies:**
-- `openai` - LM Studio API client
-- `click` - CLI framework
-- `tracery` - Grammar expansion
-- `mflux` - Image generation (optional, Apple Silicon only)
-- `fastapi` + `uvicorn` + `sse-starlette` - Web UI server
+- [uv](https://docs.astral.sh/uv/)
+- LM Studio with `google/gemma-4-26b-a4b-qat`
+- LM Studio CLI (`lms`) on `PATH`
+- Enough free disk space to download the source checkpoint and save the approximately 6.2 GB q4 checkpoint
 
 ## Installation
 
 ```bash
-git clone https://github.com/fabian20ro/image-prompt-expander.git
-cd image-prompt-expander
-
-uv sync
-
-# Optional: image generation / enhancement support on Apple Silicon
-uv sync --extra images
+uv sync --group dev
+uv sync --extra images --group dev
 ```
 
-**Important:** Use `uv run` for project commands. No manual activation step.
+Start the LM Studio local server at `http://localhost:1234/v1`. The configured model ID is:
 
-If you see 'Connection refused', ensure LM Studio's local server is enabled and accessible at the correct URL (default: http://localhost:1234/v1).
+```text
+google/gemma-4-26b-a4b-qat
+```
 
+Override it when necessary:
 
 ```bash
-uv sync --group dev
-
-# If you are working on image features too
-uv sync --group dev --extra images
+export PROMPT_GEN_LM_STUDIO_MODEL=google/gemma-4-26b-a4b-qat
 ```
 
-Then install [LM Studio](https://lmstudio.ai/), download a model (e.g., Qwen 2.5 7B, Llama 3.1 8B), and start the local server.
+## Provision ERNIE-Image-Turbo q4
 
-## Usage
+The application intentionally loads only a previously saved 4-bit checkpoint. Default location:
 
-### Web UI (Recommended)
+```text
+~/Library/Caches/mflux/models/ernie-image-turbo-4bit
+```
 
-Start the interactive web interface:
+Create it once with mflux 0.18.0 or newer:
+
+```bash
+mkdir -p ~/Library/Caches/mflux/models
+uv run mflux-save \
+  --model ernie-image-turbo \
+  --quantize 4 \
+  --path ~/Library/Caches/mflux/models/ernie-image-turbo-4bit
+```
+
+Custom location:
+
+```bash
+export PROMPT_GEN_ERNIE_MODEL_PATH=/absolute/path/to/ernie-image-turbo-4bit
+```
+
+After verifying generation, the larger source checkpoint in the Hugging Face cache may be removed manually. Do not remove the saved q4 directory.
+
+## Memory handoff
+
+Grammar inference and image inference do not coexist in unified memory. Immediately before loading ERNIE or SeedVR2, the application runs:
+
+```bash
+lms unload --all
+```
+
+Image generation fails closed if the CLI is missing, times out, or cannot unload the models. Before a later grammar request, the application checks LM Studio's native model inventory and synchronously reloads Gemma by its exact model ID. Transient load cancellations are retried three times.
+
+## CLI
+
+Generate prompts:
+
+```bash
+uv run python src/cli.py \
+  --prompt "a barn owl on a mossy branch" \
+  --count 20
+```
+
+Generate prompts and ERNIE images:
+
+```bash
+uv run python src/cli.py \
+  --prompt "a bilingual science museum poster" \
+  --count 4 \
+  --generate-images \
+  --images-per-prompt 1 \
+  --width 1024 \
+  --height 1024
+```
+
+Generate and enhance:
+
+```bash
+uv run python src/cli.py \
+  --prompt "a cinematic mountain observatory" \
+  --count 2 \
+  --generate-images \
+  --enhance \
+  --enhance-after
+```
+
+Enhance existing images:
+
+```bash
+uv run python src/cli.py --enhance-images path/to/image.png
+uv run python src/cli.py --enhance-images path/to/folder/
+uv run python src/cli.py --enhance-images "generated/prompts/*/*.png"
+```
+
+Resume from existing artifacts:
+
+```bash
+uv run python src/cli.py --from-grammar generated/grammars/example.tracery.json --count 50
+uv run python src/cli.py --from-prompts generated/prompts/run-id --generate-images --resume
+```
+
+Important options:
+
+| Option | Purpose |
+|---|---|
+| `--prompt TEXT` | Source image idea |
+| `--count INT` | Number of Tracery expansions |
+| `--generate-images` | Render expanded prompts |
+| `--images-per-prompt INT` | Images per prompt; `0` keeps a prompt-only layout |
+| `--width`, `--height` | Output dimensions; multiples of 8 |
+| `--seed INT` | Reproducible starting seed |
+| `--max-prompts INT` | Limit prompts rendered as images |
+| `--no-tiled-vae` | Disable memory-saving VAE tiling |
+| `--enhance` | Apply SeedVR2 2× enhancement |
+| `--enhance-softness FLOAT` | SeedVR2 softness from 0 to 1 |
+| `--enhance-after` | Release ERNIE before batch enhancement |
+| `--dry-run` | Print grammar without rendering |
+| `--serve` | Start the web UI |
+
+Model architecture, quantization, inference steps, and guidance are deliberately not configurable. Generation always uses ERNIE-Image-Turbo q4, 8 inference steps, and guidance 1.0.
+
+## Web UI
 
 ```bash
 uv run python src/cli.py --serve
 ```
 
-This opens `http://localhost:8000` with:
-- **New Generation Form**: Queue grammar + prompt generation (`prompt`, `prefix`, `count`, `model`, `temperature`, cache, tiled VAE)
-- **Gallery Browser**: View and manage all existing galleries
-- **Live Progress + Logs**: Real-time status and worker log streaming via SSE
-- **Queue Management**: Queue multiple operations, clear pending queue, kill running tasks
-- **Gallery Deletion**: Queue deletion for active galleries from the index page
+Open `http://localhost:8000`. The UI provides:
 
-Image generation and enhancement settings are configured per-gallery (not from the index form). The per-gallery form also exposes `Images/Prompt (0 = prompt-only layout)` for prompt-only runs.
+- queued grammar and prompt generation
+- direct Tracery grammar import
+- prompt-only gallery layouts
+- per-prompt or batch image generation
+- SeedVR2 enhancement
+- live progress through server-sent events
+- editable grammar history
+- galleries and archived images
 
-Gallery pages include:
-- **Edit Grammar**: Modify Tracery grammar, review grammar history, and regenerate prompts
-- **Grammar History**: Restore a previous grammar revision from the saved revision list
-- **Generate Images**: Queue individual or all images for generation
-- **Enhance Images**: Apply SeedVR2 enhancement to individual or all images
-- **Save to Archive**: Manually backup the current gallery state
-- **Kill/Clear**: Stop current task or clear pending queue
-- **Back to Index**: Navigate back to the master index
+## Prompt format
 
-**Auto-Backup**: The system automatically creates backups before destructive operations (regenerating prompts when images exist, enhancing all images). Archives are saved as flat PNG files in `generated/saved/` with metadata embedded in PNG text chunks (prompt, model, settings). Archives appear as image grids in the "Archived Images" section on the index.
+Gemma returns strict Tracery JSON. Expanded ERNIE prompts follow:
 
-### CLI: Basic (Text Prompts Only)
+1. image type and primary subject
+2. scene and explicit spatial relationships
+3. concrete visible details
+4. composition and aspect-ratio-aware layout
+5. visual style or medium
+6. lighting, color, atmosphere, and finish
 
-```bash
-# Generate 50 prompt variations (default)
-uv run python src/cli.py -p "a dragon flying over mountains"
+Visible text is instantiated rather than represented by placeholders. User-provided text remains exact and quoted. Grammar cache keys include the ERNIE prompt-schema version, preventing reuse of obsolete prompt formats.
 
-# Generate fewer variations
-uv run python src/cli.py -p "a cat sleeping on a bookshelf" -n 50
+## Output
 
-# Preview grammar without creating files
-uv run python src/cli.py -p "a cyberpunk city at night" --dry-run
-```
-
-### With Image Generation
-
-```bash
-# Generate prompts AND images (Apple Silicon only)
-uv run python src/cli.py -p "a dragon flying over mountains" -n 5 \
-    --generate-images \
-    --prefix dragon
-
-# Multiple images per prompt
-uv run python src/cli.py -p "a mystical forest" -n 10 \
-    --generate-images \
-    --images-per-prompt 3 \
-    --prefix forest
-
-# Limit how many prompts get rendered
-uv run python src/cli.py -p "abstract art" -n 100 \
-    --generate-images \
-    --max-prompts 10 \
-    --prefix abstract
-```
-
-### Custom Image Settings
-
-```bash
-# Different model (auto-selects optimized prompt structure)
-uv run python src/cli.py -p "portrait of a wizard" -n 5 -i \
-    --model flux2-klein-4b \
-    --prefix wizard
-
-# Custom resolution and steps
-uv run python src/cli.py -p "landscape painting" -n 5 -i \
-    --width 1024 --height 768 --steps 8 \
-    --prefix landscape
-
-# Reproducible with seed
-uv run python src/cli.py -p "abstract pattern" -n 3 -i \
-    --seed 42 \
-    --prefix pattern
-```
-
-### Image Enhancement (SeedVR2)
-
-Enhance generated images with 2x upscaling using SeedVR2. Enhanced images replace the originals:
-
-```bash
-# Generate images with automatic 2x enhancement
-uv run python src/cli.py -p "a cat sleeping" -n 3 -i \
-    --enhance \
-    --prefix cat
-
-# Adjust enhancement softness (0.0-1.0, default: 0.5)
-uv run python src/cli.py -p "portrait" -n 1 -i \
-    --enhance --enhance-softness 0.3 \
-    --prefix portrait
-
-# Memory-efficient batch enhancement (for large batches)
-# Defers enhancement until after all images are generated
-uv run python src/cli.py -p "a cat sleeping" -n 50 -i \
-    --enhance --enhance-after \
-    --prefix cat
-```
-
-### Standalone Enhancement
-
-Enhance existing images in-place (replaces originals). The same `--seed` and `--quantize` options apply here, and `--quantize` defaults to 8 when omitted:
-
-```bash
-# Enhance a single image
-uv run python src/cli.py --enhance-images path/to/image.png
-
-# Enhance all images in a folder
-uv run python src/cli.py --enhance-images generated/prompts/myrun/
-
-# Enhance using glob pattern
-uv run python src/cli.py --enhance-images "generated/prompts/*/cat_*.png"
-
-# With custom softness
-uv run python src/cli.py --enhance-images folder/ --enhance-softness 0.7
-```
-
-### Resume from Intermediate Steps
-
-```bash
-# Resume from cached grammar (skip LLM generation)
-uv run python src/cli.py --from-grammar generated/grammars/abc123.tracery.json \
-    -n 100 --prefix dragon2
-
-# Resume from existing prompts (generate images only)
-uv run python src/cli.py --from-prompts generated/prompts/abc123_20260124_122208 \
-    --generate-images --images-per-prompt 2
-```
-
-### Cleanup
-
-```bash
-uv run python src/cli.py --clean
-```
-
-## CLI Options
-
-| Option | Description |
-|--------|-------------|
-| `-p, --prompt TEXT` | Image description to generate variations for |
-| `-n, --count INT` | Number of variations (default: 50) |
-| `-o, --output PATH` | Custom output directory |
-| `--prefix TEXT` | Output file prefix (default: "image") |
-| `--dry-run` | Preview grammar only |
-| `--no-cache` | Force regenerate grammar |
-| `--clean` | Remove all generated files |
-| `--base-url TEXT` | LM Studio URL (default: http://localhost:1234/v1) |
-| `--temperature FLOAT` | LLM temperature (default: 0.7) |
-| `--from-grammar PATH` | Resume from existing grammar file (skip LLM generation) |
-| `--from-prompts PATH` | Resume from existing prompts directory (images only) |
-| `-i, --generate-images` | Enable mflux image generation |
-| `--images-per-prompt INT` | Images per prompt (default: 1, `0` = prompt-only layout) |
-| `--max-prompts INT` | Limit prompts to render |
-| `-m, --model` | `z-image-turbo`, `flux2-klein-4b`, `flux2-klein-9b` (default: `flux2-klein-4b`) |
-| `--steps INT` | Inference steps |
-| `--width INT` | Image width (default: 864) |
-| `--height INT` | Image height (default: 1152) |
-|| `-q, --quantize` | Quantization level (3, 4, 5, 6, or 8; default: 8). Applies to generation and standalone enhancement |
-| `--seed INT` | Random seed |
-| `--enhance` | Enable SeedVR2 2x enhancement (replaces original) |
-| `--enhance-softness FLOAT` | Enhancement softness (0.0-1.0, default: 0.5) |
-| `--enhance-after` | Defer enhancement to after all images generated (saves memory) |
-| `--enhance-images PATH` | Enhance existing images in-place (file, folder, or glob) |
-| `--resume` | Skip already-generated images when resuming interrupted runs |
-| `--no-tiled-vae` | Disable tiled VAE decoding (uses more memory, may be faster) |
-| `--serve` | Start interactive web UI at http://localhost:8000 |
-| `--port INT` | Port for web UI server (default: 8000) |
-
-## Output Structure
-
-```
+```text
 generated/
-├── index.html                # Master index linking all galleries
-├── queue.json                # Task queue persistence for web UI
-├── grammars/                 # Cached grammars (by prompt hash)
-├── prompts/{timestamp}_{hash}/    # Active generation runs
-│   ├── dragon_0.txt          # First prompt
-│   ├── dragon_0_0.png        # First image (enhanced in-place if --enhance)
-│   ├── dragon_0_1.png        # Second image (if --images-per-prompt 2)
-│   ├── dragon_1.txt          # Second prompt
-│   ├── dragon_1_0.png
-│   ├── ...
-│   ├── dragon_gallery.html   # Gallery generated dynamically via --serve
-│   ├── dragon_grammar.json   # Tracery grammar used
-│   ├── dragon_grammar_history.json  # Saved grammar revisions for undo/restore
-│   └── dragon_metadata.json  # Generation settings
-└── saved/                    # Flat archived images
-    ├── dragon_20260126_143052_0_0.png  # {prefix}_{timestamp}_{promptIdx}_{imgIdx}.png
-    ├── dragon_20260126_143052_1_0.png  # Metadata embedded in PNG text chunks
-    └── ...
+├── grammars/                 # Cached Tracery grammars and raw LM responses
+├── prompts/<run-id>/         # Prompt text, metadata, gallery, images, worker log
+├── saved/                    # Archived PNG images with embedded metadata
+├── queue.json
+└── index.html
 ```
 
-The master index at `generated/index.html` provides a unified entry point to browse all generation runs with thumbnails and metadata. Archives appear as image grids in the "Archived Images" section, grouped by prefix and timestamp. Archive metadata (prompt, model, settings) is embedded directly in PNG text chunks for self-contained files. Grammars are cached and reused for identical prompts.
+Generation metadata always records:
 
-## How It Works
+```json
+{
+  "model": "ernie-image-turbo",
+  "steps": 8,
+  "guidance": 1.0,
+  "quantize": 4
+}
+```
 
-1. **Grammar Generation** - Your prompt is sent to a local LLM (recommended: GLM-4.7-Flash via LM Studio) with model-specific instructions to create a Tracery grammar. The grammar locks elements you specified and varies everything else. Different models use different prompt structures (camera-first for z-image-turbo, prose-based for flux2-klein).
-
-2. **Prompt Expansion** - The grammar is expanded N times, randomly selecting from options to create diverse but coherent prompts.
-
-3. **Image Generation** (optional) - Each prompt is rendered using mflux on Apple Silicon.
-
-4. **Image Enhancement** (optional) - Images are enhanced in-place with SeedVR2 2x upscaling, replacing the originals with higher quality versions.
-
-## Supported Models
-
-| Model | Parameters | Default Steps | Notes |
-|-------|------------|---------------|-------|
-| z-image-turbo | 6B | 9 | Fast, good quality |
-| flux2-klein-4b | 4B | 4 | Very fast, lighter (CLI/API default) |
-| flux2-klein-9b | 9B | 4 | Best quality |
-
-Pre-quantized 4-bit versions are used automatically when available.
-
-## Prompt Tips
-
-- **Be specific** about constants: "a RED dragon with GOLDEN eyes"
-- **Describe scene structure**: "a warrior standing on a cliff overlooking a battlefield"
-- **Suggest variation dimensions**: "a cat in various cozy indoor settings"
-- **Use FLUX-friendly language**: lighting ("golden hour"), atmosphere ("epic", "serene")
-- **Front-load important elements** (FLUX prioritizes earlier content)
-
-## Configuration
-
-Settings can be overridden via environment variables with `PROMPT_GEN_` prefix:
+## Verification
 
 ```bash
-# Use different LM Studio instance
-export PROMPT_GEN_LM_STUDIO_URL="http://192.168.1.100:1234/v1"
-
-# Change default image dimensions
-export PROMPT_GEN_DEFAULT_WIDTH=1024
-export PROMPT_GEN_DEFAULT_HEIGHT=768
+uv run ruff check src tests
+uv run pytest -q
 ```
+
+Tests mock LM Studio and mflux. Hardware smoke tests require the provisioned checkpoint and working Metal access.
 
 ## Troubleshooting
 
-**"Connection refused"** - Start LM Studio and ensure the server is running.
+**LM Studio unreachable** — Start its local server and ensure the base URL is `http://localhost:1234/v1`.
 
-**"mflux is required"** - Run `uv sync --extra images` (requires Apple Silicon).
+**Gemma not available** — Install/load `google/gemma-4-26b-a4b-qat`. Confirm with `lms ps`.
 
-**"Invalid JSON grammar"** - Try `--no-cache` or use a different LLM model.
+**Image generation refuses to start** — Confirm `lms` is on `PATH` and `lms unload --all` succeeds.
 
-**Slow generation** - First run downloads model weights. Use `--steps 4` or `flux2-klein-4b` for speed.
+**ERNIE checkpoint missing** — Run the q4 provisioning command or set `PROMPT_GEN_ERNIE_MODEL_PATH`.
 
-**Out of memory** - Use `--enhance-after` for batch enhancement (single model at a time). Reduce resolution, use `flux2-klein-4b`, or use `--no-tiled-vae` to trade memory for speed.
+**Out of memory** — Use tiled VAE, reduce dimensions, and enable deferred enhancement.
 
-## Development
-
-### Setup
-
-```bash
-git clone https://github.com/fabian20ro/image-prompt-expander.git
-cd image-prompt-expander
-uv sync --group dev
-
-# Optional: image generation / enhancement dependencies
-uv sync --group dev --extra images
-```
-
-### Running Tests
-
-```bash
-# Run all tests
-uv run pytest -v --tb=short
-
-# Run specific test file
-uv run pytest tests/test_pipeline.py -v
-
-# Run with coverage
-uv run pytest --cov=src --cov-report=html
-```
-
-`uv run` may emit a benign `VIRTUAL_ENV` mismatch warning under Hermes; if the command completes successfully, the repo environment is still being used.
-
-The test suite currently collects 333 tests covering:
-- CLI help and validation (`test_cli.py`)
-- Pipeline orchestration (`test_pipeline.py`)
-- Image generation (`test_image_generator.py`)
-- Grammar expansion (`test_tracery_runner.py`)
-- Shared HTML/CSS/JS components (`test_html_components.py`)
-- Gallery index rendering (`test_gallery_index.py`)
-- API routes (`test_routes.py`)
-- Background workers (`test_worker.py`, `test_worker_subprocess.py`)
-- Metadata management (`test_metadata_manager.py`)
-- Utility functions (`test_utils.py`, `test_gallery.py`)
-
-### Architecture
-
-```
-src/
-├── cli.py                 # CLI entry point
-├── pipeline.py            # Core orchestration (PipelineExecutor)
-├── metadata_manager.py    # Centralized metadata operations
-├── grammar_generator.py   # LLM-based grammar generation
-├── tracery_runner.py      # Grammar expansion
-├── image_generator.py     # mflux image generation
-├── image_enhancer.py      # SeedVR2 enhancement
-├── gallery.py             # Gallery HTML generation
-├── gallery_index.py       # Master index generation
-├── utils.py               # Shared utilities
-├── config.py              # Path configuration
-└── server/
-    ├── app.py             # FastAPI application
-    ├── routes.py          # API endpoints
-    ├── models.py          # Pydantic models
-    ├── worker.py          # Background task processor
-    ├── worker_subprocess.py  # Isolated task execution
-    └── queue_manager.py   # Task queue management
-```
-
-Key patterns:
-- **MetadataManager**: Use for all run metadata operations instead of raw JSON
-- **PipelineConfig**: Dataclass for grouping pipeline parameters
-- **FastAPI DI**: Routes use `Depends()` with `lru_cache` for service singletons
-
-### Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Add tests for new functionality
-4. Ensure all tests pass: `uv run pytest -v --tb=short`
-5. Submit a pull request
+**Invalid grammar JSON** — Retry with `--no-cache`; inspect the cached raw LM response.
 
 ## Credits
 
-- [Fifty Shades Generator](https://github.com/lisawray/fiftyshades) by Lisa Wray - original inspiration
-- [Tracery](https://github.com/galaxykate/tracery) by Kate Compton - grammar expansion library
-- [mflux](https://github.com/filipstrand/mflux) by Filip Strand - MLX-based image generation for Apple Silicon, including pre-quantized model weights
-- [Z-Image-Turbo](https://huggingface.co/Tongyi-MAI/Z-Image-Turbo) by Tongyi-MAI - supported image model (6B parameters)
-- [FLUX models](https://blackforestlabs.ai/) by Black Forest Labs - flux2-klein image models
-
-## License
-
-See [LICENSE](LICENSE) file.
-
-## Roadmap
-
-- [ ] LoRA support for custom styles (if requested)
+- [ERNIE-Image](https://github.com/baidu/ERNIE-Image) by Baidu
+- [mflux](https://github.com/filipstrand/mflux) by Filip Strand
+- [Tracery](https://github.com/galaxykate/tracery)

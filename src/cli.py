@@ -1,16 +1,13 @@
 #!/usr/bin/env python3
-"""CLI entry point for the FLUX.2 Klein image prompt generator."""
+"""CLI entry point for the ERNIE-Image-Turbo prompt generator."""
 
 import shutil
 import sys
 from pathlib import Path
 
 import click
-
-import click
 from config import settings, paths
 from grammar_generator import generate_grammar
-from image_generator import SUPPORTED_MODELS, MODEL_DEFAULTS
 from image_enhancer import enhance_image, collect_images
 from pipeline import PipelineExecutor
 from utils import check_lm_studio
@@ -100,18 +97,6 @@ def cli_progress(stage: str, current: int = 0, total: int = 0, message: str = ""
     help='Prefix for output files (default: "image")'
 )
 @click.option(
-    '--model', '-m',
-    default=None,
-    type=click.Choice(SUPPORTED_MODELS),
-    help='mflux model to use (default: %s)' % settings.image_generation.default_model
-)
-@click.option(
-    '--steps',
-    type=int,
-    default=None,
-    help='Inference steps (default: model-specific)'
-)
-@click.option(
     '--width',
     default=None,
     type=int,
@@ -122,12 +107,6 @@ def cli_progress(stage: str, current: int = 0, total: int = 0, message: str = ""
     default=None,
     type=int,
     help='Image height in pixels (default: %s)' % settings.image_generation.default_height
-)
-@click.option(
-    '--quantize', '-q',
-    default=None,
-    type=click.Choice([3, 4, 5, 6, 8], case_sensitive=False),
-    help='Quantization level for model (default: %s; used for generation and standalone enhancement)' % settings.image_generation.default_quantize,
 )
 @click.option(
     '--max-prompts',
@@ -205,11 +184,8 @@ def main(
     generate_images: bool,
     images_per_prompt: int,
     prefix: str | None,
-    model: str | None,
-    steps: int | None,
     width: int | None,
     height: int | None,
-    quantize: int | None,
     max_prompts: int | None,
     seed: int | None,
     from_grammar: Path | None,
@@ -224,7 +200,7 @@ def main(
     port: int,
 ):
     """
-    Generate FLUX.2 Klein image prompt variations using LLM-powered Tracery grammars.
+    Generate ERNIE-Image-Turbo prompt variations using local LLM-powered Tracery grammars.
 
     Example:
         uv run python src/cli.py -p "a dragon flying over mountains" -n 50
@@ -232,7 +208,7 @@ def main(
 
     With image generation:
         uv run python src/cli.py -p "a dragon flying over mountains" -n 5 \
-            --generate-images --images_per_prompt 3 --prefix dragon
+            --generate-images --images-per-prompt 3 --prefix dragon
 
     With image generation + SeedVR2 2x enhancement:
         uv run python src/cli.py -p "a cat" -n 1 --generate-images --enhance --prefix test
@@ -241,7 +217,7 @@ def main(
         uv run python src/cli.py --from-grammar generated/grammars/abc123.tracery.json -n 100
 
     Resume from existing prompts (images only):
-        uvrun python src/cli.py --from-prompts generated/prompts/abc123_20260124_122208 \
+        uv run python src/cli.py --from-prompts generated/prompts/abc123_20260124_122208 \
             --generate-images --images-per-prompt 2
 
     Standalone enhancement (no image generation):
@@ -249,8 +225,8 @@ def main(
         uv run python src/cli.py --enhance-images path/to/folder/
         uv run python src/cli.py --enhance-images "generated/prompts/*/test_*.png"
     """
-    # Check LM Studio connectivity
-    if not check_lm_studio(base_url):
+    # LM Studio is required only when creating a grammar.
+    if prompt and not from_grammar and not from_prompts and not check_lm_studio(base_url):
         click.echo(f"Error: LM Studio is not reachable at {base_url}. Please ensure it is running.", err=True)
         sys.exit(1)
 
@@ -287,7 +263,7 @@ def main(
 
     # STANDALONE MODE: Enhance existing images
     if enhance_images:
-        _run_standalone_enhancement(enhance_images, enhance_softness, seed, quantize, no_tiled_vae)
+        _run_standalone_enhancement(enhance_images, enhance_softness, seed, no_tiled_vae)
         return
 
     # Validation
@@ -311,14 +287,12 @@ def main(
 
     # Set defaults
     prefix = prefix or "image"
-    model = model or settings.image_generation.default_model
     width = width or settings.image_generation.default_width
     height = height or settings.image_generation.default_height
-    quantize = quantize or settings.image_generation.default_quantize
 
     # Handle --dry-run (needs special handling for grammar preview)
     if dry_run:
-        _run_dry_run(prompt, from_grammar, base_url, no_cache, temperature, model)
+        _run_dry_run(prompt, from_grammar, base_url, no_cache, temperature)
         return
 
     # Create executor with CLI progress callback
@@ -330,11 +304,8 @@ def main(
         result = executor.run_from_prompts(
             prompts_dir=from_prompts,
             images_per_prompt=images_per_prompt,
-            model=model,
             width=width,
             height=height,
-            steps=steps,
-            quantize=quantize,
             seed=seed,
             max_prompts=max_prompts,
             tiled_vae=not no_tiled_vae,
@@ -351,13 +322,10 @@ def main(
             grammar_path=from_grammar,
             count=count,
             prefix=prefix,
-            model=model,
             generate_images=generate_images,
             images_per_prompt=images_per_prompt,
             width=width,
             height=height,
-            steps=steps,
-            quantize=quantize,
             seed=seed,
             max_prompts=max_prompts,
             tiled_vae=not no_tiled_vae,
@@ -375,15 +343,12 @@ def main(
             prompt=prompt,
             count=count,
             prefix=prefix,
-            model=model,
             temperature=temperature,
             no_cache=no_cache,
             generate_images=generate_images,
             images_per_prompt=images_per_prompt,
             width=width,
             height=height,
-            steps=steps,
-            quantize=quantize,
             seed=seed,
             max_prompts=max_prompts,
             tiled_vae=not no_tiled_vae,
@@ -412,7 +377,6 @@ def _run_standalone_enhancement(
     enhance_images: str,
     enhance_softness: float,
     seed: int | None,
-    quantize: int | None,
     no_tiled_vae: bool,
 ) -> None:
     """Run standalone image enhancement mode."""
@@ -425,7 +389,6 @@ def _run_standalone_enhancement(
 
     click.echo(f"Enhancing {len(images)} images with SeedVR2 (2x upscale, softness={enhance_softness})...")
 
-    quantize = quantize or 8
     current_seed = seed
 
     for idx, img_path in enumerate(images, 1):
@@ -437,7 +400,6 @@ def _run_standalone_enhancement(
                 output_path=img_path,
                 softness=enhance_softness,
                 seed=current_seed,
-                quantize=quantize,
                 tiled_vae=not no_tiled_vae,
             )
         except ImportError as e:
@@ -459,7 +421,6 @@ def _run_dry_run(
     base_url: str,
     no_cache: bool,
     temperature: float,
-    model: str,
 ) -> None:
     """Run dry-run mode to preview grammar."""
     if from_grammar:
@@ -476,7 +437,6 @@ def _run_dry_run(
                 base_url=base_url,
                 use_cache=not no_cache,
                 temperature=temperature,
-                model=model,
             )
         except Exception as e:
             click.echo(f"Error generating grammar: {e}", err=True)

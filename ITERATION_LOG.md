@@ -221,4 +221,84 @@ Each entry should follow this structure:
 
 ---
 
+### [2026-06-20] Planned ERNIE-Image-Turbo q4-only migration
+
+**Context:** Requested a thorough plan to replace Z-Image and FLUX support with ERNIE-Image-Turbo at 4-bit quantization and add its Prompt Enhancer.
+**What happened:** Audited model coupling across generation, pipeline, CLI, API, worker, HTML forms, metadata, templates, tests, dependencies, and README. Verified mflux 0.18.0 adds ERNIE-Image-Turbo with q4 support but explicitly omits Baidu's Prompt Enhancer; Baidu documents the PE as a separate causal-LM stage receiving prompt, width, and height.
+**Outcome:** Planning in progress — ERNIE-only simplification is clear; Prompt Enhancer runtime and persistence behavior require product decisions before implementation.
+**Insight:** mflux model support and official ERNIE Prompt Enhancer support are separate integrations; treating PE as part of the mflux generator would hide a required runtime boundary.
+**Promoted to Lessons Learned:** No
+
+---
+
+### [2026-06-20] Reviewed ERNIE prompt-engineering guide
+
+**Context:** The user supplied a third-party ERNIE Image prompt-engineering guide while refining the q4-only migration plan.
+**What happened:** Compared its recommendations with Baidu's official Prompt Enhancer contract and mflux limitations.
+**Outcome:** The guide informs the ERNIE-specific Tracery template and supports optional PE bypass, but does not provide a Prompt Enhancer runtime.
+**Insight:** Separate prompt-authoring guidance from PE execution: the former shapes grammar output; the latter is a resolution-aware causal-LM rewrite stage returning structured JSON.
+**Promoted to Lessons Learned:** No
+
+---
+
+### [2026-06-20] Removed retired model-family caches
+
+**Context:** After selecting ERNIE-Image-Turbo q4 as the sole generator, the user requested removal of obsolete models and LoRAs from disk.
+**What happened:** Removed the cached FLUX.2 Klein 9B model, Z-Image Turbo q4 model, their Hugging Face lock directories, and two Z-Image LoRAs with their locks. Left unrelated FLUX.1 cache stubs untouched. Verified the target paths are absent and the mflux LoRA cache is empty. Also verified LM Studio currently serves `google/gemma-4-26b-a4b-qat` locally as an MLX 4-bit model.
+**Outcome:** Success — approximately 37.9 GB reclaimed; local grammar-model prerequisite confirmed.
+**Insight:** mflux stores generator weights and LoRAs in different cache roots, so retiring a model family requires inspecting both locations.
+**Promoted to Lessons Learned:** Yes
+
+---
+
+### [2026-06-20] Added LM Studio unload boundary to migration plan
+
+**Context:** ERNIE q4 generation must reclaim memory held by any locally loaded LM Studio model.
+**What happened:** Verified the installed LM Studio CLI supports non-interactive inspection with `lms ps --json` and unloading with `lms unload --all`; the configured Gemma instance currently occupies 15.64 GB.
+**Outcome:** Plan updated conceptually: every mflux generation or SeedVR2 entry path must unload LM Studio models immediately before loading MLX image weights, and fail closed if unloading fails.
+**Insight:** Grammar inference and image inference need an explicit lifecycle boundary; relying on users to unload LM Studio makes unified-memory failures nondeterministic.
+**Promoted to Lessons Learned:** No
+
+---
+
+### [2026-06-20] Created ERNIE-only migration goal
+
+**Context:** The user requested the agreed migration plan be converted into a `/goal` objective.
+**What happened:** Created an active measurable goal covering ERNIE-Turbo q4, local Gemma Tracery generation, mandatory LM Studio unloading, SeedVR2 retention, legacy removal, full automated checks, and two consecutive end-to-end validations.
+**Outcome:** Success — goal is active with explicit completion evidence and stop conditions.
+**Insight:** No new reusable technical insight.
+**Promoted to Lessons Learned:** No
+
+---
+
+### [2026-06-20] Implemented ERNIE-Turbo q4-only architecture
+
+**Context:** Active goal replaced Z-Image/FLUX with persistent ERNIE-Image-Turbo q4, local Gemma prompt enhancement, strict LM Studio memory handoff, and retained SeedVR2.
+**What happened:** Upgraded mflux to 0.18.0; added fixed ERNIE q4/8-step/guidance-1 loading; added fail-closed `lms unload --all` boundaries before ERNIE and SeedVR2 loads; removed legacy controls and adapters across CLI, API, UI, worker, pipeline, templates, and tests; rewrote docs and metadata; rejected removed API fields; removed the OpenAI client dependency.
+**Outcome:** Success for code paths — 355 tests pass and Ruff is clean. Persistent q4 provisioning and hardware image E2E remain pending because the required unsandboxed command approval was rejected after the account reached its Codex usage limit.
+**Insight:** Fixed model architecture is simpler and safer when enforced at request validation, pipeline signatures, loader construction, and recorded metadata rather than only hidden in UI controls.
+**Promoted to Lessons Learned:** No
+
+---
+
+### [2026-06-20] Validated Gemma prompt enhancement through native LM Studio chat
+
+**Context:** LM Studio's OpenAI-compatible chat endpoint ignored `chat_template_kwargs.enable_thinking`, causing Gemma to spend its output budget on reasoning and return no grammar.
+**What happened:** Switched grammar generation to `POST /api/v1/chat` with the exact local model ID, a dedicated system prompt, `reasoning: "off"`, and `store: false`; ran an uncached live request from an empty LM Studio state.
+**Outcome:** Success — LM Studio auto-loaded Gemma and returned valid ERNIE-oriented Tracery JSON; the app then unloaded Gemma cleanly.
+**Insight:** Native LM Studio reasoning controls are required for predictable non-reasoning Gemma output in this setup.
+**Promoted to Lessons Learned:** Yes
+
+---
+
+### [2026-06-20] Completed consecutive ERNIE q4 hardware verification
+
+**Context:** Completion required two uninterrupted local runs spanning Gemma grammar generation, LM Studio memory handoff, ERNIE q4 rendering, fixed metadata, and SeedVR2 enhancement.
+**What happened:** Provisioned checkpoint presence was verified at 6.2 GB. A live run exposed LM Studio's just-in-time reload race after `lms unload --all`; grammar generation was hardened with native inventory inspection, synchronous model loading at 8192 context, and three bounded retries for transient cancellation. Then two consecutive 512×512 runs completed with different prompts and seeds. Final audit moved the fail-closed unload boundary from cache misses to every ERNIE and SeedVR2 operation.
+**Outcome:** Success — both runs produced valid 1024×1024 SeedVR2 outputs and metadata recording `ernie-image-turbo`, q4, 8 steps, and guidance 1.0. LM Studio ended empty. Full suite: 357 passed; Ruff clean.
+**Insight:** A model unload command can complete before LM Studio's next just-in-time load is safe; an explicit load handshake makes alternating LLM/image workloads deterministic.
+**Promoted to Lessons Learned:** Yes
+
+---
+
 <!-- New entries go above this line, most recent first -->

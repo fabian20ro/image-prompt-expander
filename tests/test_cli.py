@@ -164,7 +164,7 @@ class TestCliValidation:
         result = runner.invoke(main, ["--help"])
         assert result.exit_code == 0
         assert "0 = prompt-only layout" in result.output
-        assert "standalone enhancement" in result.output
+        assert "Standalone: enhance existing images" in result.output
         assert "LM Studio API base URL (default:" in result.output
         assert "http://localhost:1234/v1" in result.output
 
@@ -189,7 +189,6 @@ class TestCliDryRun:
             base_url="http://localhost:1234/v1",
             use_cache=True,
             temperature=0.7,
-            model="flux2-klein-4b",
         )
         mock_executor_cls.assert_not_called()
 
@@ -273,4 +272,3 @@ class TestCliFullPipeline:
         args, kwargs = mock_executor.run_full_pipeline.call_args
         assert kwargs["width"] == 1024
         assert kwargs["height"] == 768
-

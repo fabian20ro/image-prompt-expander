@@ -550,14 +550,10 @@ async def generate_all_images(
 
     # Add optional image settings (only if provided)
     if req:
-        if req.model is not None:
-            params["model"] = req.model
         if req.width is not None:
             params["width"] = req.width
         if req.height is not None:
             params["height"] = req.height
-        if req.steps is not None:
-            params["steps"] = req.steps
         if req.seed is not None:
             params["seed"] = req.seed
         if req.max_prompts is not None:

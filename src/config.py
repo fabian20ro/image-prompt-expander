@@ -29,16 +29,14 @@ def _get_env_float(key: str, default: float) -> float:
 class LMStudioConfig:
     """Configuration for LM Studio connection."""
     base_url: str = "http://localhost:1234/v1"
-    api_key: str = "lm-studio"
+    model: str = "google/gemma-4-26b-a4b-qat"
 
 @dataclass(frozen=True)
 class ImageGenerationConfig:
     """Default configuration for image generation."""
     default_width: int = 864
     default_height: int = 1152
-    default_steps: int = 4
-    default_quantize: int = 8
-    default_model: str = "flux2-klein-4b"
+    model_path: Path = Path.home() / "Library/Caches/mflux/models/ernie-image-turbo-4bit"
 
 @dataclass(frozen=True)
 class ServerConfig:
@@ -113,14 +111,15 @@ class Settings:
         """Load settings from environment variables with PROMPT_GEN_ prefix."""
         lm_studio = LMStudioConfig(
             base_url=os.environ.get("PROMPT_GEN_LM_STUDIO_URL", LMStudioConfig.base_url),
-            api_key=os.environ.get("PROMPT_GEN_LM_STUDIO_API_KEY", LMStudioConfig.api_key),
+            model=os.environ.get("PROMPT_GEN_LM_STUDIO_MODEL", LMStudioConfig.model),
         )
         image_generation = ImageGenerationConfig(
             default_width=_get_env_int("PROMPT_GEN_DEFAULT_WIDTH", ImageGenerationConfig.default_width),
             default_height=_get_env_int("PROMPT_GEN_DEFAULT_HEIGHT", ImageGenerationConfig.default_height),
-            default_steps=_get_env_int("PROMPT_GEN_DEFAULT_STEPS", ImageGenerationConfig.default_steps),
-            default_quantize=_get_env_int("PROMPT_GEN_DEFAULT_QUANTIZE", ImageGenerationConfig.default_quantize),
-            default_model=os.environ.get("PROMPT_GEN_DEFAULT_MODEL", ImageGenerationConfig.default_model),
+            model_path=Path(os.environ.get(
+                "PROMPT_GEN_ERNIE_MODEL_PATH",
+                str(ImageGenerationConfig.model_path),
+            )),
         )
         server = ServerConfig(
             sse_queue_size=_get_env_int("PROMPT_GEN_SSE_QUEUE_SIZE", ServerConfig.sse_queue_size),

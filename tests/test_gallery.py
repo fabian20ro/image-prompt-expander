@@ -118,7 +118,7 @@ class TestGalleryInteractive:
             "count": 3,
             "display_title": "Imported grammar run",
             "image_generation": {
-                "model": "z-image-turbo",
+                "model": "ernie-image-turbo",
                 "width": 1024,
                 "height": 768,
                 "steps": 12,
@@ -140,7 +140,8 @@ class TestGalleryInteractive:
         assert 'value="2"' in content
         assert 'value="1024"' in content
         assert 'value="768"' in content
-        assert 'value="12"' in content
+        assert 'id="img-steps"' not in content
+        assert 'id="img-model"' not in content
         assert 'value="7"' in content
         assert "Imported grammar run" in content
         assert content.count('data-prompt-idx="2"') == 0

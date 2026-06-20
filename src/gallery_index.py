@@ -230,14 +230,6 @@ def _build_generation_form() -> str:
             <input type="number" id="count" name="count" value="50" min="1">
           </div>
           <div class="form-group">
-            <label for="model">Model</label>
-            <select id="model" name="model">
-              <option value="z-image-turbo">z-image-turbo</option>
-              <option value="flux2-klein-4b" selected>flux2-klein-4b</option>
-              <option value="flux2-klein-9b">flux2-klein-9b</option>
-            </select>
-          </div>
-          <div class="form-group">
             <label for="temperature">Temperature</label>
             <input type="number" id="temperature" name="temperature" value="0.7" step="0.1" min="0" max="2">
           </div>
@@ -293,14 +285,6 @@ def _build_generation_form() -> str:
         <summary>Image Defaults</summary>
         <div class="form-row">
           <div class="form-group">
-            <label for="grammar_model">Model</label>
-            <select id="grammar_model" name="model">
-              <option value="z-image-turbo">z-image-turbo</option>
-              <option value="flux2-klein-4b" selected>flux2-klein-4b</option>
-              <option value="flux2-klein-9b">flux2-klein-9b</option>
-            </select>
-          </div>
-          <div class="form-group">
             <label for="grammar_images_per_prompt">Images/Prompt (0 = prompt-only layout)</label>
             <input type="number" id="grammar_images_per_prompt" name="images_per_prompt" value="1" min="0">
           </div>
@@ -317,10 +301,6 @@ def _build_generation_form() -> str:
           <div class="form-group">
             <label for="grammar_height">Height</label>
             <input type="number" id="grammar_height" name="height" value="1152" step="8">
-          </div>
-          <div class="form-group">
-            <label for="grammar_steps">Steps</label>
-            <input type="number" id="grammar_steps" name="steps" min="1" placeholder="auto">
           </div>
           <div class="form-group">
             <label for="grammar_seed">Seed</label>
@@ -532,7 +512,6 @@ document.addEventListener('DOMContentLoaded', function() {{
       prompt: promptValue.trim(),
       prefix: formData.get('prefix') || 'image',
       count: parseInt(formData.get('count')) || 50,
-      model: formData.get('model') || 'flux2-klein-4b',
       temperature: parseFloat(formData.get('temperature')) || 0.7,
       no_cache: form.querySelector('#no_cache')?.checked || false,
       tiled_vae: form.querySelector('#tiled_vae')?.checked ?? false,
@@ -569,7 +548,6 @@ document.addEventListener('DOMContentLoaded', function() {{
       title: (formData.get('title') || '').trim() || null,
       prefix: formData.get('prefix') || 'image',
       count: parseInt(formData.get('count')) || 50,
-      model: formData.get('model') || 'flux2-klein-4b',
       images_per_prompt: (() => {{
         const value = formData.get('images_per_prompt');
         return value === null || value === '' ? 1 : parseInt(value);
@@ -577,7 +555,6 @@ document.addEventListener('DOMContentLoaded', function() {{
       max_prompts: formData.get('max_prompts') ? parseInt(formData.get('max_prompts')) : null,
       width: parseInt(formData.get('width')) || 864,
       height: parseInt(formData.get('height')) || 1152,
-      steps: formData.get('steps') ? parseInt(formData.get('steps')) : null,
       seed: formData.get('seed') ? parseInt(formData.get('seed')) : null,
     }};
 
