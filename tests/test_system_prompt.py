@@ -17,3 +17,9 @@ def test_project_system_prompt_is_ernie_specific():
     prompt = get_system_prompt()
     assert "ERNIE-Image-Turbo" in prompt
     assert "Tracery" in prompt
+    assert "Subject: exact identity" in prompt
+    assert "Description and details" in prompt
+    assert "Style and medium" in prompt
+    assert "Technical and capture finish" in prompt
+    assert "exactly 7 distinct" in prompt
+    assert "Never use 2–4 alternatives" in prompt

@@ -15,6 +15,7 @@ from grammar_generator import (
     get_cached_raw_response,
     generate_grammar,
     ensure_lm_model_loaded,
+    validate_grammar_structure,
 )
 
 class TestCache(unittest.TestCase):
@@ -118,8 +119,12 @@ class TestGrammarTools(unittest.TestCase):
                 }
             ]
         }
+        grammar_json = (
+            '{"origin":["A #subject#."],'
+            '"subject":["red cat","blue cat","green cat","black cat","white cat"]}'
+        )
         mock_post.return_value.json.return_value = {
-            "output": [{"type": "message", "content": '{"origin":["a cat"]}'}]
+            "output": [{"type": "message", "content": grammar_json}]
         }
 
         grammar, was_cached, raw = generate_grammar(
@@ -128,7 +133,7 @@ class TestGrammarTools(unittest.TestCase):
             use_cache=False,
         )
 
-        assert grammar == '{"origin":["a cat"]}'
+        assert grammar == grammar_json
         assert raw == grammar
         assert was_cached is False
         mock_post.assert_called_once_with(
@@ -190,6 +195,33 @@ class TestGrammarTools(unittest.TestCase):
 
         assert mock_post.call_count == 2
         mock_sleep.assert_called_once_with(2.0)
+
+
+class TestGrammarStructureValidation(unittest.TestCase):
+    def test_accepts_locked_rules_and_five_to_seven_alternatives(self):
+        validate_grammar_structure({
+            "origin": ["A #subject# in #light#."],
+            "subject": ["fox", "owl", "hare", "badger", "deer"],
+            "light": ["dawn", "morning", "noon", "evening", "twilight", "moonlight", "fog"],
+        })
+
+    def test_rejects_two_to_four_alternatives(self):
+        with self.assertRaisesRegex(ValueError, "5–7 alternatives"):
+            validate_grammar_structure({
+                "origin": ["A #subject#."],
+                "subject": ["fox", "owl", "hare", "badger"],
+            })
+
+    def test_rejects_missing_referenced_rule(self):
+        with self.assertRaisesRegex(ValueError, "missing rules: light"):
+            validate_grammar_structure({
+                "origin": ["A #subject# in #light#."],
+                "subject": ["fox", "owl", "hare", "badger", "deer"],
+            })
+
+    def test_rejects_grammar_without_variation(self):
+        with self.assertRaisesRegex(ValueError, "at least one varying rule"):
+            validate_grammar_structure({"origin": ["A fixed prompt."]})
 
 if __name__ == "__main__":
     unittest.main()

@@ -301,4 +301,14 @@ Each entry should follow this structure:
 
 ---
 
+### [2026-06-20] Aligned Gemma grammars with ERNIE prompt guidance
+
+**Context:** Generated prompts needed the recommended ERNIE structure and at least five, preferably seven, alternatives per varying Tracery rule.
+**What happened:** Rebuilt the Gemma system prompt around subject → details/spatial description → style/medium → technical/capture finish, added category-specific layout patterns, replaced the misleading single-option example with a complete seven-option example, advanced the cache schema to `ernie-v2`, and added structural validation for 5–7 distinct alternatives and valid rule references.
+**Outcome:** Success — 361 tests pass and Ruff is clean. An uncached live Gemma poster grammar returned five varying rules with seven alternatives each, preserved exact headline text, and followed the ERNIE layout-first poster format.
+**Insight:** Few-shot examples must obey the same cardinality and output structure demanded by the instructions; otherwise the model follows the example instead of the prose constraint.
+**Promoted to Lessons Learned:** No
+
+---
+
 <!-- New entries go above this line, most recent first -->
