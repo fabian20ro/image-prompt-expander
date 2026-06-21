@@ -1,7 +1,8 @@
 import pytest
 import json
 from pathlib import Path
-from src.grammar_generator import cache_grammar, get_cached_grammar, get_cached_raw_response
+from src.grammar_generator import cache_grammar, get_cached_grammar, get_cached_raw_response, hash_prompt
+from config import settings
 
 def test_grammar_cache_lifecycle(tmp_path, monkeypatch):
     # Setup: mock CACHE_DIR to a temp directory
@@ -77,3 +78,20 @@ def test_cache_full_integrity(tmp_path, monkeypatch):
     metadata = json.loads(metadata_file.read_text())
     assert metadata["user_prompt"] == user_prompt
     assert metadata["hash"] == prompt_hash
+    assert metadata["prompt_schema"] == "ernie-v2"
+    assert metadata["lm_model"] == settings.lm_studio.model
+    assert "created_at" in metadata
+
+def test_hash_prompt_deterministic():
+    # Test that hash_prompt is deterministic
+    prompt = "a beautiful sunset over the mountains"
+    hash1 = hash_prompt(prompt)
+    hash2 = hash_prompt(prompt)
+    assert hash1 == hash2
+    assert len(hash1) == 12
+
+def test_hash_prompt_different_prompts():
+    # Test that different prompts result in different hashes
+    prompt1 = "a beautiful sunset over the mountains"
+    prompt2 = "a beautiful sunrise over the mountains"
+    assert hash_prompt(prompt1) != hash_prompt(prompt2)
