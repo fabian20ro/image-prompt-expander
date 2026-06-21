@@ -1,7 +1,7 @@
 import pytest
 import json
 from pathlib import Path
-from src.grammar_generator import cache_grammar, get_cached_grammar
+from src.grammar_generator import cache_grammar, get_cached_grammar, get_cached_raw_response
 
 def test_grammar_cache_lifecycle(tmp_path, monkeypatch):
     # Setup: mock CACHE_DIR to a temp directory
@@ -44,3 +44,36 @@ def test_get_cached_grammar_miss(tmp_path, monkeypatch):
     
     # Assert
     assert retrieved is None
+
+def test_cache_full_integrity(tmp_path, monkeypatch):
+    # Setup
+    mock_cache_dir = tmp_path / "grammars"
+    mock_cache_dir.mkdir()
+    monkeypatch.setattr("src.grammar_generator.CACHE_DIR", mock_cache_dir)
+
+    # Data
+    prompt_hash = "full_integrity_test"
+    grammar_content = '{"origin": {"a": ["#b#"], "b": ["1", "2", "3", "4", "5", "6"]}}'
+    raw_response = "```json\n" + grammar_content + "\n```"
+    user_prompt = "Integrity test prompt"
+
+    # Act: Cache it
+    cache_grammar(
+        prompt_hash=prompt_hash,
+        grammar=grammar_content,
+        raw_response=raw_response,
+        user_prompt=user_prompt,
+    )
+
+    # Assert: Grammar
+    assert get_cached_grammar(prompt_hash) == grammar_content
+
+    # Assert: Raw response
+    assert get_cached_raw_response(prompt_hash) == raw_response
+
+    # Assert: Metadata
+    metadata_file = mock_cache_dir / f"{prompt_hash}.metaprompt.json"
+    assert metadata_file.exists()
+    metadata = json.loads(metadata_file.read_text())
+    assert metadata["user_prompt"] == user_prompt
+    assert metadata["hash"] == prompt_hash
