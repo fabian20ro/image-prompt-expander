@@ -9,13 +9,13 @@ def test_grammar_cache_lifecycle(tmp_path, monkeypatch):
     mock_cache_dir = tmp_path / "grammars"
     mock_cache_dir.mkdir()
     monkeypatch.setattr("src.grammar_generator.CACHE_DIR", mock_cache_dir)
-    
+
     # Data
     prompt_hash = "abc123def456"
     grammar_content = '{"prompt": "test"}'
     raw_response = "```json\n" + grammar_content + "\n```"
     user_prompt = "test prompt"
-    
+
     # Act: Cache it
     cache_grammar(
         prompt_hash=prompt_hash,
@@ -23,14 +23,14 @@ def test_grammar_cache_lifecycle(tmp_path, monkeypatch):
         raw_response=raw_response,
         user_prompt=user_prompt,
     )
-    
+
     # Assert: File exists
     expected_file = mock_cache_dir / f"{prompt_hash}.tracery.json"
     assert expected_file.exists()
-    
+
     # Act: Retrieve it
     retrieved_grammar = get_cached_grammar(prompt_hash)
-    
+
     # Assert: Matches
     assert retrieved_grammar == grammar_content
 
@@ -39,10 +39,22 @@ def test_get_cached_grammar_miss(tmp_path, monkeypatch):
     mock_cache_dir = tmp_path / "grammars"
     mock_cache_dir.mkdir()
     monkeypatch.setattr("src.grammar_generator.CACHE_DIR", mock_cache_dir)
-    
+
     # Act
     retrieved = get_cached_grammar("nonexistent")
-    
+
+    # Assert
+    assert retrieved is None
+
+def test_get_cached_raw_response_miss(tmp_path, monkeypatch):
+    # Setup
+    mock_cache_dir = tmp_path / "grammars"
+    mock_cache_dir.mkdir()
+    monkeypatch.setattr("src.grammar_generator.CACHE_DIR", mock_cache_dir)
+
+    # Act
+    retrieved = get_cached_raw_response("nonexistent")
+
     # Assert
     assert retrieved is None
 
@@ -59,12 +71,17 @@ def test_cache_full_integrity(tmp_path, monkeypatch):
     user_prompt = "Integrity test prompt"
 
     # Act: Cache it
-    cache_grammar(
+    returned_grammar, was_cached, returned_raw = cache_grammar(
         prompt_hash=prompt_hash,
         grammar=grammar_content,
         raw_response=raw_response,
         user_prompt=user_prompt,
     )
+
+    # Assert: Returned values
+    assert returned_grammar == grammar_content
+    assert was_cached is False
+    assert returned_raw == raw_response
 
     # Assert: Grammar
     assert get_cached_grammar(prompt_hash) == grammar_content
@@ -89,9 +106,18 @@ def test_hash_prompt_deterministic():
     hash2 = hash_prompt(prompt)
     assert hash1 == hash2
     assert len(hash1) == 12
+    assert len(hash1) > 0
 
 def test_hash_prompt_different_prompts():
     # Test that different prompts result in different hashes
     prompt1 = "a beautiful sunset over the mountains"
     prompt2 = "a beautiful sunrise over the mountains"
     assert hash_prompt(prompt1) != hash_prompt(prompt2)
+
+def test_hash_prompt_emojis():
+    # Test that hash_prompt handles emojis correctly
+    prompt = "a beautiful sunset 🌅 over the mountains 🏔️"
+    hash1 = hash_prompt(prompt)
+    hash2 = hash_prompt(prompt)
+    assert hash1 == hash2
+    assert len(hash1) == 12
