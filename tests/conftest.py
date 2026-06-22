@@ -85,6 +85,9 @@ def create_run_files(run_dir: Path, prefix: str = "test", num_prompts: int = 2,
     if grammar is None:
         grammar = {"origin": ["test"]}
 
+    # Ensure directory exists
+    run_dir.mkdir(parents=True, exist_ok=True)
+
     # Create metadata
     (run_dir / f"{prefix}.metaprompt.json").write_text(json.dumps(metadata))
 
@@ -101,3 +104,20 @@ def create_run_files(run_dir: Path, prefix: str = "test", num_prompts: int = 2,
             (run_dir / f"{prefix}_{i}_0.png").write_bytes(b"fake image")
 
     return run_dir
+
+
+@pytest.fixture
+def full_run_dir(run_dir):
+    """Create a run directory with all required files."""
+    return create_run_files(run_dir)
+
+
+def test_create_run_files_integrity(temp_dir):
+    """Verify create_run_files creates a valid directory structure."""
+    num_prompts = 3
+    prefix = "test_run"
+    run_dir = create_run_files(temp_dir / "test_run", prefix=prefix, num_prompts=num_prompts)
+    assert (run_dir / f"{prefix}.metaprompt.json").exists()
+    assert (run_dir / f"{prefix}_grammar.json").exists()
+    for i in range(num_prompts):
+        assert (run_dir / f"{prefix}_{i}.txt").exists()
