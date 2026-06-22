@@ -1,7 +1,7 @@
 import pytest
 import json
 from pathlib import Path
-from src.grammar_generator import cache_grammar, get_cached_grammar, get_cached_raw_response, hash_prompt
+from src.grammar_generator import cache_grammar, get_cached_grammar, get_cached_raw_response, hash_prompt, clean_grammar_output
 from config import settings
 
 def test_grammar_cache_lifecycle(tmp_path, monkeypatch):
