@@ -121,3 +121,16 @@ def test_hash_prompt_emojis():
     hash2 = hash_prompt(prompt)
     assert hash1 == hash2
     assert len(hash1) == 12
+
+def test_clean_grammar_output():
+    # Basic
+    assert clean_grammar_output('{"a": 1}') == '{"a": 1}'
+    # Markdown code blocks
+    assert clean_grammar_output('```json\n{"a": 1}\n```') == '{"a": 1}'
+    assert clean_grammar_output('```tracery\n{"a": 1}\n```') == '{"a": 1}'
+    # Thinking blocks
+    assert clean_grammar_output('<think>some thought</think>{"a": 1}') == '{"a": 1}'
+    # Smart quotes
+    assert clean_grammar_output('{\u201c\u201d: 1}') == '{"": 1}'
+    # Extra text
+    assert clean_grammar_output('Here is the json: {"a": 1} end of message') == '{"a": 1}'
