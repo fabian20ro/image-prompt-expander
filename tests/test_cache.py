@@ -134,3 +134,11 @@ def test_clean_grammar_output():
     assert clean_grammar_output('{\u201c\u201d: 1}') == '{"": 1}'
     # Extra text
     assert clean_grammar_output('Here is the json: {"a": 1} end of message') == '{"a": 1}'
+
+def test_clean_grammar_output_robustness():
+    # Multiple thinking blocks and code blocks
+    assert clean_grammar_output('<think>1</think>```json\n{"a": 1}\n```<think>2</think>') == '{"a": 1}'
+    # Array extraction
+    assert clean_grammar_output('Result: [1, 2, 3] end') == '[1, 2, 3]'
+    # Unbalanced braces - should return original after strip
+    assert clean_grammar_output('{ "unbalanced": 1 ') == '{ "unbalanced": 1'
