@@ -142,3 +142,19 @@ def test_clean_grammar_output_robustness():
     assert clean_grammar_output('Result: [1, 2, 3] end') == '[1, 2, 3]'
     # Unbalanced braces - should return original after strip
     assert clean_grammar_output('{ "unbalanced": 1 ') == '{ "unbalanced": 1'
+
+def test_clean_grammar_output_edge_cases():
+    # Empty string
+    assert clean_grammar_output("") == ""
+    # Just whitespace
+    assert clean_grammar_output("   ") == ""
+    # Only non-json characters
+    assert clean_grammar_output("no json here") == "no json here"
+    # Unclosed JSON object
+    assert clean_grammar_output('{ "unbalanced": 1 ') == '{ "unbalanced": 1'
+    # Unclosed JSON array
+    assert clean_grammar_output('[1, 2, 3') == '[1, 2, 3'
+    # Mixed content, first is array
+    assert clean_grammar_output('Some text [1, 2, 3] more text {"a": 1}') == '[1, 2, 3]'
+    # Mixed content, first is object
+    assert clean_grammar_output('Some text {"a": 1} more text [1, 2, 3]') == '{"a": 1}'
