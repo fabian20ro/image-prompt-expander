@@ -134,3 +134,27 @@ def test_clean_grammar_output():
     assert clean_grammar_output('{\u201c\u201d: 1}') == '{"": 1}'
     # Extra text
     assert clean_grammar_output('Here is the json: {"a": 1} end of message') == '{"a": 1}'
+
+def test_clean_grammar_output_robustness():
+    # Multiple thinking blocks and code blocks
+    assert clean_grammar_output('<think>1</think>```json\n{"a": 1}\n```<think>2</think>') == '{"a": 1}'
+    # Array extraction
+    assert clean_grammar_output('Result: [1, 2, 3] end') == '[1, 2, 3]'
+    # Unbalanced braces - should return original after strip
+    assert clean_grammar_output('{ "unbalanced": 1 ') == '{ "unbalanced": 1'
+
+def test_clean_grammar_output_edge_cases():
+    # Empty string
+    assert clean_grammar_output("") == ""
+    # Just whitespace
+    assert clean_grammar_output("   ") == ""
+    # Only non-json characters
+    assert clean_grammar_output("no json here") == "no json here"
+    # Unclosed JSON object
+    assert clean_grammar_output('{ "unbalanced": 1 ') == '{ "unbalanced": 1'
+    # Unclosed JSON array
+    assert clean_grammar_output('[1, 2, 3') == '[1, 2, 3'
+    # Mixed content, first is array
+    assert clean_grammar_output('Some text [1, 2, 3] more text {"a": 1}') == '[1, 2, 3]'
+    # Mixed content, first is object
+    assert clean_grammar_output('Some text {"a": 1} more text [1, 2, 3]') == '{"a": 1}'
