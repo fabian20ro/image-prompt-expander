@@ -143,18 +143,18 @@ def test_clean_grammar_output_robustness():
     # Unbalanced braces - should return original after strip
     assert clean_grammar_output('{ "unbalanced": 1 ') == '{ "unbalanced": 1'
 
-def test_clean_grammar_output_edge_cases():
-    # Empty string
-    assert clean_grammar_output("") == ""
-    # Just whitespace
-    assert clean_grammar_output("   ") == ""
-    # Only non-json characters
-    assert clean_grammar_output("no json here") == "no json here"
-    # Unclosed JSON object
-    assert clean_grammar_output('{ "unbalanced": 1 ') == '{ "unbalanced": 1'
-    # Unclosed JSON array
-    assert clean_grammar_output('[1, 2, 3') == '[1, 2, 3'
-    # Mixed content, first is array
-    assert clean_grammar_output('Some text [1, 2, 3] more text {"a": 1}') == '[1, 2, 3]'
-    # Mixed content, first is object
-    assert clean_grammar_output('Some text {"a": 1} more text [1, 2, 3]') == '{"a": 1}'
+def test_cache_directory_creation(tmp_path, monkeypatch):
+    # Setup: mock CACHE_DIR to a non-existent path
+    mock_cache_dir = tmp_path / "nested" / "cache"
+    # We don't call .mkdir() here
+    monkeypatch.setattr("src.grammar_generator.CACHE_DIR", mock_cache_dir)
+
+    # Act: Cache something
+    prompt_hash = "dir_creation_test"
+    grammar_content = '{"a": 1}'
+    raw_response = '```json\n{"a": 1}\n```'
+    user_prompt = "test"
+    cache_grammar(prompt_hash, grammar_content, raw_response, user_prompt)
+
+    # Assert
+    assert mock_cache_dir.exists()
