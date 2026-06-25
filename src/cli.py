@@ -371,12 +371,23 @@ def main(
         sys.exit(1)
 
     # Print summary
-    click.echo(f"\nGenerated {result.prompt_count} prompts in: {result.output_dir}")
-    if result.image_count > 0:
-        if result.skipped_count > 0:
-            click.echo(f"Generated {result.image_count} images, skipped {result.skipped_count} existing")
-        else:
-            click.echo(f"Generated {result.image_count} images")
+    summary = {
+        "prompt_count": result.prompt_count,
+        "output_dir": str(result.output_dir) if result.output_dir else None,
+        "image_count": result.image_count,
+        "skipped_count": result.skipped_count,
+        "success": result.success,
+    }
+
+    if json:
+        click.echo(json.dumps(summary, indent=2))
+    else:
+        click.echo(f"\nGenerated {result.prompt_count} prompts in: {result.output_dir}")
+        if result.image_count > 0:
+            if result.skipped_count > 0:
+                click.echo(f"Generated {result.image_count} images, skipped {result.skipped_count} existing")
+            else:
+                click.echo(f"Generated {result.image_count} images")
 
 
 def _run_standalone_enhancement(
