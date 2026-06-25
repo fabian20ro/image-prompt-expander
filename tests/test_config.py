@@ -19,6 +19,7 @@ class TestConfig:
         assert settings.lm_studio.base_url == "http://localhost:1234/v1"
         assert settings.image_generation.default_width == 864
         assert settings.image_generation.default_height == 1152
+        assert settings.image_generation.seed == 0
         assert settings.lm_studio.model == "google/gemma-4-26b-a4b-qat"
         assert settings.image_generation.model_path.name == "ernie-image-turbo-4bit"
         assert settings.server.sse_queue_size == 100
@@ -31,6 +32,7 @@ class TestConfig:
             "PROMPT_GEN_DEFAULT_WIDTH": "1024",
             "PROMPT_GEN_DEFAULT_HEIGHT": "768",
             "PROMPT_GEN_SSE_QUEUE_SIZE": "200",
+            "PROMPT_GEN_IMAGE_SEED": "42",
         }
         
         with patch.dict(os.environ, env_vars):
@@ -39,6 +41,7 @@ class TestConfig:
             assert settings.image_generation.default_width == 1024
             assert settings.image_generation.default_height == 768
             assert settings.server.sse_queue_size == 200
+            assert settings.image_generation.seed == 42
 
     def test_immutable_config(self):
         """Test that config dataclasses are immutable."""

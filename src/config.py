@@ -36,6 +36,7 @@ class ImageGenerationConfig:
     """Default configuration for image generation."""
     default_width: int = 864
     default_height: int = 1152
+    seed: int = 0
     model_path: Path = Path.home() / "Library/Caches/mflux/models/ernie-image-turbo-4bit"
 
 @dataclass(frozen=True)
@@ -116,6 +117,7 @@ class Settings:
         image_generation = ImageGenerationConfig(
             default_width=_get_env_int("PROMPT_GEN_DEFAULT_WIDTH", ImageGenerationConfig.default_width),
             default_height=_get_env_int("PROMPT_GEN_DEFAULT_HEIGHT", ImageGenerationConfig.default_height),
+            seed=_get_env_int("PROMPT_GEN_IMAGE_SEED", 0),
             model_path=Path(os.environ.get(
                 "PROMPT_GEN_ERNIE_MODEL_PATH",
                 str(ImageGenerationConfig.model_path),
