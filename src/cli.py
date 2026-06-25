@@ -172,6 +172,10 @@ def cli_progress(stage: str, current: int = 0, total: int = 0, message: str = ""
     type=int,
     help='Port for web UI server (default: 8000)'
 )
+@click.option(
+    '--json', is_flag=True,
+    help='Output summary as JSON'
+)
 def main(
     prompt: str | None,
     clean: bool,
@@ -198,6 +202,7 @@ def main(
     no_tiled_vae: bool,
     serve: bool,
     port: int,
+    json: bool = False,
 ):
     """
     Generate ERNIE-Image-Turbo prompt variations using local LLM-powered Tracery grammars.
