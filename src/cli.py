@@ -404,30 +404,27 @@ def _run_standalone_enhancement(
         click.echo(f"Error: {e}", err=True)
         sys.exit(1)
 
-    click.echo(f"Enhancing {len(images)} images with SeedVR2 (2x upscale, softness={enhance_softness})...")
+    with click.progressbar(images, label=f"Enhancing {len(images)} images") as bar:
+        current_seed = seed
+        for img_path in bar:
+            bar.write(f"\nEnhancing {img_path.name} (replacing original)...")
+            try:
+                enhance_image(
+                    image_path=img_path,
+                    output_path=img_path,
+                    softness=enhance_softness,
+                    seed=current_seed,
+                    tiled_vae=not no_tiled_vae,
+                )
+            except ImportError as e:
+                click.echo(f"Error: {e}", err=True)
+                sys.exit(1)
+            except Exception as e:
+                click.echo(f"Error enhancing image: {e}", err=True)
+                sys.exit(1)
 
-    current_seed = seed
-
-    for idx, img_path in enumerate(images, 1):
-        click.echo(f"  [{idx}/{len(images)}] Enhancing {img_path.name} (replacing original)...")
-
-        try:
-            enhance_image(
-                image_path=img_path,
-                output_path=img_path,
-                softness=enhance_softness,
-                seed=current_seed,
-                tiled_vae=not no_tiled_vae,
-            )
-        except ImportError as e:
-            click.echo(f"Error: {e}", err=True)
-            sys.exit(1)
-        except Exception as e:
-            click.echo(f"Error enhancing image: {e}", err=True)
-            sys.exit(1)
-
-        if current_seed is not None:
-            current_seed += 1
+            if current_seed is not None:
+                current_seed += 1
 
     click.echo(f"\nEnhanced {len(images)} images")
 
