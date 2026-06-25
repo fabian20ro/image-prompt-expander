@@ -3,6 +3,7 @@
 
 import shutil
 import sys
+import json
 from pathlib import Path
 
 import click
