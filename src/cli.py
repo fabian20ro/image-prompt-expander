@@ -3,6 +3,7 @@
 
 import shutil
 import sys
+import json
 from pathlib import Path
 
 import click
@@ -172,6 +173,10 @@ def cli_progress(stage: str, current: int = 0, total: int = 0, message: str = ""
     type=int,
     help='Port for web UI server (default: 8000)'
 )
+@click.option(
+    '--json', is_flag=True,
+    help='Output summary as JSON'
+)
 def main(
     prompt: str | None,
     clean: bool,
@@ -198,6 +203,7 @@ def main(
     no_tiled_vae: bool,
     serve: bool,
     port: int,
+    json: bool = False,
 ):
     """
     Generate ERNIE-Image-Turbo prompt variations using local LLM-powered Tracery grammars.
@@ -365,12 +371,23 @@ def main(
         sys.exit(1)
 
     # Print summary
-    click.echo(f"\nGenerated {result.prompt_count} prompts in: {result.output_dir}")
-    if result.image_count > 0:
-        if result.skipped_count > 0:
-            click.echo(f"Generated {result.image_count} images, skipped {result.skipped_count} existing")
-        else:
-            click.echo(f"Generated {result.image_count} images")
+    summary = {
+        "prompt_count": result.prompt_count,
+        "output_dir": str(result.output_dir) if result.output_dir else None,
+        "image_count": result.image_count,
+        "skipped_count": result.skipped_count,
+        "success": result.success,
+    }
+
+    if json:
+        click.echo(json.dumps(summary, indent=2))
+    else:
+        click.echo(f"\nGenerated {result.prompt_count} prompts in: {result.output_dir}")
+        if result.image_count > 0:
+            if result.skipped_count > 0:
+                click.echo(f"Generated {result.image_count} images, skipped {result.skipped_count} existing")
+            else:
+                click.echo(f"Generated {result.image_count} images")
 
 
 def _run_standalone_enhancement(
