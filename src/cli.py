@@ -39,9 +39,9 @@ def cli_progress(stage: str, current: int = 0, total: int = 0, message: str = ""
 
 
 @click.command()
+@click.version_option(version="1.0.0")
 @click.option(
-    '-p', '--prompt',
-    default=None,
+    '-p', '--prompt',    default=None,
     help='Image description to generate variations for'
 )
 @click.option(
