@@ -30,6 +30,7 @@ class LMStudioConfig:
     """Configuration for LM Studio connection."""
     base_url: str = "http://localhost:1234/v1"
     model: str = "google/gemma-4-26b-a4b-qat"
+    timeout: float = 60.0  # seconds
 
 @dataclass(frozen=True)
 class ImageGenerationConfig:
@@ -113,6 +114,7 @@ class Settings:
         lm_studio = LMStudioConfig(
             base_url=os.environ.get("PROMPT_GEN_LM_STUDIO_URL", LMStudioConfig.base_url),
             model=os.environ.get("PROMPT_GEN_LM_STUDIO_MODEL", LMStudioConfig.model),
+            timeout=_get_env_float("PROMPT_GEN_LM_STUDIO_TIMEOUT", LMStudioConfig.timeout),
         )
         image_generation = ImageGenerationConfig(
             default_width=_get_env_int("PROMPT_GEN_DEFAULT_WIDTH", ImageGenerationConfig.default_width),

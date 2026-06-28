@@ -177,6 +177,10 @@ def cli_progress(stage: str, current: int = 0, total: int = 0, message: str = ""
     '--json', is_flag=True,
     help='Output summary as JSON'
 )
+@click.option(
+    '--quiet', is_flag=True,
+    help='Suppress non-error output'
+)
 def main(
     prompt: str | None,
     clean: bool,
@@ -204,6 +208,7 @@ def main(
     serve: bool,
     port: int,
     json: bool = False,
+    quiet: bool = False,
 ):
     """
     Generate ERNIE-Image-Turbo prompt variations using local LLM-powered Tracery grammars.
@@ -239,7 +244,8 @@ def main(
     # Handle --clean
     if clean:
         removed = clean_generated()
-        click.echo(f"Cleaned {removed} items from {paths.generated_dir}")
+        if not quiet:
+            click.echo(f"Cleaned {removed} items from {paths.generated_dir}")
         if not prompt and not from_grammar and not from_prompts and not enhance_images and not serve:
             return
 
@@ -248,8 +254,9 @@ def main(
         import webbrowser
         import threading
 
-        click.echo(f"Starting web UI server at http://localhost:{port}")
-        click.echo("Press Ctrl+C to stop")
+        if not quiet:
+            click.echo(f"Starting web UI server at http://localhost:{port}")
+            click.echo("Press Ctrl+C to stop")
 
         def open_browser():
             import time
@@ -286,7 +293,12 @@ def main(
         sys.exit(1)
 
     if prompt and (from_grammar or from_prompts):
-        click.echo("Warning: --prompt is ignored when using --from-grammar or --from-prompts", err=True)
+        if not quiet:
+            click.echo("Warning: --prompt is ignored when using --from-grammar or --from-prompts", err=True)
+        else:
+            pass
+        # Note: It's better to just proceed if it's just a warning.
+        # The current logic already proceeds.
 
     if not (0.0 <= temperature <= 2.0):
         raise click.BadParameter(f"temperature must be between 0.0 and 2.0, got {temperature}")

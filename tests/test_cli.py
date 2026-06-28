@@ -172,6 +172,21 @@ class TestCliValidation:
 class TestCliDryRun:
     """Tests for --dry-run behavior."""
 
+    def test_dry_run_from_grammar(self, temp_dir):
+        """Test --dry-run with an existing grammar file."""
+        grammar_file = temp_dir / "test.json"
+        grammar_content = '{"origin": ["test_grammar"]}'
+        grammar_file.write_text(grammar_content)
+
+        runner = CliRunner()
+        result = runner.invoke(main, ["--from-grammar", str(grammar_file), "--dry-run"])
+
+        assert result.exit_code == 0
+        assert f"Loading grammar from: {grammar_file}" in result.output
+        assert "--- Loaded Grammar ---" in result.output
+        assert grammar_content in result.output
+        assert "--- End Grammar ---" in result.output
+
     @patch("cli.generate_grammar")
     @patch("cli.PipelineExecutor")
     def test_dry_run_previews_grammar_without_pipeline(self, mock_executor_cls, mock_generate_grammar):

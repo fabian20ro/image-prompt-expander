@@ -158,3 +158,15 @@ def test_cache_directory_creation(tmp_path, monkeypatch):
 
     # Assert
     assert mock_cache_dir.exists()
+
+def test_clean_grammar_output_extra_whitespace():
+    assert clean_grammar_output("   {\"a\": 1}   ") == "{\"a\": 1}"
+
+def test_clean_grammar_output_nested_json_in_text():
+    assert clean_grammar_output('The JSON is: {"a": 1, "b": [1, 2]} and more') == '{"a": 1, "b": [1, 2]}'
+
+def test_clean_grammar_output_smart_quotes_in_json():
+    assert clean_grammar_output('{"key": \u201cvalue\u201d}') == '{"key": "value"}'
+
+def test_clean_grammar_output_multiple_json_objects():
+    assert clean_grammar_output('{"first": 1} {"second": 2}') == '{"first": 1}'
