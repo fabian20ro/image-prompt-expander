@@ -25,6 +25,12 @@ def _get_env_float(key: str, default: float) -> float:
         logger.warning("Invalid value for %s: %s. Using default: %f", key, val, default)
         return default
 
+def _get_env_str(key: str, default: str) -> str:
+    val = os.environ.get(key)
+    if val is None or not val.strip():
+        return default
+    return val
+
 @dataclass(frozen=True)
 class LMStudioConfig:
     """Configuration for LM Studio connection."""
@@ -112,8 +118,8 @@ class Settings:
     def from_env(cls) -> "Settings":
         """Load settings from environment variables with PROMPT_GEN_ prefix."""
         lm_studio = LMStudioConfig(
-            base_url=os.environ.get("PROMPT_GEN_LM_STUDIO_URL", LMStudioConfig.base_url),
-            model=os.environ.get("PROMPT_GEN_LM_STUDIO_MODEL", LMStudioConfig.model),
+            base_url=_get_env_str("PROMPT_GEN_LM_STUDIO_URL", LMStudioConfig.base_url),
+            model=_get_env_str("PROMPT_GEN_LM_STUDIO_MODEL", LMStudioConfig.model),
             timeout=_get_env_float("PROMPT_GEN_LM_STUDIO_TIMEOUT", LMStudioConfig.timeout),
         )
         image_generation = ImageGenerationConfig(
