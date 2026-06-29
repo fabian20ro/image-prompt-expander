@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 from unittest.mock import patch
 
-from config import Settings, LMStudioConfig, paths
+from config import Settings, LMStudioConfig, ImageGenerationConfig, paths
 
 
 class TestConfig:
@@ -58,7 +58,16 @@ class TestConfig:
         with patch.dict(os.environ, env_vars):
             settings = Settings.from_env()
             assert settings.image_generation.default_width == 864
-        # Verify paths are Path objects
+
+    def test_invalid_dimensions(self):
+        """Test that invalid dimensions raise ValueError."""
+        with pytest.raises(ValueError, match="default_width must be positive"):
+            ImageGenerationConfig(default_width=0)
+        with pytest.raises(ValueError, match="default_height must be positive"):
+            ImageGenerationConfig(default_height=-1)
+
+    def test_path_properties(self):
+        """Verify path properties are Path objects and correct."""
         assert isinstance(paths.root_dir, Path)
         assert isinstance(paths.generated_dir, Path)
         assert isinstance(paths.grammars_dir, Path)
