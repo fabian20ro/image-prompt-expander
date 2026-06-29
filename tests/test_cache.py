@@ -170,3 +170,14 @@ def test_clean_grammar_output_smart_quotes_in_json():
 
 def test_clean_grammar_output_multiple_json_objects():
     assert clean_grammar_output('{"first": 1} {"second": 2}') == '{"first": 1}'
+
+def test_clean_grammar_output_markdown_variations():
+    # Test markdown block with no language identifier
+    assert clean_grammar_output('```\n{"a": 1}\n```') == '{"a": 1}'
+    # Test markdown block with unknown language
+    assert clean_grammar_output('```xml\n{"a": 1}\n```') == '{"a": 1}'
+
+def test_clean_grammar_output_complex_extraction():
+    # Test JSON extraction from very messy text
+    messy = "The result is: \n```json\n{\"a\": 1}\n``` \nEnd of message."
+    assert clean_grammar_output(messy) == '{"a": 1}'
