@@ -177,6 +177,12 @@ def test_clean_grammar_output_markdown_variations():
     # Test markdown block with unknown language
     assert clean_grammar_output('```xml\n{"a": 1}\n```') == '{"a": 1}'
 
+def test_clean_grammar_output_unclosed_markdown():
+    assert clean_grammar_output('```json\n{"a": 1}') == '{"a": 1}'
+
+def test_clean_grammar_output_multiple_thinking_blocks():
+    assert clean_grammar_output('text{"a": 1}') == '{"a": 1}'
+
 def test_clean_grammar_output_complex_extraction():
     # Test JSON extraction from very messy text
     messy = "The result is: \n```json\n{\"a\": 1}\n``` \nEnd of message."
