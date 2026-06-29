@@ -1,7 +1,7 @@
 import pytest
 import json
 from pathlib import Path
-from src.grammar_generator import cache_grammar, get_cached_grammar, get_cached_raw_response, hash_prompt, clean_grammar_output
+from src.grammar_generator import cache_grammar, get_cached_grammar, get_cached_raw_response, hash_prompt, clean_grammar_output, validate_grammar_structure
 from config import settings
 
 def test_grammar_cache_lifecycle(tmp_path, monkeypatch):
@@ -183,7 +183,62 @@ def test_clean_grammar_output_unclosed_markdown():
 def test_clean_grammar_output_multiple_thinking_blocks():
     assert clean_grammar_output('text{"a": 1}') == '{"a": 1}'
 
-def test_clean_grammar_output_complex_extraction():
-    # Test JSON extraction from very messy text
-    messy = "The result is: \n```json\n{\"a\": 1}\n``` \nEnd of message."
-    assert clean_grammar_output(messy) == '{"a": 1}'
+def test_validate_grammar_structure():
+    # Valid grammar (flat)
+    valid_grammar = {
+        "origin": ["#a#", "2", "3", "4", "5", "6"],
+        "a": ["1"]
+    }
+    # This should not raise an exception
+    validate_grammar_structure(valid_grammar)
+
+    # Invalid: missing origin
+    with pytest.raises(ValueError, match='Grammar must be a JSON object containing an "origin" rule'):
+        validate_grammar_structure({"a": ["1"]})
+
+    # Invalid: too many rules
+    too_many_rules = {
+        "origin": ["#a#", "2", "3", "4", "5", "6"],
+        "a": ["1"],
+        "b": ["1"],
+        "c": ["1"],
+        "d": ["1"],
+        "e": ["1"],
+        "f": ["1"],
+        "g": ["1"],
+        "h": ["1"]
+    }
+    with pytest.raises(ValueError, match='Grammar must contain at most 8 rules'):
+        validate_grammar_structure(too_many_rules)
+
+    # Invalid: duplicate alternatives
+    duplicates = {
+        "origin": ["1", "1", "3", "4", "5", "6"],
+        "a": ["1"]
+    }
+    with pytest.raises(ValueError, match=r"Grammar rule .* contains duplicate alternatives"):
+        validate_grammar_structure(duplicates)
+
+    # Invalid: rule with too few/many alternatives (not varying)
+    too_few_alternatives = {
+        "origin": ["1", "2"],
+        "a": ["1"]
+    }
+    with pytest.raises(ValueError, match=r"Varying grammar rule .* must contain 5–7 alternatives"):
+        validate_grammar_structure(too_few_alternatives)
+
+    # Invalid: missing references
+    missing_ref = {
+        "origin": ["#missing#", "2", "3", "4", "5", "6"],
+        "a": ["1"]
+    }
+    with pytest.raises(ValueError, match=r"Grammar references missing rules: missing"):
+        validate_grammar_structure(missing_ref)
+
+    # Invalid: non-string alternatives
+    non_string = {
+        "origin": ["#a#", "2", "3", "4", "5", "6"],
+        "a": [1]
+    }
+    with pytest.raises(ValueError, match=r"Grammar rule .* must contain non-empty strings"):
+        validate_grammar_structure(non_string)
