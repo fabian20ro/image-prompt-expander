@@ -169,8 +169,17 @@ class TestCliValidation:
         assert "http://localhost:1234/v1" in result.output
 
 
-class TestCliDryRun:
-    """Tests for --dry-run behavior."""
+class TestCliEnhanceImages:
+    """Tests for --enhance-images flag."""
+
+    @patch("cli.collect_images")
+    def test_enhance_images_error(self, mock_collect, temp_dir):
+        """Test --enhance-images with invalid path."""
+        mock_collect.side_effect = ValueError("No images found matching pattern: invalid")
+        runner = CliRunner()
+        result = runner.invoke(main, ["--enhance-images", "invalid"])
+        assert result.exit_code != 0
+        assert "Error: No images found matching pattern: invalid" in result.output
 
     def test_dry_run_from_grammar(self, temp_dir):
         """Test --dry-run with an existing grammar file."""
