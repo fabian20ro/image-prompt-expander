@@ -46,6 +46,12 @@ class ImageGenerationConfig:
     seed: int = 0
     model_path: Path = Path.home() / "Library/Caches/mflux/models/ernie-image-turbo-4bit"
 
+    def __post_init__(self):
+        if self.default_width <= 0:
+            raise ValueError("default_width must be positive")
+        if self.default_height <= 0:
+            raise ValueError("default_height must be positive")
+
 @dataclass(frozen=True)
 class ServerConfig:
     """Configuration for the web server."""
