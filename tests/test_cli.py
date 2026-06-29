@@ -7,6 +7,7 @@ from unittest.mock import patch, MagicMock
 import pytest
 from click.testing import CliRunner
 
+from config import settings
 from cli import main, clean_generated, cli_progress
 
 

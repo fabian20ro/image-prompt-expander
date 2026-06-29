@@ -59,6 +59,12 @@ class ServerConfig:
     sse_timeout: float = 5.0  # seconds between keepalives
     worker_timeout: float = 300.0  # seconds
 
+    def __post_init__(self):
+        if self.sse_timeout <= 0:
+            raise ValueError("sse_timeout must be positive")
+        if self.worker_timeout <= 0:
+            raise ValueError("worker_timeout must be positive")
+
 @dataclass(frozen=True)
 class EnhancementConfig:
     """Configuration for image enhancement."""
