@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 from unittest.mock import patch
 
-from config import Settings, LMStudioConfig, ImageGenerationConfig, paths
+from config import Settings, LMStudioConfig, ImageGenerationConfig, ServerConfig, paths
 
 
 class TestConfig:
@@ -59,12 +59,12 @@ class TestConfig:
             settings = Settings.from_env()
             assert settings.image_generation.default_width == 864
 
-    def test_invalid_dimensions(self):
-        """Test that invalid dimensions raise ValueError."""
-        with pytest.raises(ValueError, match="default_width must be positive"):
-            ImageGenerationConfig(default_width=0)
-        with pytest.raises(ValueError, match="default_height must be positive"):
-            ImageGenerationConfig(default_height=-1)
+    def test_invalid_server_timeouts(self):
+        """Test that invalid server timeouts raise ValueError."""
+        with pytest.raises(ValueError, match="sse_timeout must be positive"):
+            ServerConfig(sse_timeout=0)
+        with pytest.raises(ValueError, match="worker_timeout must be positive"):
+            ServerConfig(worker_timeout=-1)
 
     def test_path_properties(self):
         """Verify path properties are Path objects and correct."""
