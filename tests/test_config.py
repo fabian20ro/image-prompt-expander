@@ -66,6 +66,13 @@ class TestConfig:
         with pytest.raises(ValueError, match="worker_timeout must be positive"):
             ServerConfig(worker_timeout=-1)
 
+    def test_invalid_image_dimensions(self):
+        """Test that invalid image dimensions raise ValueError."""
+        with pytest.raises(ValueError, match="default_width must be positive"):
+            ImageGenerationConfig(default_width=0)
+        with pytest.raises(ValueError, match="default_height must be positive"):
+            ImageGenerationConfig(default_height=-1)
+
     def test_path_properties(self):
         """Verify path properties are Path objects and correct."""
         assert isinstance(paths.root_dir, Path)
