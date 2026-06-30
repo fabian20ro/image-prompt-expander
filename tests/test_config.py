@@ -63,6 +63,10 @@ class TestConfig:
         """Test that invalid server timeouts raise ValueError."""
         with pytest.raises(ValueError, match="sse_timeout must be positive"):
             ServerConfig(sse_timeout=0)
+        with pytest.raises(ValueError, match="sse_timeout must be positive"):
+            ServerConfig(sse_timeout=-1)
+        with pytest.raises(ValueError, match="worker_timeout must be positive"):
+            ServerConfig(worker_timeout=0)
         with pytest.raises(ValueError, match="worker_timeout must be positive"):
             ServerConfig(worker_timeout=-1)
 

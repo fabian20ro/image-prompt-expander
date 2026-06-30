@@ -174,8 +174,9 @@ def cli_progress(stage: str, current: int = 0, total: int = 0, message: str = ""
     help='Port for web UI server (default: 8000)'
 )
 @click.option(
-    '--json', is_flag=True,
-    help='Output summary as JSON'
+    '--version-check',
+    is_flag=True,
+    help='Verify LM Studio connectivity before starting'
 )
 @click.option(
     '--quiet', is_flag=True,
@@ -209,6 +210,7 @@ def main(
     port: int,
     json: bool = False,
     quiet: bool = False,
+    version_check: bool = False
 ):
     """
     Generate ERNIE-Image-Turbo prompt variations using local LLM-powered Tracery grammars.
@@ -236,10 +238,15 @@ def main(
         uv run python src/cli.py --enhance-images path/to/folder/
         uv run python src/cli.py --enhance-images "generated/prompts/*/test_*.png"
     """
+    # Handle --version-check
+    if version_check:
+        if check_lm_studio(base_url):
+            click.echo(f"Successfully connected to LM Studio at {base_url}")
+        else:
+            click.echo(f"Error: LM Studio is not reachable at {base_url}.", err=True)
+            sys.exit(1)
+
     # LM Studio is required only when creating a grammar.
-    if prompt and not from_grammar and not from_prompts and not check_lm_studio(base_url):
-        click.echo(f"Error: LM Studio is not reachable at {base_url}. Please ensure it is running.", err=True)
-        sys.exit(1)
 
     # Handle --clean
     if clean:
