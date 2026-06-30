@@ -38,6 +38,10 @@ class LMStudioConfig:
     model: str = "google/gemma-4-26b-a4b-qat"
     timeout: float = 60.0  # seconds
 
+    def __post_init__(self):
+        if self.timeout <= 0:
+            raise ValueError("timeout must be positive")
+
 @dataclass(frozen=True)
 class ImageGenerationConfig:
     """Default configuration for image generation."""

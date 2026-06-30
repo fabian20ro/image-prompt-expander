@@ -70,6 +70,13 @@ class TestConfig:
         with pytest.raises(ValueError, match="worker_timeout must be positive"):
             ServerConfig(worker_timeout=-1)
 
+    def test_invalid_lm_studio_timeouts(self):
+        """Test that invalid LM Studio timeouts raise ValueError."""
+        with pytest.raises(ValueError, match="timeout must be positive"):
+            LMStudioConfig(timeout=0)
+        with pytest.raises(ValueError, match="timeout must be positive"):
+            LMStudioConfig(timeout=-1)
+
     def test_invalid_image_dimensions(self):
         """Test that invalid image dimensions raise ValueError."""
         with pytest.raises(ValueError, match="default_width must be positive"):
