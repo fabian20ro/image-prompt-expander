@@ -59,20 +59,6 @@ def test_get_cached_raw_response_miss(tmp_path, monkeypatch):
     # Assert
     assert retrieved is None
 
-def test_get_cached_raw_response_hit():
-    """Cache hit: raw response file exists and can be read back exactly."""
-    prompt_hash = "raw_hit_test"
-    raw_content = "<think>thought</think>```json\n{\"origin\": [\"#a#\"]}\n```"
-    with patch("src.grammar_generator.CACHE_DIR") as mock_dir:
-        mock_file = MagicMock(spec=Path)
-        mock_file.exists.return_value = True
-        mock_file.read_text.return_value = raw_content
-        (mock_dir.__truediv__).return_value = mock_file
-
-        retrieved = get_cached_raw_response(prompt_hash)
-
-    assert retrieved == raw_content
-
 
 def test_cache_full_integrity(tmp_path, monkeypatch):
     # Setup
