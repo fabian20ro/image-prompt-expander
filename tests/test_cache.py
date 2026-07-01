@@ -329,3 +329,54 @@ def test_get_cached_raw_response_hit():
         retrieved = get_cached_raw_response(prompt_hash)
 
     assert retrieved == raw_content
+
+
+def test_cache_grammar_overwrite(tmp_path, monkeypatch):
+    """Cache update: re-caching the same hash must overwrite both grammar and raw files."""
+    mock_cache_dir = tmp_path / "grammars"
+    mock_cache_dir.mkdir()
+    monkeypatch.setattr("src.grammar_generator.CACHE_DIR", mock_cache_dir)
+
+    prompt_hash = "overwrite_test"
+    initial_grammar = '{"origin": ["#a#"], "a": ["1"]}'
+    initial_raw = '```json\ninitial content\n```'
+    user_prompt = "original prompt"
+
+    cache_grammar(prompt_hash, initial_grammar, initial_raw, user_prompt)
+
+    # First retrieval matches what was written
+    assert get_cached_grammar(prompt_hash) == initial_grammar
+    assert get_cached_raw_response(prompt_hash) == initial_raw
+
+    # Now re-cache with new content (simulates regeneration with different params)
+    updated_grammar = '{"origin": ["#b#", "x"], "a": ["1"], "b": ["hello"]}'
+    updated_raw = '```json\nupdated thinking\n```'
+
+    cache_grammar(prompt_hash, updated_grammar, updated_raw, user_prompt)
+
+    # Overwritten content is now retrievable and old content is gone
+    assert get_cached_grammar(prompt_hash) == updated_grammar
+    assert get_cached_raw_response(prompt_hash) == updated_raw
+
+
+def test_cache_persists_all_three_files(tmp_path, monkeypatch):
+    """cache_grammar must write all three files: grammar, raw response, and metadata."""
+    mock_cache_dir = tmp_path / "grammars"
+    mock_cache_dir.mkdir()
+    monkeypatch.setattr("src.grammar_generator.CACHE_DIR", mock_cache_dir)
+
+    prompt_hash = "triple_file_test"
+    grammar_content = '{"origin": ["#a#"], "a": ["1"]}'
+    raw_response = '```json\n{"origin":["#a#"],"a":["1"]}\n```'
+    user_prompt = "multi-file test"
+
+    cache_grammar(prompt_hash, grammar_content, raw_response, user_prompt)
+
+    # All three files must exist for this hash
+    assert (mock_cache_dir / f"{prompt_hash}.tracery.json").exists()
+    assert (mock_cache_dir / f"{prompt_hash}.raw.txt").exists()
+    assert (mock_cache_dir / f"{prompt_hash}.metaprompt.json").exists()
+
+    # Each file must contain the correct content exactly as written
+    assert (mock_cache_dir / f"{prompt_hash}.tracery.json").read_text() == grammar_content
+    assert (mock_cache_dir / f"{prompt_hash}.raw.txt").read_text() == raw_response
