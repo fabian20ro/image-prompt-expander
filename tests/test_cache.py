@@ -1,6 +1,7 @@
 import pytest
 import json
 from pathlib import Path
+import src.grammar_generator as grammar_gen
 from src.grammar_generator import cache_grammar, get_cached_grammar, get_cached_raw_response, hash_prompt, clean_grammar_output, validate_grammar_structure
 from config import settings
 
@@ -113,6 +114,20 @@ def test_hash_prompt_different_prompts():
     prompt1 = "a beautiful sunset over the mountains"
     prompt2 = "a beautiful sunrise over the mountains"
     assert hash_prompt(prompt1) != hash_prompt(prompt2)
+
+
+def test_hash_prompt_schema_versioned():
+    # Changing schema version should produce a different hash for the same prompt,
+    # ensuring cache invalidation when grammar schema changes.
+    prompt = "test prompt"
+    with pytest.MonkeyPatch.context() as mp:
+        original_schema = grammar_gen.PROMPT_SCHEMA_VERSION
+        hash_original = hash_prompt(prompt)
+
+        mp.setattr("src.grammar_generator.PROMPT_SCHEMA_VERSION", "ernie-v3")
+        hash_new = hash_prompt(prompt)
+
+    assert hash_new != hash_original
 
 def test_hash_prompt_emojis():
     # Test that hash_prompt handles emojis correctly
