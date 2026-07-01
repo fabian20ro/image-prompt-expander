@@ -287,3 +287,27 @@ def test_validate_grammar_structure():
     }
     with pytest.raises(ValueError, match=r"Grammar rule .* must contain non-empty strings"):
         validate_grammar_structure(non_string)
+
+    # Invalid: rule value is not a list (e.g. a bare string from malformed JSON)
+    not_a_list = {
+        "origin": "#a#",
+        "a": ["1"]
+    }
+    with pytest.raises(ValueError, match=r"Grammar rule .* must be a non-empty array"):
+        validate_grammar_structure(not_a_list)
+
+    # Invalid: empty list alternative (no options)
+    empty_rule = {
+        "origin": ["#a#", "2", "3", "4", "5", "6"],
+        "a": []
+    }
+    with pytest.raises(ValueError, match=r"Grammar rule .* must be a non-empty array"):
+        validate_grammar_structure(empty_rule)
+
+    # Invalid: rule value is None instead of a list
+    none_rule = {
+        "origin": ["#a#", "2", "3", "4", "5", "6"],
+        "a": None
+    }
+    with pytest.raises(ValueError, match=r"Grammar rule .* must be a non-empty array"):
+        validate_grammar_structure(none_rule)
