@@ -242,6 +242,7 @@ def main(
     if version_check:
         if check_lm_studio(base_url):
             click.echo(f"Successfully connected to LM Studio at {base_url}")
+            return
         else:
             click.echo(f"Error: LM Studio is not reachable at {base_url}.", err=True)
             sys.exit(1)
@@ -302,10 +303,7 @@ def main(
     if prompt and (from_grammar or from_prompts):
         if not quiet:
             click.echo("Warning: --prompt is ignored when using --from-grammar or --from-prompts", err=True)
-        else:
-            pass
         # Note: It's better to just proceed if it's just a warning.
-        # The current logic already proceeds.
 
     if not (0.0 <= temperature <= 2.0):
         raise click.BadParameter(f"temperature must be between 0.0 and 2.0, got {temperature}")
