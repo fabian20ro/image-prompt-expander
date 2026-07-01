@@ -98,8 +98,25 @@ class TestCliValidation:
         """Test that no arguments shows error."""
         runner = CliRunner()
         result = runner.invoke(main, [])
-        assert result.exit_code != 0
-        assert "Error" in result.output
+        assert result.exit_code == 1
+        assert "Error: --prompt is required" in result.output
+
+    @patch("cli.check_lm_studio", return_value=True)
+    def test_version_check_success(self, mock_check):
+        """Test --version-check prints success and exits 0."""
+        runner = CliRunner()
+        result = runner.invoke(main, ["--version-check"])
+        assert result.exit_code == 0
+        assert "Successfully connected to LM Studio" in result.output
+        mock_check.assert_called_once_with("http://localhost:1234/v1")
+
+    @patch("cli.check_lm_studio", return_value=False)
+    def test_version_check_failure(self, mock_check):
+        """Test --version-check prints error and exits 1."""
+        runner = CliRunner()
+        result = runner.invoke(main, ["--version-check"])
+        assert result.exit_code == 1
+        assert "Error: LM Studio is not reachable" in result.output
 
     def test_from_grammar_and_from_prompts_conflict(self, temp_dir):
         """Test conflicting flags."""
