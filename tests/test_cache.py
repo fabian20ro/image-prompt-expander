@@ -227,6 +227,28 @@ def test_validate_grammar_structure():
     with pytest.raises(ValueError, match=r"Varying grammar rule .* must contain 5–7 alternatives"):
         validate_grammar_structure(too_few_alternatives)
 
+    # Invalid: too many alternatives (above 7)
+    too_many_alternatives = {
+        "origin": ["1", "2", "3", "4", "5", "6", "7", "8"],
+        "a": ["1"]
+    }
+    with pytest.raises(ValueError, match=r"Varying grammar rule .* must contain 5–7 alternatives"):
+        validate_grammar_structure(too_many_alternatives)
+
+    # Edge case: exactly 5 and exactly 7 should be valid (no raise)
+    five_alt = {"origin": ["1", "2", "3", "#a#", "5"], "a": ["1"]}
+    validate_grammar_structure(five_alt)
+    seven_alt = {"origin": ["1", "2", "3", "4", "5", "6", "#a#"], "a": ["1"]}
+    validate_grammar_structure(seven_alt)
+
+    # Edge case: exactly 8 should fail (one past the upper bound)
+    eight_alt = {
+        "origin": ["1", "2", "3", "4", "5", "6", "7", "#a#"],
+        "a": ["1"]
+    }
+    with pytest.raises(ValueError, match=r"Varying grammar rule .* must contain 5–7 alternatives"):
+        validate_grammar_structure(eight_alt)
+
     # Invalid: missing references
     missing_ref = {
         "origin": ["#missing#", "2", "3", "4", "5", "6"],
