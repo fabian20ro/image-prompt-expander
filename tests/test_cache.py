@@ -192,6 +192,14 @@ def test_validate_grammar_structure():
     # This should not raise an exception
     validate_grammar_structure(valid_grammar)
 
+    # Invalid: no varying rule (all rules have exactly 1 alternative)
+    no_varying = {
+        "origin": ["#a#"],
+        "a": ["1"]
+    }
+    with pytest.raises(ValueError, match=r"Grammar must contain at least one varying rule"):
+        validate_grammar_structure(no_varying)
+
     # Invalid: missing origin
     with pytest.raises(ValueError, match='Grammar must be a JSON object containing an "origin" rule'):
         validate_grammar_structure({"a": ["1"]})
