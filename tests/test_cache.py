@@ -380,3 +380,75 @@ def test_cache_persists_all_three_files(tmp_path, monkeypatch):
     # Each file must contain the correct content exactly as written
     assert (mock_cache_dir / f"{prompt_hash}.tracery.json").read_text() == grammar_content
     assert (mock_cache_dir / f"{prompt_hash}.raw.txt").read_text() == raw_response
+
+
+def test_get_cached_grammar_independent_of_raw_file(tmp_path, monkeypatch):
+    """Grammar file is readable even if raw response file was lost (e.g., crash between writes)."""
+    mock_cache_dir = tmp_path / "grammars"
+    monkeypatch.setattr("src.grammar_generator.CACHE_DIR", mock_cache_dir)
+
+    prompt_hash = "partial_state_test"
+    grammar_content = '{"origin": ["#a#", "x"], "a": ["1"]}'
+    raw_response = '```json\n' + grammar_content + '\n```'
+    user_prompt = "test"
+
+    # Write all files first, then delete the raw file to simulate crash state
+    cache_grammar(prompt_hash, grammar_content, raw_response, user_prompt)
+    (mock_cache_dir / f"{prompt_hash}.raw.txt").unlink()
+    assert not (mock_cache_dir / f"{prompt_hash}.raw.txt").exists()
+
+    # Act: retrieve grammar only
+    retrieved = get_cached_grammar(prompt_hash)
+
+    # Assert: returns the grammar, does NOT return None due to missing raw file
+    assert retrieved == grammar_content
+
+
+def test_get_cached_raw_response_independent_of_grammar_file(tmp_path, monkeypatch):
+    """Raw response file is readable even if grammar file was lost (e.g., crash between writes)."""
+    mock_cache_dir = tmp_path / "grammars"
+    monkeypatch.setattr("src.grammar_generator.CACHE_DIR", mock_cache_dir)
+
+    prompt_hash = "partial_state_raw_test"
+    raw_content = '```json\n{"origin": ["#a#"], "a": ["1"]}\n```'
+    grammar_content = '{"origin": ["#a#"], "a": ["1"]}'
+    user_prompt = "test"
+
+    # Write all files first, then delete the grammar file to simulate crash state
+    cache_grammar(prompt_hash, grammar_content, raw_content, user_prompt)
+    (mock_cache_dir / f"{prompt_hash}.tracery.json").unlink()
+    assert not (mock_cache_dir / f"{prompt_hash}.tracery.json").exists()
+
+    # Act: retrieve raw response only
+    retrieved = get_cached_raw_response(prompt_hash)
+
+    # Assert: returns the raw content, does NOT return None due to missing grammar file
+    assert retrieved == raw_content
+
+
+def test_get_cached_grammar_returns_none_for_missing_file(tmp_path, monkeypatch):
+    """Confirm cache miss behavior when no files exist for a hash."""
+    mock_cache_dir = tmp_path / "grammars"
+    monkeypatch.setattr("src.grammar_generator.CACHE_DIR", mock_cache_dir)
+
+    prompt_hash = "completely_missing_test"
+
+    # Act: retrieve grammar with no files present
+    retrieved = get_cached_grammar(prompt_hash)
+
+    # Assert: returns None (no partial state — truly missing)
+    assert retrieved is None
+
+
+def test_get_cached_raw_response_returns_none_for_missing_file(tmp_path, monkeypatch):
+    """Confirm cache miss behavior for raw file when it doesn't exist."""
+    mock_cache_dir = tmp_path / "grammars"
+    monkeypatch.setattr("src.grammar_generator.CACHE_DIR", mock_cache_dir)
+
+    prompt_hash = "completely_missing_raw_test"
+
+    # Act: retrieve raw response with no files present
+    retrieved = get_cached_raw_response(prompt_hash)
+
+    # Assert: returns None (truly missing)
+    assert retrieved is None
