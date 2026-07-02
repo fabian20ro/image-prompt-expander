@@ -474,3 +474,28 @@ def test_get_cached_raw_response_returns_none_for_missing_file(tmp_path, monkeyp
 
     # Assert: returns None (truly missing)
     assert retrieved is None
+
+
+def test_cache_grammar_return_values(tmp_path, monkeypatch):
+    """cache_grammar must return the exact inputs as a tuple on fresh write."""
+    mock_cache_dir = tmp_path / "grammars"
+    mock_cache_dir.mkdir()
+    monkeypatch.setattr("src.grammar_generator.CACHE_DIR", mock_cache_dir)
+
+    prompt_hash = "return_values_test"
+    grammar_content = '{"origin": ["#a#"], "a": ["1"]}'
+    raw_response = '```json\n{"origin": ["#a#"], "a": ["1"]}\n```'
+    user_prompt = "test return values"
+
+    # Act: cache_grammar should return (grammar, was_cached=False, raw_response)
+    returned_grammar, was_cached, returned_raw = cache_grammar(
+        prompt_hash=prompt_hash,
+        grammar=grammar_content,
+        raw_response=raw_response,
+        user_prompt=user_prompt,
+    )
+
+    # Assert: return values match inputs exactly
+    assert returned_grammar == grammar_content
+    assert was_cached is False
+    assert returned_raw == raw_response
