@@ -1,3 +1,4 @@
+import math
 import os
 import logging
 from dataclasses import dataclass, field
@@ -17,10 +18,19 @@ def _get_env_int(key: str, default: int) -> int:
 
 def _get_env_float(key: str, default: float) -> float:
     val = os.environ.get(key)
-    if val is None:
+    if val is None or not val.strip():
         return default
     try:
-        return float(val)
+        fval = float(val)
+        if math.isnan(fval):
+            logger.warning("Invalid value for %s: %s (NaN). Using default: %f", key, val, default)
+            return default
+        if math.isinf(fval):
+            logger.warning(
+                "Invalid value for %s: %s (Infinity). Using default: %f", key, val, default
+            )
+            return default
+        return fval
     except ValueError:
         logger.warning("Invalid value for %s: %s. Using default: %f", key, val, default)
         return default
@@ -74,6 +84,12 @@ class EnhancementConfig:
     """Configuration for image enhancement."""
     default_softness: float = 0.5
     default_scale: int = 2
+
+    def __post_init__(self):
+        if not (0 <= self.default_softness <= 1):
+            raise ValueError("default_softness must be between 0 and 1")
+        if self.default_scale < 1:
+            raise ValueError("default_scale must be at least 1")
 
 @dataclass(frozen=True)
 class PathConfig:

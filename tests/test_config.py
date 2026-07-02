@@ -83,6 +83,25 @@ class TestConfig:
             ImageGenerationConfig(default_width=0)
         with pytest.raises(ValueError, match="default_height must be positive"):
             ImageGenerationConfig(default_height=-1)
+    def test_invalid_enhancement_config(self):
+        """Test that invalid enhancement settings raise ValueError."""
+        from config import EnhancementConfig
+
+        with pytest.raises(ValueError, match="default_softness must be between 0 and 1"):
+            EnhancementConfig(default_softness=-0.5)
+        with pytest.raises(ValueError, match="default_softness must be between 0 and 1"):
+            EnhancementConfig(default_softness=2.0)
+        with pytest.raises(ValueError, match="default_scale must be at least 1"):
+            EnhancementConfig(default_scale=0)
+        with pytest.raises(ValueError, match="default_scale must be at least 1"):
+            EnhancementConfig(default_scale=-3)
+
+    def test_nan_inf_env_vars_fall_back(self):
+        """Test that NaN and Infinity env values fall back to defaults."""
+        for bad_value in ("NaN", "nan", "inf", "-inf", "Infinity"):
+            with patch.dict(os.environ, {"PROMPT_GEN_DEFAULT_WIDTH": bad_value}):
+                settings = Settings.from_env()
+                assert settings.image_generation.default_width == 864
 
     def test_path_properties(self):
         """Verify path properties are Path objects and correct."""
