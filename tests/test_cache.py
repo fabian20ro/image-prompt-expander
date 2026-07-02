@@ -315,6 +315,28 @@ def test_validate_grammar_structure():
 
 
 from unittest.mock import patch, MagicMock
+import src.grammar_generator as grammar_gen
+
+
+def test_api_root_strips_trailing_slash():
+    """_api_root must remove a trailing slash before processing /v1."""
+    assert grammar_gen._api_root("http://localhost:1234/v1/") == "http://localhost:1234"
+
+
+def test_api_root_removes_v1_suffix():
+    """The OpenAI-compatible base URL ends in /v1; that suffix must be stripped."""
+    assert grammar_gen._api_root("http://localhost:1234/v1") == "http://localhost:1234"
+
+
+def test_api_root_already_clean_passthrough():
+    """A clean server root (no trailing slash, no /v1) must round-trip unchanged."""
+    assert grammar_gen._api_root("http://localhost:1234") == "http://localhost:1234"
+
+
+def test_api_root_handles_https_and_slash():
+    """HTTPS URLs and double-suffix edge cases must also be normalised correctly."""
+    assert grammar_gen._api_root("https://example.com/v1/") == "https://example.com"
+
 
 def test_get_cached_raw_response_hit():
     """Cache hit: raw response file exists and can be read back exactly."""
