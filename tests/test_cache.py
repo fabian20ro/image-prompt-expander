@@ -2,7 +2,15 @@ import pytest
 import json
 from pathlib import Path
 import src.grammar_generator as grammar_gen
-from src.grammar_generator import cache_grammar, get_cached_grammar, get_cached_raw_response, hash_prompt, clean_grammar_output, validate_grammar_structure
+from src.grammar_generator import (
+    cache_grammar,
+    generate_grammar,
+    get_cached_grammar,
+    get_cached_raw_response,
+    hash_prompt,
+    clean_grammar_output,
+    validate_grammar_structure,
+)
 from config import settings
 
 def test_grammar_cache_lifecycle(tmp_path, monkeypatch):
@@ -538,3 +546,76 @@ def test_cache_grammar_return_values(tmp_path, monkeypatch):
     assert returned_grammar == grammar_content
     assert was_cached is False
     assert returned_raw == raw_response
+
+
+def test_generate_grammar_returns_cached_without_http_call(tmp_path, monkeypatch):
+    """generate_grammar must short-circuit the HTTP call when a cache hit exists.
+
+    This guards against regressions in the most critical performance path:
+    identical prompts should reuse grammars without re-invoking LM Studio.
+    """
+    mock_cache_dir = tmp_path / "grammars"
+    mock_cache_dir.mkdir()
+    monkeypatch.setattr("src.grammar_generator.CACHE_DIR", mock_cache_dir)
+
+    user_prompt = "a cat riding a unicycle"
+    grammar_content = '{"origin": ["#a#", "2"], "a": ["1"]}'
+
+    # Write the grammar directly into cache (simulates prior generation)
+    prompt_hash = hash_prompt(user_prompt)
+    cache_grammar(
+        prompt_hash=prompt_hash,
+        grammar=grammar_content,
+        raw_response="```json\n" + grammar_content + "\n```",
+        user_prompt=user_prompt,
+    )
+
+    # Patch all HTTP paths so any call would immediately fail — proving they're NOT called
+    with patch("src.grammar_generator.requests.post") as mock_post:
+        mock_post.side_effect = AssertionError("generate_grammar should not call requests.post on cache hit")
+        with patch("src.grammar_generator.ensure_lm_model_loaded"):
+            result = generate_grammar(user_prompt=user_prompt, use_cache=True)
+
+    grammar_out, was_cached, raw_out = result
+
+    # Cache path taken: no HTTP calls happened; response is cached data
+    mock_post.assert_not_called()
+    assert was_cached is True
+    assert grammar_out == grammar_content
+
+
+def test_clean_grammar_output_text_before_json():
+    """The extractor must find valid JSON even when preceded by arbitrary text."""
+    messy = "Here's what I think: the best grammar for this prompt is\n{\"origin\": [\"#a#\", \"x\", \"y\", \"z\", \"w\"]}\nGood luck!"
+    assert clean_grammar_output(messy) == '{"origin": ["#a#", "x", "y", "z", "w"]}'
+
+
+def test_clean_grammar_output_json_array_extraction():
+    """When the LLM returns a JSON array (not object), it must still be extracted."""
+    messy = "Some preamble text\n[\"option1\", \"option2\"]\nEnd of response"
+    assert clean_grammar_output(messy) == '["option1", "option2"]'
+
+
+def test_generate_grammar_invalidates_cache_on_error(tmp_path, monkeypatch):
+    """If generate_grammar raises on a cache miss, the partial cache must NOT be created.
+
+    This guards against leaving half-written grammar files in CACHE_DIR after failures.
+    The LLM call is mocked to fail; we assert no files exist for that hash.
+    """
+    mock_cache_dir = tmp_path / "grammars"
+    mock_cache_dir.mkdir()
+    monkeypatch.setattr("src.grammar_generator.CACHE_DIR", mock_cache_dir)
+
+    user_prompt = "prompt_that_will_fail"
+    prompt_hash = hash_prompt(user_prompt)
+
+    with patch("src.grammar_generator.requests.post") as mock_post:
+        mock_post.side_effect = Exception("simulated LM Studio error")
+        with patch("src.grammar_generator.ensure_lm_model_loaded"):
+            try:
+                generate_grammar(user_prompt=user_prompt, use_cache=True)
+            except Exception:
+                pass
+
+    # Assert: no grammar file was written for this failed hash
+    assert not (mock_cache_dir / f"{prompt_hash}.tracery.json").exists()
