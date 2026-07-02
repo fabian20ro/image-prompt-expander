@@ -1,3 +1,4 @@
+import math
 import os
 import logging
 from dataclasses import dataclass, field
@@ -17,10 +18,19 @@ def _get_env_int(key: str, default: int) -> int:
 
 def _get_env_float(key: str, default: float) -> float:
     val = os.environ.get(key)
-    if val is None:
+    if val is None or not val.strip():
         return default
     try:
-        return float(val)
+        fval = float(val)
+        if math.isnan(fval):
+            logger.warning("Invalid value for %s: %s (NaN). Using default: %f", key, val, default)
+            return default
+        if math.isinf(fval):
+            logger.warning(
+                "Invalid value for %s: %s (Infinity). Using default: %f", key, val, default
+            )
+            return default
+        return fval
     except ValueError:
         logger.warning("Invalid value for %s: %s. Using default: %f", key, val, default)
         return default

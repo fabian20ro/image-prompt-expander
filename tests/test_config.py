@@ -96,6 +96,13 @@ class TestConfig:
         with pytest.raises(ValueError, match="default_scale must be at least 1"):
             EnhancementConfig(default_scale=-3)
 
+    def test_nan_inf_env_vars_fall_back(self):
+        """Test that NaN and Infinity env values fall back to defaults."""
+        for bad_value in ("NaN", "nan", "inf", "-inf", "Infinity"):
+            with patch.dict(os.environ, {"PROMPT_GEN_DEFAULT_WIDTH": bad_value}):
+                settings = Settings.from_env()
+                assert settings.image_generation.default_width == 864
+
     def test_path_properties(self):
         """Verify path properties are Path objects and correct."""
         assert isinstance(paths.root_dir, Path)
