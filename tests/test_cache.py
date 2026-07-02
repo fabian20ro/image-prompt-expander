@@ -498,6 +498,7 @@ def test_stale_schema_version_cache_invalidated(tmp_path, monkeypatch):
     user_prompt = "a cat riding a unicycle"
     grammar_content = '{"origin": ["#a#", "x"], "a": ["meow"]}'
     raw_response = '```json\n' + grammar_content + '\n```'
+    hash_v2 = hash_prompt(user_prompt)
 
     with pytest.MonkeyPatch.context() as mp:
         # Phase 1: cache under original schema version
@@ -592,7 +593,7 @@ def test_clean_grammar_output_text_before_json():
 
 def test_clean_grammar_output_json_array_extraction():
     """When the LLM returns a JSON array (not object), it must still be extracted."""
-    messy = "Some preamble text\n[\"option1\", \"option2\"]\nEnd of response"
+    messy = 'Some preamble text\n["option1", "option2"]\nEnd of response'
     assert clean_grammar_output(messy) == '["option1", "option2"]'
 
 
@@ -618,4 +619,64 @@ def test_generate_grammar_invalidates_cache_on_error(tmp_path, monkeypatch):
                 pass
 
     # Assert: no grammar file was written for this failed hash
+    assert not (mock_cache_dir / f"{prompt_hash}.tracery.json").exists()
+
+
+def test_get_cached_grammar_creates_missing_directory(tmp_path, monkeypatch):
+    """get_cached_grammar must auto-create CACHE_DIR if it does not yet exist.
+
+    The getter is called on every grammar generation attempt — even before any
+    cache_grammar call has ever written to the directory. Without defensive
+    mkdir(parents=True), the first read after a wiped or fresh environment would
+    raise FileNotFoundError instead of returning None, breaking the cache-miss path.
+    """
+    mock_cache_dir = tmp_path / "deep" / "nested" / "cache"
+    # Do NOT call .mkdir() — directory must not exist yet
+    monkeypatch.setattr("src.grammar_generator.CACHE_DIR", mock_cache_dir)
+
+    prompt_hash = "fresh_env_test"
+
+    # Act: read from a non-existent cache directory (simulates first run after wipe)
+    retrieved = get_cached_grammar(prompt_hash)
+
+    # Assert: no exception raised, returns None as expected for missing hash
+    assert retrieved is None
+    # And the directory was created on demand so subsequent writes can proceed
+    assert mock_cache_dir.exists()
+
+
+def test_generate_grammar_skips_cache_when_use_cache_false(tmp_path, monkeypatch):
+    """generate_grammar with use_cache=False must NOT cache results, even after a successful LLM call.
+
+    This guards against the subtle regression where the caching decision is ignored
+    and every generation permanently pollutes CACHE_DIR regardless of caller intent.
+    The LM Studio call is mocked to succeed; we assert no grammar file was written.
+    """
+    mock_cache_dir = tmp_path / "grammars"
+    mock_cache_dir.mkdir()
+    monkeypatch.setattr("src.grammar_generator.CACHE_DIR", mock_cache_dir)
+
+    user_prompt = "no_cache_test_prompt"
+    prompt_hash = hash_prompt(user_prompt)
+    fake_grammar = '{"origin": ["#a#", "2", "3", "4", "5"], "a": ["x"]}'
+    fake_raw = '```json\n' + fake_grammar + '\n```'
+
+    with patch("src.grammar_generator.requests.post") as mock_post:
+        mock_response = MagicMock()
+        mock_response.json.return_value = {
+            "output": [{"type": "message", "content": fake_raw}]
+        }
+        mock_response.raise_for_status = lambda: None
+        mock_post.return_value = mock_response
+        with patch("src.grammar_generator.ensure_lm_model_loaded"):
+            grammar_out, was_cached, raw_out = generate_grammar(
+                user_prompt=user_prompt, use_cache=False
+            )
+
+    # The LLM call happened (mock verified via return value)
+    assert not was_cached
+    assert grammar_out == fake_grammar
+
+    # But no cache file was written — caller opted out of persistence
+    mock_post.assert_called_once()
     assert not (mock_cache_dir / f"{prompt_hash}.tracery.json").exists()
