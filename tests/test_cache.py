@@ -476,6 +476,45 @@ def test_get_cached_raw_response_returns_none_for_missing_file(tmp_path, monkeyp
     assert retrieved is None
 
 
+def test_stale_schema_version_cache_invalidated(tmp_path, monkeypatch):
+    """Cache entries written under one PROMPT_SCHEMA_VERSION must NOT be served after the version changes.
+
+    This validates that hash-based invalidation correctly bypasses stale grammar files
+    when the schema format evolves — no false hits on old data.
+    """
+    # Setup: mock CACHE_DIR to a temp directory
+    mock_cache_dir = tmp_path / "grammars"
+    mock_cache_dir.mkdir()
+    monkeypatch.setattr("src.grammar_generator.CACHE_DIR", mock_cache_dir)
+
+    user_prompt = "a cat riding a unicycle"
+    grammar_content = '{"origin": ["#a#", "x"], "a": ["meow"]}'
+    raw_response = '```json\n' + grammar_content + '\n```'
+
+    with pytest.MonkeyPatch.context() as mp:
+        # Phase 1: cache under original schema version
+        hash_v2 = hash_prompt(user_prompt)
+        cache_grammar(prompt_hash=str(hash_v2), grammar=grammar_content, raw_response=raw_response, user_prompt=user_prompt)
+        assert (mock_cache_dir / f"{hash_v2}.tracery.json").exists()
+
+        # Phase 2: schema version changes (simulating a future ERNIE upgrade)
+        mp.setattr("src.grammar_generator.PROMPT_SCHEMA_VERSION", "ernie-v3")
+        hash_v3 = hash_prompt(user_prompt)
+
+    # The new hash must differ from the old one — proving cache invalidation by design
+    assert hash_v3 != str(hash_v2)
+
+    # The stale file still exists on disk (hasn't been garbage-collected)
+    assert (mock_cache_dir / f"{str(hash_v2)}.tracery.json").exists()
+
+    # But querying the NEW hash returns None — no false positive from stale data
+    assert get_cached_grammar(str(hash_v3)) is None
+    assert get_cached_raw_response(str(hash_v3)) is None
+
+    # And the old hash still reads back its original content (proving files are intact, just mis-keyed)
+    assert get_cached_grammar(str(hash_v2)) == grammar_content
+
+
 def test_cache_grammar_return_values(tmp_path, monkeypatch):
     """cache_grammar must return the exact inputs as a tuple on fresh write."""
     mock_cache_dir = tmp_path / "grammars"
