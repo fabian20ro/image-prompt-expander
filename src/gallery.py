@@ -119,9 +119,11 @@ def _build_card_html(
       </div>'''
 
     if exists:
+        # Use the prompt text as alt text for accessibility.
+        # `escaped_prompt` is already HTML-escaped, so it's safe to embed directly.
         return f'''    <div class="card" data-image="{image_filename}" data-prompt-idx="{prompt_idx}" data-image-idx="{image_idx}">
       <a href="{image_filename}" target="_blank">
-        <img src="{image_filename}" loading="lazy">
+        <img src="{image_filename}" loading="lazy" alt="{escaped_prompt}">
       </a>
       <div class="prompt">{escaped_prompt}</div>{action_buttons}
     </div>'''
@@ -170,9 +172,10 @@ def update_gallery(
             rf'<div class="placeholder">Pending\.\.\.</div>'
         )
 
+        escaped_prompt = html.escape(prompt) if prompt else ""
         replacement = (
             rf'\1\n      <a href="{image_filename}" target="_blank">\n'
-            rf'        <img src="{image_filename}" loading="lazy">\n'
+            rf'        <img src="{image_filename}" loading="lazy" alt="{escaped_prompt}">\n'
             rf'      </a>'
         )
 
