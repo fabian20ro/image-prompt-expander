@@ -75,6 +75,12 @@ class EnhancementConfig:
     default_softness: float = 0.5
     default_scale: int = 2
 
+    def __post_init__(self):
+        if not (0 <= self.default_softness <= 1):
+            raise ValueError("default_softness must be between 0 and 1")
+        if self.default_scale < 1:
+            raise ValueError("default_scale must be at least 1")
+
 @dataclass(frozen=True)
 class PathConfig:
     """Centralized path configuration for the application."""
