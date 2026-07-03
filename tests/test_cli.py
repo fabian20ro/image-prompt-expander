@@ -205,6 +205,39 @@ class TestCliValidation:
         assert "LM Studio API base URL (default:" in result.output
         assert "http://localhost:1234/v1" in result.output
 
+    def test_prompt_ignored_with_from_grammar(self, temp_dir):
+        """Test that --prompt emits a warning (not an error) when used with --from-grammar."""
+        grammar_file = temp_dir / "test.json"
+        grammar_file.write_text('{"origin": ["a cat"]}')
+
+        runner = CliRunner()
+        result = runner.invoke(main, [
+            "-p", "ignored prompt",
+            "--from-grammar", str(grammar_file),
+            "--dry-run",
+        ])
+
+        assert "Warning: --prompt is ignored when using --from-grammar" in result.output
+        # Dry-run continues with the grammar file and exits 0
+        assert result.exit_code == 0
+        assert "--- Loaded Grammar ---" in result.output
+
+    def test_prompt_ignored_with_from_prompts_quiet(self, temp_dir):
+        """Test that --quiet suppresses the --prompt-ignored warning."""
+        prompts_dir = temp_dir / "prompts"
+        prompts_dir.mkdir()
+
+        runner = CliRunner()
+        result = runner.invoke(main, [
+            "-p", "ignored prompt",
+            "--from-prompts", str(prompts_dir),
+            "--generate-images",
+            "--quiet",
+        ])
+
+        assert "Warning" not in result.output
+        assert "--prompt is ignored" not in result.output
+
 
 class TestCliEnhanceImages:
     """Tests for --enhance-images flag."""
