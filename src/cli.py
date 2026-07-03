@@ -182,6 +182,10 @@ def cli_progress(stage: str, current: int = 0, total: int = 0, message: str = ""
     '--quiet', is_flag=True,
     help='Suppress non-error output'
 )
+@click.option(
+    '--json', 'as_json', is_flag=True, default=False,
+    help='Output summary as JSON (useful for scripting)'
+)
 def main(
     prompt: str | None,
     clean: bool,
@@ -208,7 +212,7 @@ def main(
     no_tiled_vae: bool,
     serve: bool,
     port: int,
-    json: bool = False,
+    as_json: bool = False,
     quiet: bool = False,
     version_check: bool = False
 ):
@@ -253,7 +257,10 @@ def main(
     if clean:
         removed = clean_generated()
         if not quiet:
-            click.echo(f"Cleaned {removed} items from {paths.generated_dir}")
+            if removed == 0:
+                click.echo("Nothing to clean.")
+            else:
+                click.echo(f"Cleaned {removed} items from {paths.generated_dir}")
         if not prompt and not from_grammar and not from_prompts and not enhance_images and not serve:
             return
 
@@ -396,7 +403,7 @@ def main(
         "success": result.success,
     }
 
-    if json:
+    if as_json:
         click.echo(json.dumps(summary, indent=2))
     else:
         click.echo(f"\nGenerated {result.prompt_count} prompts in: {result.output_dir}")

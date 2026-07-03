@@ -90,6 +90,25 @@ class TestCliCleanCommand:
             assert "Cleaned 5 items" in result.output
             mock_clean.assert_called_once()
 
+    def test_clean_empty_nothing_to_print(self):
+        """Test --clean with no files prints a friendly message."""
+        runner = CliRunner()
+        with patch("cli.clean_generated", return_value=0) as mock_clean:
+            result = runner.invoke(main, ["--clean"])
+            assert result.exit_code == 0
+            assert "Nothing to clean." in result.output
+            assert "Cleaned 0 items" not in result.output
+            mock_clean.assert_called_once()
+
+    def test_clean_quiet_no_output(self):
+        """Test --clean with --quiet suppresses all output."""
+        runner = CliRunner()
+        with patch("cli.clean_generated", return_value=3) as mock_clean:
+            result = runner.invoke(main, ["--clean", "--quiet"])
+            assert result.exit_code == 0
+            assert "Cleaned" not in result.output
+            assert "Nothing to clean." not in result.output
+
 
 class TestCliValidation:
     """Tests for CLI argument validation."""
@@ -186,6 +205,39 @@ class TestCliValidation:
         assert "LM Studio API base URL (default:" in result.output
         assert "http://localhost:1234/v1" in result.output
 
+    def test_prompt_ignored_with_from_grammar(self, temp_dir):
+        """Test that --prompt emits a warning (not an error) when used with --from-grammar."""
+        grammar_file = temp_dir / "test.json"
+        grammar_file.write_text('{"origin": ["a cat"]}')
+
+        runner = CliRunner()
+        result = runner.invoke(main, [
+            "-p", "ignored prompt",
+            "--from-grammar", str(grammar_file),
+            "--dry-run",
+        ])
+
+        assert "Warning: --prompt is ignored when using --from-grammar" in result.output
+        # Dry-run continues with the grammar file and exits 0
+        assert result.exit_code == 0
+        assert "--- Loaded Grammar ---" in result.output
+
+    def test_prompt_ignored_with_from_prompts_quiet(self, temp_dir):
+        """Test that --quiet suppresses the --prompt-ignored warning."""
+        prompts_dir = temp_dir / "prompts"
+        prompts_dir.mkdir()
+
+        runner = CliRunner()
+        result = runner.invoke(main, [
+            "-p", "ignored prompt",
+            "--from-prompts", str(prompts_dir),
+            "--generate-images",
+            "--quiet",
+        ])
+
+        assert "Warning" not in result.output
+        assert "--prompt is ignored" not in result.output
+
 
 class TestCliEnhanceImages:
     """Tests for --enhance-images flag."""
@@ -233,6 +285,22 @@ class TestCliEnhanceImages:
             temperature=0.7,
         )
         mock_executor_cls.assert_not_called()
+
+    @patch("cli.generate_grammar")
+    def test_dry_run_grammar_failure(self, mock_generate_grammar):
+        """Test --dry-run surfaces grammar errors with helpful message and exits 1."""
+
+        error_msg = "LM Studio connection refused"
+        mock_generate_grammar.side_effect = ConnectionError(error_msg)
+
+        runner = CliRunner()
+        result = runner.invoke(
+            main, ["-p", "a cat", "--dry-run"], catch_exceptions=False
+        )
+
+        assert result.exit_code == 1
+        assert f"Error generating grammar: {error_msg}" in result.output
+        assert "Make sure LM Studio is running at http://localhost:1234/v1" in result.output
 
 
 class TestCliServe:
@@ -334,3 +402,38 @@ class TestCliFullPipeline:
         # No summary should be printed on failure
         assert "Generated" not in result.output
         mock_executor.run_full_pipeline.assert_called_once()
+
+    @patch("cli.PipelineExecutor")
+    def test_json_flag_outputs_valid_summary(self, mock_executor_cls):
+        """Test that --json prints a valid JSON summary with expected keys.
+
+        The CLI emits status echoes (e.g. "Generating grammar for: ...") to stdout
+        before the JSON summary; extract JSON from the first brace onward.
+        """
+        import json as _json
+
+        mock_executor = MagicMock()
+        mock_result = MagicMock()
+        mock_result.success = True
+        mock_result.output_dir = Path("/tmp/test")
+        mock_result.prompt_count = 50
+        mock_result.image_count = 10
+        mock_result.skipped_count = 2
+        mock_result.error = None
+        mock_executor.run_full_pipeline.return_value = mock_result
+        mock_executor_cls.return_value = mock_executor
+
+        runner = CliRunner()
+        result = runner.invoke(main, ["-p", "a cat", "--json"])
+
+        assert result.exit_code == 0
+        # Extract JSON from the first '{' character (status messages precede it)
+        json_start = result.output.find("{")
+        assert json_start >= 0, f"No JSON found in output:\n{result.output}"
+
+        summary = _json.loads(result.output[json_start:])
+        assert summary["prompt_count"] == 50
+        assert summary["image_count"] == 10
+        assert summary["skipped_count"] == 2
+        assert summary["success"] is True
+        assert "output_dir" in summary
