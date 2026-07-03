@@ -314,3 +314,23 @@ class TestCliFullPipeline:
         args, kwargs = mock_executor.run_full_pipeline.call_args
         assert kwargs["width"] == 1024
         assert kwargs["height"] == 768
+
+    @patch("cli.PipelineExecutor")
+    def test_pipeline_failure_exits_1(self, mock_executor_cls):
+        """Test that a failed pipeline result exits with code 1 and prints the error."""
+        mock_executor = MagicMock()
+        mock_result = MagicMock()
+        mock_result.success = False
+        mock_result.error = "Grammar generation timed out"
+
+        mock_executor.run_full_pipeline.return_value = mock_result
+        mock_executor_cls.return_value = mock_executor
+
+        runner = CliRunner()
+        result = runner.invoke(main, ["-p", "a cat", "-n", "5"])
+
+        assert result.exit_code == 1
+        assert "Error: Grammar generation timed out" in result.output
+        # No summary should be printed on failure
+        assert "Generated" not in result.output
+        mock_executor.run_full_pipeline.assert_called_once()
