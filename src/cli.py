@@ -257,7 +257,10 @@ def main(
     if clean:
         removed = clean_generated()
         if not quiet:
-            click.echo(f"Cleaned {removed} items from {paths.generated_dir}")
+            if removed == 0:
+                click.echo("Nothing to clean.")
+            else:
+                click.echo(f"Cleaned {removed} items from {paths.generated_dir}")
         if not prompt and not from_grammar and not from_prompts and not enhance_images and not serve:
             return
 

@@ -90,6 +90,25 @@ class TestCliCleanCommand:
             assert "Cleaned 5 items" in result.output
             mock_clean.assert_called_once()
 
+    def test_clean_empty_nothing_to_print(self):
+        """Test --clean with no files prints a friendly message."""
+        runner = CliRunner()
+        with patch("cli.clean_generated", return_value=0) as mock_clean:
+            result = runner.invoke(main, ["--clean"])
+            assert result.exit_code == 0
+            assert "Nothing to clean." in result.output
+            assert "Cleaned 0 items" not in result.output
+            mock_clean.assert_called_once()
+
+    def test_clean_quiet_no_output(self):
+        """Test --clean with --quiet suppresses all output."""
+        runner = CliRunner()
+        with patch("cli.clean_generated", return_value=3) as mock_clean:
+            result = runner.invoke(main, ["--clean", "--quiet"])
+            assert result.exit_code == 0
+            assert "Cleaned" not in result.output
+            assert "Nothing to clean." not in result.output
+
 
 class TestCliValidation:
     """Tests for CLI argument validation."""
