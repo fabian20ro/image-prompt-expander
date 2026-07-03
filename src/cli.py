@@ -182,6 +182,10 @@ def cli_progress(stage: str, current: int = 0, total: int = 0, message: str = ""
     '--quiet', is_flag=True,
     help='Suppress non-error output'
 )
+@click.option(
+    '--json', 'as_json', is_flag=True, default=False,
+    help='Output summary as JSON (useful for scripting)'
+)
 def main(
     prompt: str | None,
     clean: bool,
@@ -208,7 +212,7 @@ def main(
     no_tiled_vae: bool,
     serve: bool,
     port: int,
-    json: bool = False,
+    as_json: bool = False,
     quiet: bool = False,
     version_check: bool = False
 ):
@@ -396,7 +400,7 @@ def main(
         "success": result.success,
     }
 
-    if json:
+    if as_json:
         click.echo(json.dumps(summary, indent=2))
     else:
         click.echo(f"\nGenerated {result.prompt_count} prompts in: {result.output_dir}")

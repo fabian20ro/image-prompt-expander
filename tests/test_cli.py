@@ -334,3 +334,38 @@ class TestCliFullPipeline:
         # No summary should be printed on failure
         assert "Generated" not in result.output
         mock_executor.run_full_pipeline.assert_called_once()
+
+    @patch("cli.PipelineExecutor")
+    def test_json_flag_outputs_valid_summary(self, mock_executor_cls):
+        """Test that --json prints a valid JSON summary with expected keys.
+
+        The CLI emits status echoes (e.g. "Generating grammar for: ...") to stdout
+        before the JSON summary; extract JSON from the first brace onward.
+        """
+        import json as _json
+
+        mock_executor = MagicMock()
+        mock_result = MagicMock()
+        mock_result.success = True
+        mock_result.output_dir = Path("/tmp/test")
+        mock_result.prompt_count = 50
+        mock_result.image_count = 10
+        mock_result.skipped_count = 2
+        mock_result.error = None
+        mock_executor.run_full_pipeline.return_value = mock_result
+        mock_executor_cls.return_value = mock_executor
+
+        runner = CliRunner()
+        result = runner.invoke(main, ["-p", "a cat", "--json"])
+
+        assert result.exit_code == 0
+        # Extract JSON from the first '{' character (status messages precede it)
+        json_start = result.output.find("{")
+        assert json_start >= 0, f"No JSON found in output:\n{result.output}"
+
+        summary = _json.loads(result.output[json_start:])
+        assert summary["prompt_count"] == 50
+        assert summary["image_count"] == 10
+        assert summary["skipped_count"] == 2
+        assert summary["success"] is True
+        assert "output_dir" in summary
