@@ -577,12 +577,14 @@ def test_generate_grammar_returns_cached_without_http_call(tmp_path, monkeypatch
         with patch("src.grammar_generator.ensure_lm_model_loaded"):
             result = generate_grammar(user_prompt=user_prompt, use_cache=True)
 
+    stored_raw = "```json\n" + grammar_content + "\n```"
     grammar_out, was_cached, raw_out = result
 
     # Cache path taken: no HTTP calls happened; response is cached data
     mock_post.assert_not_called()
     assert was_cached is True
     assert grammar_out == grammar_content
+    assert raw_out == stored_raw
 
 
 def test_clean_grammar_output_text_before_json():
