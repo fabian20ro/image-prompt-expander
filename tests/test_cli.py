@@ -253,6 +253,22 @@ class TestCliEnhanceImages:
         )
         mock_executor_cls.assert_not_called()
 
+    @patch("cli.generate_grammar")
+    def test_dry_run_grammar_failure(self, mock_generate_grammar):
+        """Test --dry-run surfaces grammar errors with helpful message and exits 1."""
+
+        error_msg = "LM Studio connection refused"
+        mock_generate_grammar.side_effect = ConnectionError(error_msg)
+
+        runner = CliRunner()
+        result = runner.invoke(
+            main, ["-p", "a cat", "--dry-run"], catch_exceptions=False
+        )
+
+        assert result.exit_code == 1
+        assert f"Error generating grammar: {error_msg}" in result.output
+        assert "Make sure LM Studio is running at http://localhost:1234/v1" in result.output
+
 
 class TestCliServe:
     """Tests for --serve flag."""
