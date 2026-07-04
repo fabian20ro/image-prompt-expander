@@ -446,10 +446,9 @@ class TestCliFullPipeline:
         assert call_kwargs["count"] == 10
 
     @patch("cli.PipelineExecutor")
-    def test_from_prompts_calls_run_from_prompts(self, mock_executor_cls):
+    def test_from_prompts_calls_run_from_prompts(self, mock_executor_cls, tmp_path):
         """Test that --from-prompts + --generate-images invokes run_from_prompts."""
-        prompts_dir = Path("/tmp/prompts")
-        prompts_dir.mkdir()
+        prompts_dir = tmp_path
 
         mock_result = MagicMock()
         mock_result.success = True
