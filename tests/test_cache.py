@@ -682,3 +682,98 @@ def test_generate_grammar_skips_cache_when_use_cache_false(tmp_path, monkeypatch
     # But no cache file was written — caller opted out of persistence
     mock_post.assert_called_once()
     assert not (mock_cache_dir / f"{prompt_hash}.tracery.json").exists()
+
+
+def test_generate_grammar_cache_miss_happy_path(tmp_path, monkeypatch):
+    """Full cache-miss flow: LM call → clean → validate → cache.
+
+    Exercises the most critical end-to-end path in generate_grammar — when a prompt
+    is not yet cached, the function must call LM Studio once, extract and clean the
+    grammar response, validate its structure (raising on invalid JSON), write all
+    three cache files atomically, and return was_cached=False with correct content.
+
+    This test exists to prevent regressions in the happy-path generation flow that
+    would silently break if any of those steps were skipped or reordered.
+    """
+    mock_cache_dir = tmp_path / "grammars"
+    mock_cache_dir.mkdir()
+    monkeypatch.setattr("src.grammar_generator.CACHE_DIR", mock_cache_dir)
+
+    user_prompt = "a sunset over mountains with birds"
+    prompt_hash = hash_prompt(user_prompt)
+    grammar_content = '{"origin": ["#a#", "#b#", "#c#", "#d#", "#e#"], "a": ["red sky"], "b": ["orange clouds"], "c": ["blue waves"], "d": ["green hills"], "e": ["purple twilight"]}'
+    raw_response = '```json\n' + grammar_content + '\n```'
+
+    with patch("src.grammar_generator.requests.post") as mock_post:
+        mock_response = MagicMock()
+        mock_response.json.return_value = {
+            "output": [{"type": "message", "content": raw_response}]
+        }
+        mock_response.raise_for_status = lambda: None
+        mock_post.return_value = mock_response
+
+        with patch("src.grammar_generator.ensure_lm_model_loaded"):
+            grammar_out, was_cached, raw_out = generate_grammar(
+                user_prompt=user_prompt, use_cache=True
+            )
+
+    # The LM Studio call happened exactly once — no cache hit shortcut taken
+    mock_post.assert_called_once()
+
+    # Cache miss path: was_cached must be False
+    assert was_cached is False
+
+    # Returned grammar matches the cleaned content from the mock response
+    assert grammar_out == grammar_content
+    assert raw_out == raw_response
+
+    # All three cache files must have been written with correct content
+    tracery_file = mock_cache_dir / f"{prompt_hash}.tracery.json"
+    raw_file = mock_cache_dir / f"{prompt_hash}.raw.txt"
+    meta_file = mock_cache_dir / f"{prompt_hash}.metaprompt.json"
+
+    assert tracery_file.exists() and tracery_file.read_text() == grammar_content
+    assert raw_file.exists() and raw_file.read_text() == raw_response
+
+    import json as _json
+    metadata = _json.loads(meta_file.read_text())
+    assert metadata["user_prompt"] == user_prompt
+    assert metadata["hash"] == prompt_hash
+    assert "created_at" in metadata
+
+    # Subsequent reads return the cached content — cache is consistent with what was written
+    assert get_cached_grammar(prompt_hash) == grammar_content
+
+
+def test_generate_grammar_cache_miss_invalid_json_raises(tmp_path, monkeypatch):
+    """If the LM Studio response yields invalid JSON after cleaning, generate_grammar must raise.
+
+    This guards against silently accepting malformed grammars and ensures that
+    any LLM output that doesn't parse as valid JSON is surfaced to the caller
+    rather than cached or ignored. The test patches requests.post so we never
+    need a live LM Studio instance.
+    """
+    mock_cache_dir = tmp_path / "grammars"
+    mock_cache_dir.mkdir()
+    monkeypatch.setattr("src.grammar_generator.CACHE_DIR", mock_cache_dir)
+
+    user_prompt = "prompt_with_bad_grammar"
+    prompt_hash = hash_prompt(user_prompt)
+
+    # LLM returns something that is NOT valid JSON after cleaning — the regex extractor
+    # will find a partial brace and raw_decode will fail, raising ValueError.
+    with patch("src.grammar_generator.requests.post") as mock_post:
+        bad_response = "Here's my thought\n{incomplete json"
+        mock_response = MagicMock()
+        mock_response.json.return_value = {
+            "output": [{"type": "message", "content": bad_response}]
+        }
+        mock_response.raise_for_status = lambda: None
+        mock_post.return_value = mock_response
+
+        with patch("src.grammar_generator.ensure_lm_model_loaded"):
+            with pytest.raises(ValueError, match="invalid JSON grammar after cleaning"):
+                generate_grammar(user_prompt=user_prompt, use_cache=True)
+
+    # No cache file should be left behind for a failed generation — the cache must remain clean
+    assert not (mock_cache_dir / f"{prompt_hash}.tracery.json").exists()
