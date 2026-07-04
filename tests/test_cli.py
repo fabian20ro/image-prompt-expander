@@ -416,6 +416,73 @@ class TestCliFullPipeline:
         mock_executor.run_full_pipeline.assert_called_once()
 
     @patch("cli.PipelineExecutor")
+    def test_from_grammar_calls_run_from_grammar(self, mock_executor_cls):
+        """Test that --from-grammar invokes run_from_grammar with correct args."""
+        import json as _json
+
+        grammar_file = Path("/tmp/test_grammar.json")
+        grammar_file.write_text(_json.dumps({"origin": ["test"]}))
+
+        mock_result = MagicMock()
+        mock_result.success = True
+        mock_result.output_dir = Path("/tmp/out")
+        mock_result.prompt_count = 10
+        mock_result.image_count = 5
+        mock_result.skipped_count = 0
+        mock_result.error = None
+
+        mock_executor_cls.return_value.run_full_pipeline.return_value = mock_result
+        mock_executor_cls.return_value.run_from_grammar.return_value = mock_result
+
+        runner = CliRunner()
+        result = runner.invoke(
+            main, ["--from-grammar", str(grammar_file), "-n", "10"]
+        )
+
+        assert result.exit_code == 0
+        mock_executor_cls.assert_called_once_with(on_progress=cli_progress)
+        call_kwargs = mock_executor_cls.return_value.run_from_grammar.call_args.kwargs
+        assert call_kwargs["grammar_path"] == grammar_file
+        assert call_kwargs["count"] == 10
+
+    @patch("cli.PipelineExecutor")
+    def test_from_prompts_calls_run_from_prompts(self, mock_executor_cls):
+        """Test that --from-prompts + --generate-images invokes run_from_prompts."""
+        prompts_dir = Path("/tmp/prompts")
+        prompts_dir.mkdir()
+
+        mock_result = MagicMock()
+        mock_result.success = True
+        mock_result.output_dir = Path("/tmp/out")
+        mock_result.prompt_count = 5
+        mock_result.image_count = 5
+        mock_result.skipped_count = 0
+        mock_result.error = None
+
+        mock_executor_cls.return_value.run_full_pipeline.return_value = mock_result
+        mock_executor_cls.return_value.run_from_prompts.return_value = mock_result
+
+        runner = CliRunner()
+        result = runner.invoke(
+            main,
+            [
+                "--from-prompts", str(prompts_dir),
+                "--generate-images",
+                "--images-per-prompt", "2",
+                "--width", "1024",
+                "--height", "768",
+            ],
+        )
+
+        assert result.exit_code == 0
+        mock_executor_cls.assert_called_once_with(on_progress=cli_progress)
+        call_kwargs = mock_executor_cls.return_value.run_from_prompts.call_args.kwargs
+        assert call_kwargs["prompts_dir"] == prompts_dir
+        assert call_kwargs["images_per_prompt"] == 2
+        assert call_kwargs["width"] == 1024
+        assert call_kwargs["height"] == 768
+
+    @patch("cli.PipelineExecutor")
     def test_json_flag_outputs_valid_summary(self, mock_executor_cls):
         """Test that --json prints a valid JSON summary with expected keys.
 
