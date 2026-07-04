@@ -43,6 +43,25 @@ class TestConfig:
             assert settings.server.sse_queue_size == 200
             assert settings.image_generation.seed == 42
 
+    def test_cross_platform_default_model_path(self):
+        """Test that model path uses cross-platform fallback on non-macOS."""
+        from config import _default_model_path, ImageGenerationConfig
+
+        default = _default_model_path()
+        assert isinstance(default, Path)
+        # On any platform this should resolve to a sensible location
+        assert "mflux" in str(default)
+        assert "ernie-image-turbo-4bit" in str(default)
+
+    def test_env_override_uses_default_function(self):
+        """Test that env override still works with cross-platform default."""
+        from config import _default_model_path, ImageGenerationConfig
+
+        custom_path = "/custom/model/path"
+        with patch.dict(os.environ, {"PROMPT_GEN_ERNIE_MODEL_PATH": custom_path}):
+            settings = Settings.from_env()
+            assert str(settings.image_generation.model_path) == custom_path
+
     def test_immutable_config(self):
         """Test that config dataclasses are immutable."""
         config = LMStudioConfig()
