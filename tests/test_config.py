@@ -122,6 +122,20 @@ class TestConfig:
                 settings = Settings.from_env()
                 assert settings.image_generation.default_width == 864
 
+    def test_nan_timeout_raises(self):
+        """Test that NaN timeout values raise ValueError instead of silently passing."""
+        import math
+        with pytest.raises(ValueError, match="timeout must be positive"):
+            LMStudioConfig(timeout=float("nan"))
+
+    def test_nan_server_timeouts_raise(self):
+        """Test that NaN server timeouts raise ValueError instead of silently passing."""
+        import math
+        with pytest.raises(ValueError, match="sse_timeout must be positive"):
+            ServerConfig(sse_timeout=float("nan"))
+        with pytest.raises(ValueError, match="worker_timeout must be positive"):
+            ServerConfig(worker_timeout=float("nan"))
+
     def test_path_properties(self):
         """Verify path properties are Path objects and correct."""
         assert isinstance(paths.root_dir, Path)

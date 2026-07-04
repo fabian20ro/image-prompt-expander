@@ -57,7 +57,7 @@ class LMStudioConfig:
     timeout: float = 60.0  # seconds
 
     def __post_init__(self):
-        if self.timeout <= 0:
+        if math.isnan(self.timeout) or self.timeout <= 0:
             raise ValueError("timeout must be positive")
 
 @dataclass(frozen=True)
@@ -82,9 +82,9 @@ class ServerConfig:
     worker_timeout: float = 300.0  # seconds
 
     def __post_init__(self):
-        if self.sse_timeout <= 0:
+        if math.isnan(self.sse_timeout) or self.sse_timeout <= 0:
             raise ValueError("sse_timeout must be positive")
-        if self.worker_timeout <= 0:
+        if math.isnan(self.worker_timeout) or self.worker_timeout <= 0:
             raise ValueError("worker_timeout must be positive")
 
 @dataclass(frozen=True)
