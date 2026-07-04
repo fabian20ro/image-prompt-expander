@@ -599,6 +599,29 @@ def test_clean_grammar_output_json_array_extraction():
     assert clean_grammar_output(messy) == '["option1", "option2"]'
 
 
+def test_clean_grammar_output_no_json_present():
+    """When the LLM returns text with no JSON at all, clean_grammar_output strips thinking blocks and preserves remaining prose.
+
+    This guards against silent acceptance of garbage — if the entire response is prose,
+    thinking blocks, or markdown without code fences, the function should produce a
+    cleanly result so that generate_grammar's json.loads check can then raise ValueError.
+    Without this path producing non-JSON output, an LLM that refuses to emit JSON would
+    cause downstream code to cache and use empty grammar strings silently.
+    """
+    # Prose only — no braces anywhere; prose is preserved as-is after cleanup
+    prose = "I'm not sure how to generate a grammar for this prompt. Here's my thoughts."
+    assert clean_grammar_output(prose) == prose
+
+    # Only thinking blocks, nothing else → stripped entirely
+    thinking_only = "<think>Let me think about this...</think>"
+    assert clean_grammar_output(thinking_only) == ""
+
+    # Markdown code fence with non-JSON language tag — the regex captures everything
+    # between the backticks including the language identifier as part of extracted content.
+    fenced_prose = "```text\nJust some prose here\n```"
+    assert clean_grammar_output(fenced_prose) == "text\nJust some prose here"
+
+
 def test_generate_grammar_invalidates_cache_on_error(tmp_path, monkeypatch):
     """If generate_grammar raises on a cache miss, the partial cache must NOT be created.
 
