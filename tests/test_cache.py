@@ -843,3 +843,58 @@ def test_generate_grammar_cache_miss_invalid_json_raises(tmp_path, monkeypatch):
 
     # No cache file should be left behind for a failed generation — the cache must remain clean
     assert not (mock_cache_dir / f"{prompt_hash}.tracery.json").exists()
+
+
+def test_generate_grammar_forces_regeneration_when_use_cache_false(tmp_path, monkeypatch):
+    """generate_grammar with use_cache=False must NOT serve an existing cached grammar.
+
+    When a caller explicitly opts out of caching (e.g., --no-cache on the CLI),
+    every subsequent call should regenerate from LM Studio even if a perfect
+    cache hit exists. This guards against stale data silently leaking through
+    when users expect forced regeneration.
+
+    The LLM path is patched to fail so we prove it IS called; an existing
+    cache file is written beforehand so the function has no reason to skip it
+    unless use_cache=False overrides the cache check.
+    """
+    mock_cache_dir = tmp_path / "grammars"
+    mock_cache_dir.mkdir()
+    monkeypatch.setattr("src.grammar_generator.CACHE_DIR", mock_cache_dir)
+
+    user_prompt = "force_regenerate_test_prompt"
+    prompt_hash = hash_prompt(user_prompt)
+    cached_grammar = '{"origin": ["#a#", "#b#", "#c#", "#d#", "#e#"], "a": ["cached"], "b": ["x"], "c": ["y"], "d": ["z"], "e": ["w"]}'
+    cached_raw = '```json\n' + cached_grammar + '\n```'
+
+    # Pre-populate the cache so a hit would be available
+    cache_grammar(prompt_hash, cached_grammar, cached_raw, user_prompt)
+    assert (mock_cache_dir / f"{prompt_hash}.tracery.json").exists()
+
+    fresh_grammar = '{"origin": ["#a#", "#b#", "#c#", "#d#", "#e#"], "a": ["fresh1"], "b": ["f2"], "c": ["f3"], "d": ["f4"], "e": ["f5"]}'
+    fresh_raw = '```json\n' + fresh_grammar + '\n```'
+
+    with patch("src.grammar_generator.requests.post") as mock_post:
+        mock_response = MagicMock()
+        mock_response.json.return_value = {
+            "output": [{"type": "message", "content": fresh_raw}]
+        }
+        mock_response.raise_for_status = lambda: None
+        mock_post.return_value = mock_response
+
+        with patch("src.grammar_generator.ensure_lm_model_loaded"):
+            grammar_out, was_cached, raw_out = generate_grammar(
+                user_prompt=user_prompt, use_cache=False
+            )
+
+    # The cache hit path must NOT have been taken — the LLM call MUST happen
+    mock_post.assert_called_once()
+    assert was_cached is False
+    # Fresh content returned from the mocked LLM response, not cached content
+    assert grammar_out == fresh_grammar
+    assert raw_out == fresh_raw
+
+    # And with use_cache=False, results are NOT persisted either — the cache file
+    # on disk should still contain its original (stale) content since nothing was
+    # written back. This confirms use_cache=False is a true no-cache toggle that
+    # skips both read and write paths.
+    assert (mock_cache_dir / f"{prompt_hash}.tracery.json").read_text() == cached_grammar
