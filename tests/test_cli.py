@@ -242,14 +242,20 @@ class TestCliValidation:
 class TestCliEnhanceImages:
     """Tests for --enhance-images flag."""
 
-    @patch("cli.collect_images")
-    def test_enhance_images_error(self, mock_collect, temp_dir):
-        """Test --enhance-images with invalid path."""
-        mock_collect.side_effect = ValueError("No images found matching pattern: invalid")
+    @patch("image_enhancer.collect_images")
+    def test_enhance_images_error(self, mock_collect):
+        """Test --enhance-images with an invalid path raises a user-facing error."""
+        from image_enhancer import collect_images
+
+        mock_collect.side_effect = ValueError(
+            "No images found matching pattern: /nonexistent/path"
+        )
         runner = CliRunner()
-        result = runner.invoke(main, ["--enhance-images", "invalid"])
+        result = runner.invoke(main, ["--enhance-images", "/nonexistent/path"])
         assert result.exit_code != 0
-        assert "Error: No images found matching pattern: invalid" in result.output
+        assert (
+            'Error: No images found matching pattern: /nonexistent/path' in result.output
+        )
 
     def test_dry_run_from_grammar(self, temp_dir):
         """Test --dry-run with an existing grammar file."""
