@@ -38,6 +38,11 @@ def cli_progress(stage: str, current: int = 0, total: int = 0, message: str = ""
             click.echo(message)
 
 
+def _status_echo(message: str) -> None:
+    """Write informational status message to stderr (keeps stdout clean for --json)."""
+    click.echo(message, err=True)
+
+
 @click.command()
 @click.version_option(version="1.0.0")
 @click.option(
@@ -245,7 +250,7 @@ def main(
     # Handle --version-check
     if version_check:
         if check_lm_studio(base_url):
-            click.echo(f"Successfully connected to LM Studio at {base_url}")
+            _status_echo(f"Successfully connected to LM Studio at {base_url}")
             return
         else:
             click.echo(f"Error: LM Studio is not reachable at {base_url}.", err=True)
@@ -258,9 +263,9 @@ def main(
         removed = clean_generated()
         if not quiet:
             if removed == 0:
-                click.echo("Nothing to clean.")
+                _status_echo("Nothing to clean.")
             else:
-                click.echo(f"Cleaned {removed} items from {paths.generated_dir}")
+                _status_echo(f"Cleaned {removed} items from {paths.generated_dir}")
         if not prompt and not from_grammar and not from_prompts and not enhance_images and not serve:
             return
 
@@ -270,8 +275,8 @@ def main(
         import threading
 
         if not quiet:
-            click.echo(f"Starting web UI server at http://localhost:{port}")
-            click.echo("Press Ctrl+C to stop")
+            _status_echo(f"Starting web UI server at http://localhost:{port}")
+            _status_echo("Press Ctrl+C to stop")
 
         def open_browser():
             import time

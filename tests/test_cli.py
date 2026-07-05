@@ -8,11 +8,21 @@ import pytest
 from click.testing import CliRunner
 
 from config import settings
-from cli import main, clean_generated, cli_progress
+from cli import main, clean_generated, cli_progress, _status_echo
+
+
+class TestStatusEcho:
+    """Tests for the _status_echo helper (info messages go to stderr)."""
+
+    def test_status_echo_to_stderr(self, capsys):
+        """Test that info messages are written to stderr."""
+        _status_echo("status message")
+        captured = capsys.readouterr()
+        assert "status message" in captured.err
+        assert captured.out == ""
 
 
 class TestCleanGenerated:
-    """Tests for the clean_generated function."""
 
     def test_clean_removes_files(self, temp_dir):
         """Test that clean removes generated files."""
