@@ -845,6 +845,42 @@ def test_generate_grammar_cache_miss_invalid_json_raises(tmp_path, monkeypatch):
     assert not (mock_cache_dir / f"{prompt_hash}.tracery.json").exists()
 
 
+def test_generate_grammar_valid_json_invalid_structure_raises(tmp_path, monkeypatch):
+    """If LM Studio returns valid JSON that fails structural validation (e.g., missing 'origin'), generate_grammar must raise ValueError and write nothing to cache.
+
+    This guards against silently accepting grammars that parse as JSON but cannot
+    drive Tracery expansion — the clean → validate → cache pipeline must reject
+    structurally broken output before any file is written to CACHE_DIR. The test
+    patches requests.post so no live LM Studio instance is needed.
+    """
+    mock_cache_dir = tmp_path / "grammars"
+    mock_cache_dir.mkdir()
+    monkeypatch.setattr("src.grammar_generator.CACHE_DIR", mock_cache_dir)
+
+    user_prompt = "structurally_invalid_test"
+    prompt_hash = hash_prompt(user_prompt)
+
+    # LLM returns valid JSON but the grammar is missing the required "origin" key
+    bad_grammar_json = '{"prompt": "a sunset"}'  # valid JSON, no origin rule
+    fake_raw = '```json\n' + bad_grammar_json + '\n```'
+
+    with patch("src.grammar_generator.requests.post") as mock_post:
+        mock_response = MagicMock()
+        mock_response.json.return_value = {
+            "output": [{"type": "message", "content": fake_raw}]
+        }
+        mock_response.raise_for_status = lambda: None
+        mock_post.return_value = mock_response
+
+        with patch("src.grammar_generator.ensure_lm_model_loaded"):
+            with pytest.raises(ValueError, match=r"Grammar must be a JSON object containing an \"origin\" rule"):
+                generate_grammar(user_prompt=user_prompt, use_cache=True)
+
+    # No cache files should be left behind after rejection — the pipeline stops before write
+    assert not (mock_cache_dir / f"{prompt_hash}.tracery.json").exists()
+    assert not (mock_cache_dir / f"{prompt_hash}.raw.txt").exists()
+
+
 def test_generate_grammar_forces_regeneration_when_use_cache_false(tmp_path, monkeypatch):
     """generate_grammar with use_cache=False must NOT serve an existing cached grammar.
 
