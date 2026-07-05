@@ -434,6 +434,49 @@ def test_get_cached_grammar_independent_of_raw_file(tmp_path, monkeypatch):
     assert retrieved == grammar_content
 
 
+def test_generate_grammar_returns_grammar_on_partial_state_hit(tmp_path, monkeypatch):
+    """generate_grammar must return cached grammar even when raw response file is lost.
+
+    When generate_grammar finds a grammar in cache but the raw response file
+    was deleted (crash mid-write), it should still serve the cached grammar with
+    was_cached=True and raw_response=None, rather than falling through to a new
+    LM Studio call or raising an error. This is graceful degradation: callers
+    should never need to distinguish between "raw present" and "raw missing" when
+    the grammar itself is intact.
+
+    The LLM HTTP path is patched so we prove no network call happens on this
+    cache-hit-then-fallback path.
+    """
+    mock_cache_dir = tmp_path / "grammars"
+    mock_cache_dir.mkdir()
+    monkeypatch.setattr("src.grammar_generator.CACHE_DIR", mock_cache_dir)
+
+    user_prompt = "partial_state_happy_test"
+    prompt_hash = hash_prompt(user_prompt)
+    grammar_content = '{"origin": ["#a#", "x"], "a": ["1"]}'
+    raw_response = '```json\n' + grammar_content + '\n```'
+
+    # Write all files then delete raw to simulate crash state
+    cache_grammar(prompt_hash, grammar_content, raw_response, user_prompt)
+    (mock_cache_dir / f"{prompt_hash}.raw.txt").unlink()
+    assert not (mock_cache_dir / f"{prompt_hash}.raw.txt").exists()
+
+    with patch("src.grammar_generator.requests.post") as mock_post:
+        mock_post.side_effect = AssertionError(
+            "generate_grammar should NOT call LM Studio on cache hit"
+        )
+        grammar_out, was_cached, raw_out = generate_grammar(
+            user_prompt=user_prompt, use_cache=True
+        )
+
+    # Cache path taken — no HTTP call
+    mock_post.assert_not_called()
+    assert was_cached is True
+    assert grammar_out == grammar_content
+    # Raw response is None because the file was missing (graceful degradation)
+    assert raw_out is None
+
+
 def test_get_cached_raw_response_independent_of_grammar_file(tmp_path, monkeypatch):
     """Raw response file is readable even if grammar file was lost (e.g., crash between writes)."""
     mock_cache_dir = tmp_path / "grammars"
