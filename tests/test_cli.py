@@ -526,6 +526,47 @@ class TestCliFullPipeline:
         assert call_kwargs["max_prompts"] is None
 
     @patch("cli.PipelineExecutor")
+    def test_skipped_images_message_when_both_counts_positive(self, mock_executor_cls):
+        """Test that CLI prints 'skipped N existing' when image_count and skipped_count are both > 0."""
+        mock_executor = MagicMock()
+        mock_result = MagicMock()
+        mock_result.success = True
+        mock_result.output_dir = Path("/tmp/test")
+        mock_result.prompt_count = 10
+        mock_result.image_count = 8
+        mock_result.skipped_count = 2
+        mock_result.error = None
+        mock_executor.run_full_pipeline.return_value = mock_result
+        mock_executor_cls.return_value = mock_executor
+
+        runner = CliRunner()
+        result = runner.invoke(main, ["-p", "a cat", "-n", "10", "--generate-images"])
+
+        assert result.exit_code == 0
+        assert "Generated 8 images, skipped 2 existing" in result.output
+
+    @patch("cli.PipelineExecutor")
+    def test_no_skipped_message_when_all_images_new(self, mock_executor_cls):
+        """Test that CLI does NOT print 'skipped N existing' when all images are freshly generated."""
+        mock_executor = MagicMock()
+        mock_result = MagicMock()
+        mock_result.success = True
+        mock_result.output_dir = Path("/tmp/test")
+        mock_result.prompt_count = 10
+        mock_result.image_count = 10
+        mock_result.skipped_count = 0
+        mock_result.error = None
+        mock_executor.run_full_pipeline.return_value = mock_result
+        mock_executor_cls.return_value = mock_executor
+
+        runner = CliRunner()
+        result = runner.invoke(main, ["-p", "a cat", "-n", "10", "--generate-images"])
+
+        assert result.exit_code == 0
+        assert "skipped" not in result.output
+        assert "Generated 10 images" in result.output
+
+    @patch("cli.PipelineExecutor")
     def test_json_flag_outputs_valid_summary(self, mock_executor_cls):
         """Test that --json prints a valid JSON summary with expected keys.
 
