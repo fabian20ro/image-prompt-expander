@@ -498,6 +498,34 @@ class TestCliFullPipeline:
         assert call_kwargs["height"] == 768
 
     @patch("cli.PipelineExecutor")
+    def test_default_prefix_and_dimensions(self, mock_executor_cls):
+        """"Test that --prompt without explicit prefix/width/height passes CLI defaults to the executor."""
+        from config import settings
+
+        mock_result = MagicMock()
+        mock_result.success = True
+        mock_result.output_dir = Path("/tmp/test")
+        mock_result.prompt_count = 50
+        mock_result.image_count = 0
+        mock_result.skipped_count = 0
+        mock_result.error = None
+
+        mock_executor_cls.return_value.run_full_pipeline.return_value = mock_result
+
+        runner = CliRunner()
+        result = runner.invoke(main, ["-p", "a cat"])
+
+        assert result.exit_code == 0
+        call_kwargs = mock_executor_cls.return_value.run_full_pipeline.call_args.kwargs
+        # CLI default: prefix = prefix or "image"
+        assert call_kwargs["prefix"] == "image"
+        # Width/height fall back to config defaults (not from_env overrides)
+        assert call_kwargs["width"] == settings.image_generation.default_width
+        assert call_kwargs["height"] == settings.image_generation.default_height
+        assert call_kwargs["seed"] is None
+        assert call_kwargs["max_prompts"] is None
+
+    @patch("cli.PipelineExecutor")
     def test_json_flag_outputs_valid_summary(self, mock_executor_cls):
         """Test that --json prints a valid JSON summary with expected keys.
 
