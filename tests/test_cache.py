@@ -750,6 +750,41 @@ def test_generate_grammar_skips_cache_when_use_cache_false(tmp_path, monkeypatch
     assert not (mock_cache_dir / f"{prompt_hash}.tracery.json").exists()
 
 
+def test_generate_grammar_passes_temperature_to_lm_studio(tmp_path, monkeypatch):
+    """generate_grammar must forward the temperature parameter to LM Studio's chat API.
+
+    The CLI exposes --temperature and passes it into generate_grammar; if this link
+    breaks the LLM would always run at the default 0.7 regardless of user intent.
+    Verifying that requests.post receives the correct temperature kwarg protects
+    against silent regression in the parameter forwarding path.
+    """
+    mock_cache_dir = tmp_path / "grammars"
+    mock_cache_dir.mkdir()
+    monkeypatch.setattr("src.grammar_generator.CACHE_DIR", mock_cache_dir)
+
+    user_prompt = "temperature_forward_test"
+    fake_grammar = '{"origin": ["#a#", "#b#", "#c#", "#d#", "#e#"], "a": ["1"], "b": ["2"], "c": ["3"], "d": ["4"], "e": ["5"]}'
+    fake_raw = '```json\n' + fake_grammar + '\n```'
+
+    with patch("src.grammar_generator.requests.post") as mock_post:
+        mock_response = MagicMock()
+        mock_response.json.return_value = {
+            "output": [{"type": "message", "content": fake_raw}]
+        }
+        mock_response.raise_for_status = lambda: None
+        mock_post.return_value = mock_response
+
+        with patch("src.grammar_generator.ensure_lm_model_loaded"):
+            grammar_out, was_cached, raw_out = generate_grammar(
+                user_prompt=user_prompt, use_cache=True, temperature=0.35
+            )
+
+    # Verify the LM Studio call included the requested temperature
+    _, kwargs = mock_post.call_args
+    assert kwargs["json"]["temperature"] == 0.35
+    assert grammar_out == fake_grammar
+
+
 def test_generate_grammar_cache_miss_happy_path(tmp_path, monkeypatch):
     """Full cache-miss flow: LM call → clean → validate → cache.
 
