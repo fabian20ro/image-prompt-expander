@@ -600,3 +600,55 @@ class TestCliFullPipeline:
         assert summary["skipped_count"] == 2
         assert summary["success"] is True
         assert "output_dir" in summary
+
+
+class TestDumpConfigFlag:
+    """Tests for --dump-config flag."""
+
+    def test_dump_config_exits_0(self):
+        """Test that --dump-config exits cleanly with code 0."""
+        runner = CliRunner()
+        result = runner.invoke(main, ["--dump-config"])
+        assert result.exit_code == 0
+        assert "ERNIE-Image-Turbo CLI Settings" in result.output
+
+    def test_dump_config_shows_all_sections(self):
+        """Test that --dump-config prints all four config sections."""
+        runner = CliRunner()
+        result = runner.invoke(main, ["--dump-config"])
+        assert "[LM Studio]" in result.output
+        assert "[Image Generation]" in result.output
+        assert "[Server]" in result.output
+        assert "[Enhancement]" in result.output
+
+    def test_dump_config_shows_field_names(self):
+        """Test that --dump-config prints field names for each section."""
+        runner = CliRunner()
+        result = runner.invoke(main, ["--dump-config"])
+        # LM Studio fields
+        assert "base_url" in result.output
+        assert "model" in result.output
+        assert "timeout" in result.output
+        # Image Generation fields
+        assert "default_width" in result.output
+        assert "default_height" in result.output
+        assert "seed" in result.output
+
+    def test_dump_config_with_other_flags_no_pipeline(self, capsys):
+        """Test that --dump-config does not run the pipeline even with other flags."""
+        runner = CliRunner()
+        # Pass several other flags alongside --dump-config
+        result = runner.invoke(main, [
+            "--dump-config", "-p", "a cat", "-n", "5"
+        ])
+        assert result.exit_code == 0
+        assert "ERNIE-Image-Turbo CLI Settings" in result.output
+        # No pipeline output should appear
+        assert "Generating grammar for:" not in result.output
+
+    def test_dump_config_help_mentions_flag(self):
+        """Test that --help documents the --dump-config flag."""
+        runner = CliRunner()
+        result = runner.invoke(main, ["--help"])
+        assert "--dump-config" in result.output
+        assert "effective settings" in result.output or "settings" in result.output
