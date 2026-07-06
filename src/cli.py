@@ -14,6 +14,21 @@ from pipeline import PipelineExecutor
 from utils import check_lm_studio
 
 
+def _read_prompt_from_stdin(prompt: str | None) -> str | None:
+    """If prompt is '-' read from stdin, otherwise return unchanged."""
+    if prompt == "-":
+        try:
+            text = sys.stdin.read().strip()
+            if not text:
+                click.echo("Error: empty prompt read from stdin", err=True)
+                sys.exit(1)
+            return text
+        except KeyboardInterrupt:
+            click.echo("\nInterrupted.", err=True)
+            sys.exit(130)
+    return prompt
+
+
 def clean_generated():
     """Remove all generated files (grammars and prompts)."""
     count = 0
@@ -253,6 +268,8 @@ def main(
         uv run python src/cli.py --enhance-images path/to/folder/
         uv run python src/cli.py --enhance-images "generated/prompts/*/test_*.png"
     """
+
+    prompt = _read_prompt_from_stdin(prompt)
 
     # Handle --dump-config: print all settings and exit
     if dump_config:

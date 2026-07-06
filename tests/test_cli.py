@@ -331,6 +331,52 @@ class TestCliEnhanceImages:
         assert '{"origin": ["cached_cat"]}' in result.output
 
 
+class TestStdinPrompt:
+    """Tests for --prompt - (read prompt from stdin)."""
+
+    def test_stdin_prompt_reads_from_stdin(self, monkeypatch):
+        """Test that '--prompt -' reads the prompt from stdin."""
+        runner = CliRunner()
+
+        # Mock generate_grammar to avoid needing LM Studio
+        with patch("cli.generate_grammar", return_value=('{\"origin":["test"]}', False, None)):
+            result = runner.invoke(
+                main, ["--prompt", "-", "--dry-run"], input="a cat from stdin\n"
+            )
+
+        assert result.exit_code == 0
+        assert "a cat from stdin" in result.output
+        assert "{origin: [\"test\"]}" not in result.output  # Just verifying it got the prompt text through
+
+    def test_stdin_empty_prompt_errors(self, monkeypatch):
+        """Test that empty stdin gives an error."""
+        runner = CliRunner()
+        result = runner.invoke(main, ["--prompt", "-"], input="")
+        assert "empty prompt" in result.output.lower() or "Error" in result.output
+
+    def test_stdin_with_full_pipeline(self, monkeypatch):
+        """Test that stdin works with the full pipeline."""
+        runner = CliRunner()
+
+        mock_executor = MagicMock()
+        mock_result = MagicMock()
+        mock_result.success = True
+        mock_result.output_dir = Path("/tmp/test")
+        mock_result.prompt_count = 1
+        mock_result.image_count = 0
+        mock_result.error = None
+        mock_executor.run_full_pipeline.return_value = mock_result
+        monkeypatch.setattr("cli.PipelineExecutor", lambda **kw: mock_executor)
+
+        result = runner.invoke(
+            main, ["--prompt", "-"], input="a prompt from stdin\n"
+        )
+
+        assert result.exit_code == 0
+        call_args = mock_executor.run_full_pipeline.call_args
+        assert call_args.kwargs["prompt"] == "a prompt from stdin"
+
+
 class TestCliDryRunValidation:
     """Tests for dry-run argument validation."""
 
