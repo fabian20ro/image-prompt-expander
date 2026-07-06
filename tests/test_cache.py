@@ -540,6 +540,38 @@ def test_get_cached_raw_response_returns_none_for_missing_file(tmp_path, monkeyp
     assert retrieved is None
 
 
+def test_get_cached_grammar_preserves_multiline_content_roundtrip(tmp_path, monkeypatch):
+    """cache_grammar → get_cached_grammar must round-trip content byte-for-byte.
+
+    The LLM response often contains multiline thinking blocks, escaped newlines in JSON,
+    and Unicode smart quotes that the cleaner preserves before caching. A lossy write or
+    a read that strips whitespace would silently degrade cached grammar fidelity — so we
+    assert exact equality across the full roundtrip for content with real-world messiness.
+
+    This guards against regressions where cache_grammar normalizes output (e.g., via
+    .strip(), .replace('\\n', '\\n'), or json.dumps) and get_cached_grammar then returns
+    a different string than what was stored — callers that diff cached vs regenerated
+    would see spurious cache misses.
+    """
+    mock_cache_dir = tmp_path / "grammars"
+    mock_cache_dir.mkdir()
+    monkeypatch.setattr("src.grammar_generator.CACHE_DIR", mock_cache_dir)
+
+    # Real-world messy content: multiline thinking, escaped newlines in JSON strings, smart quotes
+    grammar_content = (
+        '{"origin": ["#a#", "#b#"], '
+        '"a": ["line1\\nline2", "plain text"], '
+        '"b": ["café \\u201crésumé\\u201d"]}'  # smart quotes preserved by clean_grammar_output
+    )
+
+    prompt_hash = "roundtrip_content_test"
+
+    cache_grammar(prompt_hash, grammar_content, "raw content", "user")
+
+    # Round-trip: get_cached_grammar must return exactly what was stored
+    assert get_cached_grammar(prompt_hash) == grammar_content
+
+
 def test_stale_schema_version_cache_invalidated(tmp_path, monkeypatch):
     """Cache entries written under one PROMPT_SCHEMA_VERSION must NOT be served after the version changes.
 
