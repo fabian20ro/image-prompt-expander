@@ -1069,3 +1069,43 @@ def test_generate_grammar_raises_on_empty_output(tmp_path, monkeypatch):
     # No cache file should be written — the error must prevent caching
     assert not (mock_cache_dir / f"{prompt_hash}.tracery.json").exists()
     assert not (mock_cache_dir / f"{prompt_hash}.raw.txt").exists()
+
+
+def test_generate_grammar_propagates_http_error_without_caching(tmp_path, monkeypatch):
+    """generate_grammar must propagate HTTP errors from LM Studio and write nothing to cache.
+
+    When LM Studio returns a non-2xx status (e.g., 502 Bad Gateway), `response.raise_for_status()`
+    raises an exception before any cleaning/validation/caching logic runs. This test verifies:
+    1. The HTTP error propagates to the caller (not swallowed)
+    2. No partial cache files are written for a failed request
+    3. The function does not attempt to parse or cache a non-existent response body
+
+    Without this guard, a transient network failure could leave CACHE_DIR polluted with
+    half-written files from a failed generation attempt, causing false cache hits on retry.
+    """
+    import requests as _requests
+
+    mock_cache_dir = tmp_path / "grammars"
+    mock_cache_dir.mkdir()
+    monkeypatch.setattr("src.grammar_generator.CACHE_DIR", mock_cache_dir)
+
+    user_prompt = "http_error_test_prompt"
+    prompt_hash = hash_prompt(user_prompt)
+
+    with patch("src.grammar_generator.requests.post") as mock_post:
+        # Simulate a 502 Bad Gateway from LM Studio (transient infrastructure failure)
+        mock_response = MagicMock()
+        mock_response.status_code = 502
+        mock_response.raise_for_status.side_effect = _requests.HTTPError(
+            "502 Server Error: Bad Gateway for url: http://localhost:1234/v1/chat"
+        )
+        mock_post.return_value = mock_response
+
+        with patch("src.grammar_generator.ensure_lm_model_loaded"):
+            with pytest.raises(_requests.HTTPError, match="502"):
+                generate_grammar(user_prompt=user_prompt, use_cache=True)
+
+    # No cache files should be left behind — the error must prevent any writes
+    assert not (mock_cache_dir / f"{prompt_hash}.tracery.json").exists()
+    assert not (mock_cache_dir / f"{prompt_hash}.raw.txt").exists()
+    assert not (mock_cache_dir / f"{prompt_hash}.metaprompt.json").exists()
