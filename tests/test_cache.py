@@ -192,6 +192,19 @@ def test_clean_grammar_output_nested_json_in_text():
 def test_clean_grammar_output_smart_quotes_in_json():
     assert clean_grammar_output('{"key": \u201cvalue\u201d}') == '{"key": "value"}'
 
+
+def test_clean_grammar_output_single_smart_quotes():
+    """U+2018/U+2019 (curly single quotes) must normalise to ASCII ' — otherwise downstream JSON
+    parsing fails when the LLM uses typographic apostrophes inside string values."""
+    # Left/right curly single quotes wrapping a value that itself contains an apostrophe.
+    raw = "{\u201ckey\u201d: \u2018it\u2019s\u2019}"
+    result = clean_grammar_output(raw)
+    # Both pairs of curly double quotes normalise to ASCII " around the key;
+    # both pairs of curly single quotes normalise to ASCII ' inside the value.
+    assert '"key":' in result
+    assert "it" + "'" + "s" in result
+
+
 def test_clean_grammar_output_multiple_json_objects():
     assert clean_grammar_output('{"first": 1} {"second": 2}') == '{"first": 1}'
 
