@@ -614,6 +614,30 @@ class TestCliFullPipeline:
         assert summary["success"] is True
         assert "output_dir" in summary
 
+    @patch("cli.PipelineExecutor")
+    def test_json_output_nulls_output_dir(self, mock_executor_cls):
+        """Test that --json serializes null output_dir as JSON null (no crash)."""
+        import json as _json
+
+        mock_executor = MagicMock()
+        mock_result = MagicMock()
+        mock_result.success = True
+        mock_result.output_dir = None  # Unset output dir
+        mock_result.prompt_count = 30
+        mock_result.image_count = 5
+        mock_result.skipped_count = 0
+        mock_result.error = None
+        mock_executor.run_full_pipeline.return_value = mock_result
+        mock_executor_cls.return_value = mock_executor
+
+        runner = CliRunner()
+        result = runner.invoke(main, ["-p", "a cat", "--json"])
+
+        assert result.exit_code == 0
+        json_start = result.output.find("{")
+        summary = _json.loads(result.output[json_start:])
+        assert summary["output_dir"] is None
+
 
 class TestDumpConfigFlag:
     """Tests for --dump-config flag."""
