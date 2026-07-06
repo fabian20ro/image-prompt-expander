@@ -318,6 +318,18 @@ class TestCliEnhanceImages:
         assert f"Error generating grammar: {error_msg}" in result.output
         assert "Make sure LM Studio is running at http://localhost:1234/v1" in result.output
 
+    @patch("cli.generate_grammar")
+    def test_dry_run_cached_grammar_message(self, mock_generate_grammar):
+        """Test --dry-run prints 'Using cached grammar' when grammar was served from cache."""
+        mock_generate_grammar.return_value = ('{"origin": ["cached_cat"]}', True, None)
+
+        runner = CliRunner()
+        result = runner.invoke(main, ["-p", "a cat", "--dry-run"])
+
+        assert result.exit_code == 0
+        assert "Using cached grammar" in result.output
+        assert '{"origin": ["cached_cat"]}' in result.output
+
 
 class TestCliDryRunValidation:
     """Tests for dry-run argument validation."""
