@@ -982,3 +982,52 @@ def test_generate_grammar_forces_regeneration_when_use_cache_false(tmp_path, mon
     # written back. This confirms use_cache=False is a true no-cache toggle that
     # skips both read and write paths.
     assert (mock_cache_dir / f"{prompt_hash}.tracery.json").read_text() == cached_grammar
+
+
+def test_cache_grammar_overwrite_resets_created_at(tmp_path, monkeypatch):
+    """cache_grammar currently rewrites created_at on every overwrite.
+
+    The implementation unconditionally writes ``datetime.now().isoformat()`` into the
+    metadata file on each call to cache_grammar — it does NOT preserve the original
+    timestamp from a prior write. This test documents that exact current behavior so
+    any future change (e.g., preserving created_at across re-writes) is explicit and
+    auditable rather than silent.
+
+    The test uses ``time.sleep`` between writes to guarantee two distinct ISO-timestamps
+    even under fast CI clocks.
+    """
+    import time as _time
+
+    mock_cache_dir = tmp_path / "grammars"
+    mock_cache_dir.mkdir()
+    monkeypatch.setattr("src.grammar_generator.CACHE_DIR", mock_cache_dir)
+
+    prompt_hash = "overwrite_timestamp_test"
+    grammar_a = '{"origin": ["#a#"], "a": ["1"]}'
+    raw_a = '```json\n{"origin": ["#a#"], "a": ["1"]}\n```'
+    user_prompt = "timestamp test"
+
+    # First write
+    cache_grammar(prompt_hash, grammar_a, raw_a, user_prompt)
+    meta_file = mock_cache_dir / f"{prompt_hash}.metaprompt.json"
+    first_meta = json.loads(meta_file.read_text())
+    first_created_at = first_meta["created_at"]
+
+    # Bump the clock to guarantee a different timestamp on disk
+    _time.sleep(1.1)
+
+    # Second write with new grammar content — same hash (overwrite path)
+    grammar_b = '{"origin": ["#b#"], "a": ["2"]}'
+    raw_b = '```json\n{"origin": ["#b#"], "a": ["2"]}\n```'
+    user_prompt_updated = "timestamp test updated"
+    cache_grammar(prompt_hash, grammar_b, raw_b, user_prompt_updated)
+
+    second_meta = json.loads(meta_file.read_text())
+
+    # created_at changed — proves it was rewritten on the second call (current behavior)
+    assert second_meta["created_at"] != first_created_at
+    # Other fields updated normally
+    assert second_meta["user_prompt"] == user_prompt_updated
+    assert second_meta["hash"] == prompt_hash
+    # Grammar file now holds the new content
+    assert get_cached_grammar(prompt_hash) == grammar_b
