@@ -1030,4 +1030,42 @@ def test_cache_grammar_overwrite_resets_created_at(tmp_path, monkeypatch):
     assert second_meta["user_prompt"] == user_prompt_updated
     assert second_meta["hash"] == prompt_hash
     # Grammar file now holds the new content
-    assert get_cached_grammar(prompt_hash) == grammar_b
+
+
+def test_generate_grammar_raises_on_empty_output(tmp_path, monkeypatch):
+    """generate_grammar must raise ValueError when LM Studio returns no message content.
+
+    If the LLM responds with a valid HTTP response but the output array contains
+    no "message" type items (e.g., only tool calls or empty entries), the function
+    should surface this clearly rather than silently caching an empty grammar string.
+
+    This guards against a regression where `generate_grammar` would attempt to
+    call `.strip()` on an empty joined string and then try to parse it as JSON,
+    producing a confusing error deep in `json.loads`.
+    """
+    mock_cache_dir = tmp_path / "grammars"
+    mock_cache_dir.mkdir()
+    monkeypatch.setattr("src.grammar_generator.CACHE_DIR", mock_cache_dir)
+
+    user_prompt = "empty_output_test"
+    prompt_hash = hash_prompt(user_prompt)
+
+    # LLM returns valid HTTP + JSON but output has no message items
+    with patch("src.grammar_generator.requests.post") as mock_post:
+        mock_response = MagicMock()
+        mock_response.json.return_value = {
+            "output": [
+                {"type": "tool_call", "content": ""},
+                {"type": "text", "content": "Just thinking..."},
+            ]
+        }
+        mock_response.raise_for_status = lambda: None
+        mock_post.return_value = mock_response
+
+        with patch("src.grammar_generator.ensure_lm_model_loaded"):
+            with pytest.raises(ValueError, match="LM Studio returned no message content"):
+                generate_grammar(user_prompt=user_prompt, use_cache=True)
+
+    # No cache file should be written — the error must prevent caching
+    assert not (mock_cache_dir / f"{prompt_hash}.tracery.json").exists()
+    assert not (mock_cache_dir / f"{prompt_hash}.raw.txt").exists()
