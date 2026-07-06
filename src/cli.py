@@ -320,7 +320,7 @@ def main(
         click.echo("Error: --from-prompts requires --generate-images", err=True)
         sys.exit(1)
 
-    if not prompt and not from_grammar and not from_prompts and not clean and not enhance_images:
+    if not prompt and not from_grammar and not from_prompts and not clean and not enhance_images and not dry_run:
         click.echo("Error: --prompt is required (or use --from-grammar/--from-prompts/--enhance-images/--serve)", err=True)
         sys.exit(1)
 

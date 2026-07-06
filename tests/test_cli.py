@@ -335,12 +335,13 @@ class TestCliDryRunValidation:
     """Tests for dry-run argument validation."""
 
     def test_dry_run_without_prompt_or_grammar_exits_1(self):
-        """Test --dry-run without --prompt or --from-grammar hits the generic validation and exits 1."""
+        """Test --dry-run without --prompt or --from-grammar hits the dry-run-specific error message."""
         runner = CliRunner()
         result = runner.invoke(main, ["--dry-run"])
 
         assert result.exit_code == 1
-        assert "Error: --prompt is required" in result.output
+        # The specific _run_dry_run branch (line 509-511) prints its own error, not generic validation.
+        assert "Error: --prompt is required for --dry-run" in result.output
 
 
 class TestCliServe:
