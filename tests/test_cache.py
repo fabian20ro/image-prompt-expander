@@ -758,6 +758,43 @@ def test_get_cached_grammar_creates_missing_directory(tmp_path, monkeypatch):
     assert mock_cache_dir.exists()
 
 
+def test_get_cached_raw_response_does_not_create_missing_directory(tmp_path, monkeypatch):
+    """get_cached_raw_response must NOT create CACHE_DIR when it does not exist.
+
+    Unlike ``get_cached_grammar``, which defensively calls ``CACHE_DIR.mkdir`` on every
+    call (creating the full parent tree), ``get_cached_raw_response`` relies on
+    ``Path.exists()`` returning False for paths inside non-existent directories — a
+    harmless no-op that avoids unnecessary filesystem side effects.
+
+    Documenting this asymmetric behavior explicitly prevents future refactors from
+    silently making it symmetric (e.g., by adding an unconditional ``mkdir`` call to
+    the raw-response getter) and breaking callers that depend on minimal I/O.
+    """
+    mock_cache_dir = tmp_path / "deep" / "nested" / "cache"
+    # Do NOT call .mkdir() — directory must not exist yet
+    monkeypatch.setattr("src.grammar_generator.CACHE_DIR", mock_cache_dir)
+
+    prompt_hash = "raw_no_mkdir_test"
+
+    with pytest.MonkeyPatch.context() as mp:
+        # Patch mkdir on Path to track whether the cache dir was touched
+        original_mkdir = Path.mkdir
+        mkdir_calls = []
+
+        def spy_mkdir(self, *args, **kwargs):
+            mkdir_calls.append((self, args, kwargs))
+            return original_mkdir(self, *args, **kwargs)
+
+        mp.setattr("pathlib.Path.mkdir", spy_mkdir)
+
+        # Act: read raw response from a non-existent cache directory
+        retrieved = get_cached_raw_response(prompt_hash)
+
+    # Assert: returns None without creating CACHE_DIR (asymmetric with get_cached_grammar)
+    assert retrieved is None
+    assert not mock_cache_dir.exists()
+
+
 def test_generate_grammar_skips_cache_when_use_cache_false(tmp_path, monkeypatch):
     """generate_grammar with use_cache=False must NOT cache results, even after a successful LLM call.
 
