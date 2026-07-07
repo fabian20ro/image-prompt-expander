@@ -109,6 +109,20 @@ class TestAppendGrammarRevision:
         history = append_grammar_revision(run_dir, "test", grammar="rule_a  ", action="initial")
         assert len(history) == 1
 
+    def test_appends_when_whitespace_differs_and_action_changes(self, run_dir):
+        """Dedup skips only when BOTH grammar (whitespace-normalized) AND action match.
+
+        Verifies the contract boundary: whitespace-asymmetric grammars still append if
+        the action differs from the last revision's action — confirming that dedup is
+        an exact-match gate on both fields, not a single-field short-circuit.
+        """
+        append_grammar_revision(run_dir, "test", grammar="rule_a", action="initial")
+        history = append_grammar_revision(
+            run_dir, "test", grammar="  rule_a  ", action="update"
+        )
+        assert len(history) == 2
+        assert history[1]["action"] == "update"
+
     def test_creates_history_file_on_first_append(self, run_dir):
         append_grammar_revision(run_dir, "test", grammar="rule_a", action="initial")
         path = _history_path(run_dir, "test")
