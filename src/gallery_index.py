@@ -194,7 +194,7 @@ def _extract_flat_archive_infos(saved_dir: Path, interactive: bool = False) -> l
             "prefix": prefix,
             "timestamp": timestamp,
             "display_time": display_time,
-            "user_prompt": metadata.get("user_prompt", "Archived images"),
+            "user_prompt": metadata.get("display_title") or metadata.get("user_prompt", "Archived images"),
             "image_count": archive["image_count"],
             "model": metadata.get("model", "N/A"),
             "first_image": first_image,
