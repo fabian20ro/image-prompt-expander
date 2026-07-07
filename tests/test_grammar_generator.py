@@ -118,6 +118,25 @@ class TestGrammarTools(unittest.TestCase):
         self.assertEqual(h1, h2)
         self.assertNotEqual(h1, h3)
 
+    def test_hash_prompt_binds_schema_version(self):
+        # The grammar cache key must include the schema version so that when
+        # PROMPT_SCHEMA_VERSION changes (e.g. from "ernie-v2" to a future v3),
+        # stale grammars are not reused across schemas — preserving correctness
+        # of the entire generation pipeline on cache hit.
+        prompt = "a cat"
+
+        # Snapshot original schema, then mutate it and confirm the hash changes.
+        from grammar_generator import PROMPT_SCHEMA_VERSION as original_schema
+
+        with patch("grammar_generator.PROMPT_SCHEMA_VERSION", new="v99"):
+            h_mutated = hash_prompt(prompt)
+
+        self.assertNotEqual(h_mutated, hash_prompt(prompt))
+        # Restore so subsequent tests see the real schema.
+        with patch("grammar_generator.PROMPT_SCHEMA_VERSION", original_schema):
+            h_restored = hash_prompt(prompt)
+        self.assertEqual(h_restored, hash_prompt(prompt))
+
     @patch("grammar_generator.Path.exists")
     @patch("grammar_generator.Path.read_text")
     @patch("grammar_generator.paths")
