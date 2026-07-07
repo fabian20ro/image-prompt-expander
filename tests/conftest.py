@@ -121,3 +121,55 @@ def test_create_run_files_integrity(temp_dir):
     assert (run_dir / f"{prefix}_grammar.json").exists()
     for i in range(num_prompts):
         assert (run_dir / f"{prefix}_{i}.txt").exists()
+
+
+def test_create_run_files_with_images(temp_dir):
+    """Verify create_run_files writes image files when create_images=True."""
+    num_prompts = 2
+    prefix = "img_run"
+    run_dir = create_run_files(
+        temp_dir / "img_run",
+        prefix=prefix,
+        num_prompts=num_prompts,
+        create_images=True,
+    )
+    for i in range(num_prompts):
+        img_path = run_dir / f"{prefix}_{i}_0.png"
+        assert img_path.exists()
+        assert img_path.read_bytes() == b"fake image"
+
+
+def test_create_run_files_custom_metadata(temp_dir):
+    """Verify create_run_files writes custom metadata and grammar to disk."""
+    num_prompts = 1
+    prefix = "custom_run"
+    run_dir = temp_dir / "custom_run"
+
+    meta = {"prefix": prefix, "count": num_prompts, "user_prompt": "a river"}
+    gram = {"origin": ["river scene"], "scene": ["valley"]}
+
+    returned = create_run_files(
+        run_dir,
+        prefix=prefix,
+        num_prompts=num_prompts,
+        metadata=meta,
+        grammar=gram,
+    )
+
+    # Metadata round-trips exactly as provided
+    written_meta = json.loads((returned / f"{prefix}.metaprompt.json").read_text())
+    assert written_meta == meta
+
+    # Grammar round-trips exactly as provided
+    written_gram = json.loads((returned / f"{prefix}_grammar.json").read_text())
+    assert written_gram == gram
+
+
+def test_create_run_files_exist_ok(temp_dir):
+    """Verify create_run_files succeeds when directory already exists."""
+    prefix = "exist_ok"
+    run_subdir = temp_dir / "existing" / prefix
+    run_subdir.mkdir(parents=True)  # pre-create the parent
+
+    returned = create_run_files(run_subdir, prefix=prefix, num_prompts=1)
+    assert returned == run_subdir
