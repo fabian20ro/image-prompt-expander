@@ -91,6 +91,23 @@ class TestGetEnhancer:
 
         assert result.tiling_config is None
 
+    @patch("image_enhancer._enhancer_cache", {})
+    def test_get_enhancer_default_no_args(self):
+        """Test the default no-args path: quantize=8 and tiling disabled."""
+        mock_instance = MagicMock()
+        mock_instance.tiling_config = MagicMock()
+
+        module_seedvr2 = ModuleType("mflux.models.seedvr2.variants.upscale.seedvr2")
+        module_seedvr2.SeedVR2 = MagicMock(return_value=mock_instance)
+
+        with patch.dict(sys.modules, {
+            "mflux.models.seedvr2.variants.upscale.seedvr2": module_seedvr2,
+        }):
+            result = _get_enhancer()
+
+        module_seedvr2.SeedVR2.assert_called_once_with(quantize=8)
+        assert result.tiling_config is None
+
 
 class TestEnhanceImage:
     """Tests for single image enhancement."""
