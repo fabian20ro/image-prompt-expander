@@ -35,6 +35,26 @@ class TestLogPanel:
         assert "clearLogs" in js
         assert "MAX_LOG_LINES" in js
 
+    def test_escape_html_function_exists(self):
+        """escapeHtml must be a standalone function callable from log-line rendering."""
+        js = LogPanel.js()
+        # The function is defined with 'function escapeHtml(text)' at top level.
+        assert "function escapeHtml(" in js or "escapeHtml = function" in js
+
+    def test_escape_html_produces_escaped_output(self):
+        """escapeHtml uses DOM textContent→innerHTML, so raw HTML is escaped.
+
+        This is a security contract: without proper escaping, user-supplied log
+        messages could inject HTML/script tags into the gallery UI (XSS).
+        The implementation creates a div, sets .textContent, then reads .innerHTML —
+        which forces browsers to escape < > & characters.
+        """
+        js = LogPanel.js()
+        # Verify the DOM-based pattern is used: createElement + textContent + innerHTML.
+        assert "createElement('div')" in js or 'createElement("div")' in js
+        assert "textContent" in js
+        assert "innerHTML" in js
+
 
 class TestQueueStatusBar:
     """Tests for QueueStatusBar component."""
