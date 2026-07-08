@@ -47,8 +47,21 @@ def append_grammar_revision(
     prefix: str,
     grammar: str,
     action: str,
+    max_revisions: int = 100,
 ) -> list[dict]:
-    """Append a revision if the grammar changed or action is new."""
+    """Append a revision if the grammar changed or action is new.
+
+    Args:
+        run_dir: Directory where history files are stored.
+        prefix: Filename prefix for history and grammar files.
+        grammar: The grammar string to record as a revision.
+        action: Semantic label for this revision (e.g. "initial", "update").
+        max_revisions: Trim the history to this many recent entries when saving.
+            Defaults to 100 to cap disk usage in long sessions.
+
+    Returns:
+        The updated history list.
+    """
     if not grammar.strip():
         return load_grammar_history(run_dir, prefix)
     history_path = _history_path(run_dir, prefix)
@@ -56,8 +69,6 @@ def append_grammar_revision(
     history = load_grammar_history(run_dir, prefix)
     last = history[-1] if history else None
     if last and last.get("grammar", "").strip() == grammar.strip() and last.get("action") == action:
-        if not history_exists:
-            save_grammar_history(run_dir, prefix, history)
         return history
 
     history.append({
@@ -66,5 +77,7 @@ def append_grammar_revision(
         "action": action,
         "grammar": grammar,
     })
+    if max_revisions and len(history) > max_revisions:
+        history = history[-max_revisions:]
     save_grammar_history(run_dir, prefix, history)
     return history

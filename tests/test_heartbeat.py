@@ -13,12 +13,13 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from src.server.worker_subprocess import Heartbeat
 
+
 @pytest.mark.asyncio
 async def test_heartbeat_emits_progress():
     """Test that Heartbeat emits progress messages during its interval."""
-    
+
     progress_events = []
-    
+
     def mock_emit_progress(stage: str, current: int = 0, total: int = 0, message: str = ""):
         progress_events.append((stage, current, total, message))
 
@@ -27,7 +28,7 @@ async def test_heartbeat_emits_progress():
         with Heartbeat(message="test message", interval=0.1) as hb:
             # Allow enough time for at least one heartbeat
             await asyncio.sleep(0.25)
-            
+
     assert len(progress_events) >= 1
     assert progress_events[0][0] == "heartbeat"
     assert progress_events[0][1] == 0
@@ -36,9 +37,9 @@ async def test_heartbeat_emits_progress():
 @pytest.mark.asyncio
 async def test_heartbeat_stops_on_exit():
     """Test that Heartbeat stops when exiting the context manager."""
-    
+
     heartbeats_count = 0
-    
+
     def mock_emit_progress(stage: str, current: int = 0, total: int = 0, message: str = ""):
         nonlocal heartbeats_count
         heartbeats_count += 1
@@ -47,14 +48,31 @@ async def test_heartbeat_stops_on_exit():
         with Heartbeat(message="test message", interval=0.1) as hb:
             await asyncio.sleep(0.05)
             # Should have at least 0 or 1 heartbeats
-            assert heartbeats_count < 5 
+            assert heartbeats_count < 5
             # Exit context manager
             pass
-            
+
         # After exit, heartbeats should stop
         count_after_exit = heartbeats_count
         await asyncio.sleep(0.2)
         assert heartbeats_count == count_after_exit
+
+@pytest.mark.asyncio
+async def test_heartbeat_no_progress_on_immediate_exit():
+    """Test that no progress is emitted if Heartbeat exits before first heartbeat interval."""
+
+    progress_events = []
+
+    def mock_emit_progress(stage: str, current: int = 0, total: int = 0, message: str = ""):
+        progress_events.append((stage, current, total, message))
+
+    with patch('src.server.worker_subprocess.emit_progress', side_effect=mock_emit_progress):
+        # Exit immediately - before first heartbeat interval elapses
+        with Heartbeat(message="test", interval=1.0) as hb:
+            pass  # Context manager exits immediately
+
+    assert len(progress_events) == 0
+
 
 if __name__ == "__main__":
     import pytest

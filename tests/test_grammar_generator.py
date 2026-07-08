@@ -7,16 +7,17 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 from unittest.mock import patch, MagicMock
 from grammar_generator import (
-    clean_grammar_output, 
-    get_system_prompt, 
-    hash_prompt, 
-    get_cached_grammar, 
-    cache_grammar, 
+    clean_grammar_output,
+    get_system_prompt,
+    hash_prompt,
+    get_cached_grammar,
+    cache_grammar,
     get_cached_raw_response,
     generate_grammar,
     ensure_lm_model_loaded,
     validate_grammar_structure,
 )
+
 
 class TestCache(unittest.TestCase):
     """Tests for the caching mechanisms."""
@@ -53,13 +54,14 @@ class TestCache(unittest.TestCase):
         raw_response = '<think>...</think>{"origin": "#prompt#"}'
         user_prompt = "a sunset"
         mock_datetime.now.return_value.isoformat.return_value = "2023-01-01T12:00:00"
-        
+
         result = cache_grammar(prompt_hash, grammar, raw_response, user_prompt)
 
         assert isinstance(result, tuple)
         assert result[0] == grammar
         assert result[1] is False
         assert result[2] == raw_response
+
 
 class TestGrammarTools(unittest.TestCase):
     """Tests for grammar utility functions."""
@@ -79,9 +81,31 @@ class TestGrammarTools(unittest.TestCase):
         expected = '{"key": "value"}'
         self.assertEqual(clean_grammar_output(input_str), expected)
 
+    def test_clean_grammar_output_normalizes_smart_single_quotes(self):
+        # The clean_grammar_output smart-quote normalizer must handle both
+        # left/right single quotes so LLM output round-trips as valid Python dict
+        # (straight singles are still invalid JSON — the caller must re-quote).
+        input_str = "{\u2018key\u2019: \u2018value\u2019}"
+        expected = "{'key': 'value'}"
+        self.assertEqual(clean_grammar_output(input_str), expected)
+
     def test_clean_grammar_output_extracts_json(self):
         input_str = 'Some noise here {"a": 1} and some noise there'
         expected = '{"a": 1}'
+        self.assertEqual(clean_grammar_output(input_str), expected)
+
+    def test_clean_grammar_output_handles_tracery_code_blocks(self):
+        # When LM Studio tags the code block as ```tracery instead of ```json,
+        # clean_grammar_output must still extract the JSON content.
+        input_str = '<think>thinking</think>```tracery\n{"origin":["#subject#"]}\n```'
+        expected = '{"origin":["#subject#"]}'
+        self.assertEqual(clean_grammar_output(input_str), expected)
+
+    def test_clean_grammar_output_handles_trailing_text_after_json(self):
+        # After extracting the first valid JSON, trailing noise after closing ```
+        # must not leak into the returned string.
+        input_str = '```json\n{"key": "val"}\n```\nSome trailing noise'
+        expected = '{"key": "val"}'
         self.assertEqual(clean_grammar_output(input_str), expected)
 
     def test_hash_prompt(self):
@@ -89,10 +113,29 @@ class TestGrammarTools(unittest.TestCase):
         h1 = hash_prompt(prompt)
         h2 = hash_prompt(prompt)
         h3 = hash_prompt("another prompt")
-        
+
         self.assertEqual(len(h1), 12)
         self.assertEqual(h1, h2)
         self.assertNotEqual(h1, h3)
+
+    def test_hash_prompt_binds_schema_version(self):
+        # The grammar cache key must include the schema version so that when
+        # PROMPT_SCHEMA_VERSION changes (e.g. from "ernie-v2" to a future v3),
+        # stale grammars are not reused across schemas — preserving correctness
+        # of the entire generation pipeline on cache hit.
+        prompt = "a cat"
+
+        # Snapshot original schema, then mutate it and confirm the hash changes.
+        from grammar_generator import PROMPT_SCHEMA_VERSION as original_schema
+
+        with patch("grammar_generator.PROMPT_SCHEMA_VERSION", new="v99"):
+            h_mutated = hash_prompt(prompt)
+
+        self.assertNotEqual(h_mutated, hash_prompt(prompt))
+        # Restore so subsequent tests see the real schema.
+        with patch("grammar_generator.PROMPT_SCHEMA_VERSION", original_schema):
+            h_restored = hash_prompt(prompt)
+        self.assertEqual(h_restored, hash_prompt(prompt))
 
     @patch("grammar_generator.Path.exists")
     @patch("grammar_generator.Path.read_text")
@@ -101,7 +144,7 @@ class TestGrammarTools(unittest.TestCase):
         mock_paths.templates_dir = Path("/tmp/templates")
         mock_exists.return_value = True
         mock_read_text.return_value = "system prompt content"
-        
+
         result = get_system_prompt()
         self.assertEqual(result, "system prompt content")
 
@@ -206,7 +249,7 @@ class TestGrammarStructureValidation(unittest.TestCase):
         })
 
     def test_rejects_two_to_four_alternatives(self):
-        with self.assertRaisesRegex(ValueError, "5–7 alternatives"):
+        with self.assertRaisesRegex(ValueError, "5\u20137 alternatives"):
             validate_grammar_structure({
                 "origin": ["A #subject#."],
                 "subject": ["fox", "owl", "hare", "badger"],
@@ -222,6 +265,23 @@ class TestGrammarStructureValidation(unittest.TestCase):
     def test_rejects_grammar_without_variation(self):
         with self.assertRaisesRegex(ValueError, "at least one varying rule"):
             validate_grammar_structure({"origin": ["A fixed prompt."]})
+
+    def test_rejects_too_many_rules(self):
+        # The grammar must contain at most 8 rules; more than that cannot be
+        # reliably rendered and risks silent degradation of the generation pipeline.
+        with self.assertRaisesRegex(ValueError, "at most 8"):
+            validate_grammar_structure({
+                "origin": ["#a#"],
+                "a": ["x"],
+                "b": ["y"],
+                "c": ["z"],
+                "d": ["w"],
+                "e": ["v"],
+                "f": ["u"],
+                "g": ["t"],
+                "h": ["s"],
+            })
+
 
 if __name__ == "__main__":
     unittest.main()

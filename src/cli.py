@@ -14,6 +14,21 @@ from pipeline import PipelineExecutor
 from utils import check_lm_studio
 
 
+def _read_prompt_from_stdin(prompt: str | None) -> str | None:
+    """If prompt is '-' read from stdin, otherwise return unchanged."""
+    if prompt == "-":
+        try:
+            text = sys.stdin.read().strip()
+            if not text:
+                click.echo("Error: empty prompt read from stdin", err=True)
+                sys.exit(1)
+            return text
+        except KeyboardInterrupt:
+            click.echo("\nInterrupted.", err=True)
+            sys.exit(130)
+    return prompt
+
+
 def clean_generated():
     """Remove all generated files (grammars and prompts)."""
     count = 0
@@ -36,6 +51,11 @@ def cli_progress(stage: str, current: int = 0, total: int = 0, message: str = ""
             click.echo(f"  [{current}/{total}] {message}")
         else:
             click.echo(message)
+
+
+def _status_echo(message: str) -> None:
+    """Write informational status message to stderr (keeps stdout clean for --json)."""
+    click.echo(message, err=True)
 
 
 @click.command()
@@ -186,6 +206,11 @@ def cli_progress(stage: str, current: int = 0, total: int = 0, message: str = ""
     '--json', 'as_json', is_flag=True, default=False,
     help='Output summary as JSON (useful for scripting)'
 )
+@click.option(
+    '--dump-config',
+    is_flag=True,
+    help='Print all effective settings and exit (no pipeline runs)',
+)
 def main(
     prompt: str | None,
     clean: bool,
@@ -214,7 +239,8 @@ def main(
     port: int,
     as_json: bool = False,
     quiet: bool = False,
-    version_check: bool = False
+    version_check: bool = False,
+    dump_config: bool = False,
 ):
     """
     Generate ERNIE-Image-Turbo prompt variations using local LLM-powered Tracery grammars.
@@ -242,10 +268,18 @@ def main(
         uv run python src/cli.py --enhance-images path/to/folder/
         uv run python src/cli.py --enhance-images "generated/prompts/*/test_*.png"
     """
+
+    prompt = _read_prompt_from_stdin(prompt)
+
+    # Handle --dump-config: print all settings and exit
+    if dump_config:
+        _print_settings()
+        return
+
     # Handle --version-check
     if version_check:
         if check_lm_studio(base_url):
-            click.echo(f"Successfully connected to LM Studio at {base_url}")
+            _status_echo(f"Successfully connected to LM Studio at {base_url}")
             return
         else:
             click.echo(f"Error: LM Studio is not reachable at {base_url}.", err=True)
@@ -258,9 +292,9 @@ def main(
         removed = clean_generated()
         if not quiet:
             if removed == 0:
-                click.echo("Nothing to clean.")
+                _status_echo("Nothing to clean.")
             else:
-                click.echo(f"Cleaned {removed} items from {paths.generated_dir}")
+                _status_echo(f"Cleaned {removed} items from {paths.generated_dir}")
         if not prompt and not from_grammar and not from_prompts and not enhance_images and not serve:
             return
 
@@ -270,8 +304,8 @@ def main(
         import threading
 
         if not quiet:
-            click.echo(f"Starting web UI server at http://localhost:{port}")
-            click.echo("Press Ctrl+C to stop")
+            _status_echo(f"Starting web UI server at http://localhost:{port}")
+            _status_echo("Press Ctrl+C to stop")
 
         def open_browser():
             import time
@@ -303,7 +337,7 @@ def main(
         click.echo("Error: --from-prompts requires --generate-images", err=True)
         sys.exit(1)
 
-    if not prompt and not from_grammar and not from_prompts and not clean and not enhance_images:
+    if not prompt and not from_grammar and not from_prompts and not clean and not enhance_images and not dry_run:
         click.echo("Error: --prompt is required (or use --from-grammar/--from-prompts/--enhance-images/--serve)", err=True)
         sys.exit(1)
 
@@ -492,6 +526,26 @@ def _run_dry_run(
     else:
         click.echo("Error: --prompt is required for --dry-run", err=True)
         sys.exit(1)
+
+
+def _print_settings() -> None:
+    """Print all effective settings with their current values."""
+    import dataclasses as dc
+
+    print("ERNIE-Image-Turbo CLI Settings")
+    print("=" * 50)
+    for name, obj in [("LM Studio", settings.lm_studio),
+                       ("Image Generation", settings.image_generation),
+                       ("Server", settings.server),
+                       ("Enhancement", settings.enhancement)]:
+        print(f"\n[{name}]")
+        if dc.is_dataclass(obj):
+            for field in dc.fields(obj):
+                value = getattr(obj, field.name)
+                # Format paths as strings, others normally
+                if hasattr(value, '__fspath__'):
+                    value = str(value)
+                print(f"  {field.name}: {value}")
 
 
 if __name__ == '__main__':

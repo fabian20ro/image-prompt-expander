@@ -173,7 +173,12 @@ class TestRunFullPipeline:
     def test_run_full_pipeline_prompts_only(
         self, mock_index, mock_gallery, mock_tracery, mock_grammar, temp_dir
     ):
-        """Test full pipeline without image generation."""
+        """Test full pipeline without image generation.
+
+        Verifies progress callback sequence ordering, metadata structure content,
+        and prompt file naming conventions to catch regressions in flow logic
+        rather than just the success flag.
+        """
         mock_grammar.return_value = ('{"origin": ["test"]}', False, "raw response")
         mock_tracery.return_value = ["prompt 1", "prompt 2", "prompt 3"]
         mock_gallery.return_value = temp_dir / "test_gallery.html"
@@ -201,13 +206,37 @@ class TestRunFullPipeline:
         assert result.image_count == 0
         assert result.output_dir is not None
 
-        # Check progress was reported
-        assert any(s == "generating_grammar" for s, _, _, _ in progress_calls)
-        assert any(s == "expanding_prompts" for s, _, _, _ in progress_calls)
+        # Verify progress callback sequence ordering: grammar -> expansion start -> expansion end
+        stages = [s for s, _, _, _ in progress_calls]
+        grammar_idx = stages.index("generating_grammar")
+        expand_start = stages.index("expanding_prompts")
+        expand_end = stages.index("expanding_prompts", expand_start + 1)
+        assert expand_start < expand_end  # expansion starts and ends at distinct calls
+        assert stages[grammar_idx] == "generating_grammar"
 
-        # Check files were created
-        assert result.output_dir.exists()
-        assert (result.output_dir / "test.metaprompt.json").exists()
+        # Verify progress callback message content for grammar stage
+        grammar_messages = [m for s, _, _, m in progress_calls if s == "generating_grammar"]
+        assert len(grammar_messages) >= 2  # start + end messages
+        assert any("test prompt" in msg for msg in grammar_messages)
+
+        # Verify expansion counts are correct (count=3)
+        expand_start_call = next(c for c in progress_calls if c[0] == "expanding_prompts" and c[1] == 0)
+        assert expand_start_call[2] == 3  # total should match count
+
+        # Verify prompt files were created with correct naming convention (numbered prompts)
+        expected_prompt_files = [result.output_dir / f"test_{i}.txt" for i in range(3)]
+        for expected_file in expected_prompt_files:
+            assert expected_file.exists(), f"Expected file {expected_file.name} not found"
+
+        # Verify metadata file content structure
+        import json as _json
+        meta_file = result.output_dir / "test.metaprompt.json"
+        with open(meta_file) as f:
+            meta_content = _json.load(f)
+        assert meta_content["prefix"] == "test"
+        assert meta_content["count"] == 3
+        assert meta_content["user_prompt"] == "test prompt"
+        assert "created_at" in meta_content
 
     @patch("pipeline.generate_grammar")
     def test_run_full_pipeline_grammar_failure(self, mock_grammar, temp_dir):

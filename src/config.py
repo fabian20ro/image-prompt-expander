@@ -1,8 +1,16 @@
 import math
 import os
+import platform
 import logging
 from dataclasses import dataclass, field
 from pathlib import Path
+
+
+def _default_model_path() -> Path:
+    """Cross-platform default path for the mflux model."""
+    if platform.system() == "Darwin":
+        return Path.home() / "Library/Caches/mflux/models/ernie-image-turbo-4bit"
+    return Path.home() / ".cache" / "mflux" / "models" / "ernie-image-turbo-4bit"
 
 logger = logging.getLogger(__name__)
 
@@ -49,7 +57,7 @@ class LMStudioConfig:
     timeout: float = 60.0  # seconds
 
     def __post_init__(self):
-        if self.timeout <= 0:
+        if math.isnan(self.timeout) or self.timeout <= 0:
             raise ValueError("timeout must be positive")
 
 @dataclass(frozen=True)
@@ -58,7 +66,7 @@ class ImageGenerationConfig:
     default_width: int = 864
     default_height: int = 1152
     seed: int = 0
-    model_path: Path = Path.home() / "Library/Caches/mflux/models/ernie-image-turbo-4bit"
+    model_path: Path = _default_model_path()
 
     def __post_init__(self):
         if self.default_width <= 0:
@@ -74,9 +82,9 @@ class ServerConfig:
     worker_timeout: float = 300.0  # seconds
 
     def __post_init__(self):
-        if self.sse_timeout <= 0:
+        if math.isnan(self.sse_timeout) or self.sse_timeout <= 0:
             raise ValueError("sse_timeout must be positive")
-        if self.worker_timeout <= 0:
+        if math.isnan(self.worker_timeout) or self.worker_timeout <= 0:
             raise ValueError("worker_timeout must be positive")
 
 @dataclass(frozen=True)
@@ -160,7 +168,7 @@ class Settings:
             seed=_get_env_int("PROMPT_GEN_IMAGE_SEED", 0),
             model_path=Path(os.environ.get(
                 "PROMPT_GEN_ERNIE_MODEL_PATH",
-                str(ImageGenerationConfig.model_path),
+                str(_default_model_path()),
             )),
         )
         server = ServerConfig(

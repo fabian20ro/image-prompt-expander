@@ -109,6 +109,20 @@ class TestAppendGrammarRevision:
         history = append_grammar_revision(run_dir, "test", grammar="rule_a  ", action="initial")
         assert len(history) == 1
 
+    def test_appends_when_whitespace_differs_and_action_changes(self, run_dir):
+        """Dedup skips only when BOTH grammar (whitespace-normalized) AND action match.
+
+        Verifies the contract boundary: whitespace-asymmetric grammars still append if
+        the action differs from the last revision's action — confirming that dedup is
+        an exact-match gate on both fields, not a single-field short-circuit.
+        """
+        append_grammar_revision(run_dir, "test", grammar="rule_a", action="initial")
+        history = append_grammar_revision(
+            run_dir, "test", grammar="  rule_a  ", action="update"
+        )
+        assert len(history) == 2
+        assert history[1]["action"] == "update"
+
     def test_creates_history_file_on_first_append(self, run_dir):
         append_grammar_revision(run_dir, "test", grammar="rule_a", action="initial")
         path = _history_path(run_dir, "test")
@@ -128,3 +142,47 @@ class TestLoadGrammarHistoryEdgeCases:
         history = append_grammar_revision(run_dir, "test", grammar="   ", action="initial")
         assert len(history) == 1
         assert history[0]["grammar"] == "initial"
+
+
+class TestAppendGrammarRotation:
+    def test_rotation_trims_to_max_revisions(self, run_dir):
+        for i in range(5):
+            append_grammar_revision(run_dir, "test", grammar=f"rule_{i}", action="update")
+        history = append_grammar_revision(run_dir, "test", grammar="final", action="update", max_revisions=3)
+        assert len(history) == 3
+        assert history[0]["grammar"] == "rule_3"
+        assert history[-1]["grammar"] == "final"
+
+    def test_no_rotation_when_under_limit(self, run_dir):
+        append_grammar_revision(run_dir, "test", grammar="a", action="initial")
+        append_grammar_revision(run_dir, "test", grammar="b", action="update")
+        history = append_grammar_revision(run_dir, "test", grammar="c", action="update", max_revisions=10)
+        assert len(history) == 3
+
+    def test_no_rotation_on_dedup_match(self, run_dir):
+        """Dedup must not trigger rotation — unchanged revisions are skipped."""
+        append_grammar_revision(run_dir, "test", grammar="a", action="initial")
+        history = append_grammar_revision(
+            run_dir, "test", grammar="a", action="initial", max_revisions=1
+        )
+        assert len(history) == 1
+
+    def test_zero_max_revisions_disables_rotation(self, run_dir):
+        for i in range(5):
+            append_grammar_revision(run_dir, "test", grammar=f"rule_{i}", action="update")
+        history = append_grammar_revision(run_dir, "test", grammar="final", action="update", max_revisions=0)
+        assert len(history) == 6
+
+    def test_rotation_persists_to_disk(self, run_dir):
+        for i in range(10):
+            append_grammar_revision(run_dir, "test", grammar=f"rule_{i}", action="update")
+        # Read back — should reflect trimmed state (default max_revisions=100)
+        loaded = load_grammar_history(run_dir, "test")
+        assert len(loaded) == 10
+
+    def test_rotation_with_small_max_persists(self, run_dir):
+        for i in range(5):
+            append_grammar_revision(run_dir, "small_test", grammar=f"s{i}", action="update", max_revisions=3)
+        loaded = load_grammar_history(run_dir, "small_test")
+        assert len(loaded) == 3
+        assert loaded[0]["grammar"] == "s2"

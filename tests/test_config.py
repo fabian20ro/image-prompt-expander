@@ -43,6 +43,25 @@ class TestConfig:
             assert settings.server.sse_queue_size == 200
             assert settings.image_generation.seed == 42
 
+    def test_cross_platform_default_model_path(self):
+        """Test that model path uses cross-platform fallback on non-macOS."""
+        from config import _default_model_path, ImageGenerationConfig
+
+        default = _default_model_path()
+        assert isinstance(default, Path)
+        # On any platform this should resolve to a sensible location
+        assert "mflux" in str(default)
+        assert "ernie-image-turbo-4bit" in str(default)
+
+    def test_env_override_uses_default_function(self):
+        """Test that env override still works with cross-platform default."""
+        from config import _default_model_path, ImageGenerationConfig
+
+        custom_path = "/custom/model/path"
+        with patch.dict(os.environ, {"PROMPT_GEN_ERNIE_MODEL_PATH": custom_path}):
+            settings = Settings.from_env()
+            assert str(settings.image_generation.model_path) == custom_path
+
     def test_immutable_config(self):
         """Test that config dataclasses are immutable."""
         config = LMStudioConfig()
@@ -102,6 +121,52 @@ class TestConfig:
             with patch.dict(os.environ, {"PROMPT_GEN_DEFAULT_WIDTH": bad_value}):
                 settings = Settings.from_env()
                 assert settings.image_generation.default_width == 864
+
+    def test_float_inf_env_var_falls_back_to_default(self):
+        """Test that _get_env_float rejects Infinity values for float env vars."""
+        from config import Settings, ServerConfig, _get_env_float
+        with patch.dict(os.environ, {"PROMPT_GEN_SSE_TIMEOUT": "inf"}):
+            settings = Settings.from_env()
+            assert settings.server.sse_timeout == ServerConfig.sse_timeout
+
+    def test_get_env_float_logs_warning_on_nan(self):
+        """Test that _get_env_float emits a warning when NaN is encountered."""
+        from config import _get_env_float, logger
+        with patch.dict(os.environ, {"PROMPT_GEN_SSE_TIMEOUT": "nan"}), \
+             patch.object(logger, "warning") as mock_warn:
+            result = _get_env_float("PROMPT_GEN_SSE_TIMEOUT", ServerConfig.sse_timeout)
+            assert result == ServerConfig.sse_timeout
+            mock_warn.assert_called_once()
+
+    def test_get_env_str_ignores_empty_string(self):
+        """Test that _get_env_str returns default when env var is empty."""
+        from config import _get_env_str, LMStudioConfig
+        with patch.dict(os.environ, {"PROMPT_GEN_LM_STUDIO_URL": ""}):
+            result = _get_env_str("PROMPT_GEN_LM_STUDIO_URL", LMStudioConfig.base_url)
+            assert result == LMStudioConfig.base_url
+
+    def test_get_env_float_rejects_nan(self):
+        """Test that _get_env_float returns default and logs warning on NaN."""
+        from config import _get_env_float, logger, ServerConfig
+        with patch.dict(os.environ, {"PROMPT_GEN_SSE_TIMEOUT": "nan"}), \
+             patch.object(logger, "warning") as mock_warn:
+            result = _get_env_float("PROMPT_GEN_SSE_TIMEOUT", ServerConfig.sse_timeout)
+            assert result == ServerConfig.sse_timeout
+            mock_warn.assert_called_once()
+
+    def test_nan_timeout_raises(self):
+        """Test that NaN timeout values raise ValueError instead of silently passing."""
+        import math
+        with pytest.raises(ValueError, match="timeout must be positive"):
+            LMStudioConfig(timeout=float("nan"))
+
+    def test_nan_server_timeouts_raise(self):
+        """Test that NaN server timeouts raise ValueError instead of silently passing."""
+        import math
+        with pytest.raises(ValueError, match="sse_timeout must be positive"):
+            ServerConfig(sse_timeout=float("nan"))
+        with pytest.raises(ValueError, match="worker_timeout must be positive"):
+            ServerConfig(worker_timeout=float("nan"))
 
     def test_path_properties(self):
         """Verify path properties are Path objects and correct."""

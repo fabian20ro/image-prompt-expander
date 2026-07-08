@@ -7,7 +7,12 @@ import sys
 # Add src to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
-from grammar_generator import get_system_prompt, hash_prompt, clean_grammar_output
+from grammar_generator import (
+    _api_root,
+    get_system_prompt,
+    hash_prompt,
+    clean_grammar_output,
+)
 
 def test_get_system_prompt_default(tmp_path):
     # Given
@@ -75,3 +80,23 @@ def test_clean_grammar_output_no_blocks():
     result = clean_grammar_output(raw)
     # Then
     assert result == '{"a": 1}'
+
+
+# ---------------------------------------------------------------------------
+# _api_root — pure URL transformation (no side effects, no mocks needed)
+# ---------------------------------------------------------------------------
+
+def test_api_root_strips_v1_suffix():
+    """LM Studio base URLs conventionally end in /v1; _api_root must strip it."""
+    assert _api_root("http://localhost:1234/v1") == "http://localhost:1234"
+
+
+def test_api_root_handles_trailing_slash_with_v1():
+    """Trailing slash before /v1 should still resolve to the server root."""
+    assert _api_root("http://localhost:1234/v1/") == "http://localhost:1234"
+
+
+def test_api_root_leaves_non_v1_urls_unchanged():
+    """Non-LM-Studio URLs (no /v1 segment) should round-trip untouched."""
+    url = "http://example.com/api"
+    assert _api_root(url) == url

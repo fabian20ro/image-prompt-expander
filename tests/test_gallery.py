@@ -168,52 +168,6 @@ class TestGalleryInteractive:
         assert 'id="img-images-per-prompt" name="images_per_prompt" value="0" min="0"' in content
         assert "prompt-only run" in content
         assert "Pending..." not in content
-    def test_update_gallery(self, temp_dir):
-        """Test that update_gallery correctly replaces placeholders and updates status."""
-        run_dir = temp_dir
-        prefix = "test_update"
-        gallery_path = run_dir / f"{prefix}_gallery.html"
-        image_path = run_dir / f"{prefix}_0_0.png"
-
-        # Create a dummy gallery with a placeholder
-        gallery_path.write_text(f'''<div class="card" data-image="{prefix}_0_0.png" data-prompt-idx="0" data-image-idx="0">
-            <div class="placeholder">Pending...</div>
-          </div>
-          <p class="status">Generated: 0 / 1 images</p>''')
-
-        # Create a dummy image
-        image_path.write_text("image data")
-
-        from gallery import update_gallery
-        update_gallery(gallery_path, image_path, "test prompt", 0, 1)
-
-        content = gallery_path.read_text()
-        assert f'<a href="{image_path.name}" target="_blank">' in content
-        assert '<img src="' in content
-        assert '<p class="status">Generated: 0 / 1 images</p>' in content
-
-    def test_gallery_preserves_prompt_only_layout(self, temp_dir):
-        """A persisted zero-images layout should render prompt-only cards."""
-        run_dir = temp_dir
-        metadata = {
-            "prefix": "test",
-            "count": 2,
-            "user_prompt": "prompt-only run",
-            "gallery_layout": {
-                "images_per_prompt": 0,
-                "max_prompts": 2,
-            },
-        }
-        create_run_files(run_dir, num_prompts=2, metadata=metadata)
-
-        gallery_path = generate_gallery_for_directory(run_dir, interactive=True)
-        content = gallery_path.read_text()
-
-        assert 'class="card prompt-only"' in content
-        assert 'Images/Prompt (0 = prompt-only layout)' in content
-        assert 'id="img-images-per-prompt" name="images_per_prompt" value="0" min="0"' in content
-        assert "prompt-only run" in content
-        assert "Pending..." not in content
 
     def test_update_gallery(self, temp_dir):
         """Test that update_gallery correctly replaces placeholders and updates status."""
@@ -238,3 +192,15 @@ class TestGalleryInteractive:
         assert f'<a href="{image_path.name}" target="_blank">' in content
         assert '<img src="' in content
         assert '<p class="status">Generated: 0 / 1 images</p>' in content
+
+    def test_update_gallery_skips_missing_gallery(self, temp_dir):
+        """update_gallery must be a no-op when the gallery HTML is absent."""
+        from pathlib import Path
+
+        run_dir = temp_dir
+        missing_path = run_dir / "does_not_exist_gallery.html"
+        image_path = run_dir / "test_0_0.png"
+
+        # Call update_gallery on a non-existent gallery — it should not raise.
+        update_gallery(missing_path, image_path, "prompt", 1, 1)
+        assert not missing_path.exists()
