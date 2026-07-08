@@ -266,6 +266,22 @@ class TestGrammarStructureValidation(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "at least one varying rule"):
             validate_grammar_structure({"origin": ["A fixed prompt."]})
 
+    def test_rejects_too_many_rules(self):
+        # The grammar must contain at most 8 rules; more than that cannot be
+        # reliably rendered and risks silent degradation of the generation pipeline.
+        with self.assertRaisesRegex(ValueError, "at most 8"):
+            validate_grammar_structure({
+                "origin": ["#a#"],
+                "a": ["x"],
+                "b": ["y"],
+                "c": ["z"],
+                "d": ["w"],
+                "e": ["v"],
+                "f": ["u"],
+                "g": ["t"],
+                "h": ["s"],
+            })
+
 
 if __name__ == "__main__":
     unittest.main()
