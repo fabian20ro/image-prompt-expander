@@ -221,34 +221,35 @@ class TestGalleryService:
         assert images[1].name == "test_0_1.png"
         assert images[2].name == "test_1_0.png"
 
-    def test_count_images(self, temp_dir):
-        """Test counting images."""
+    def test_count_images_multi_segment(self, temp_dir):
+        """Test counting images with multi-segment prefix (files have two segments after prefix)."""
         run_dir = temp_dir / "run_dir"
         run_dir.mkdir(parents=True)
-        (run_dir / "test_01_01.png").touch()
-        (run_dir / "test_01_02.png").touch()
-        (run_dir / "test_01_03.jpg").touch()
+        # Pattern is "{prefix}_*_*.png" so files need TWO underscore-separated segments after prefix
+        (run_dir / "test_01_run_a.png").touch()
+        (run_dir / "test_01_run_b.png").touch()
+        (run_dir / "test_01_extra.jpg").touch()  # not .png — excluded
         (run_dir / "not_an_image.txt").touch()
 
         service = GalleryService(temp_dir, temp_dir)
         assert service.count_images(run_dir, prefix="test_01") == 2
 
-    def test_list_images(self, temp_dir):
-        """Test listing images."""
+    def test_list_images_multi_segment(self, temp_dir):
+        """Test listing images with multi-segment prefix (files have two segments after prefix)."""
         run_dir = temp_dir / "run_dir"
         run_dir.mkdir(parents=True)
-        (run_dir / "test_01_01.png").touch()
-        (run_dir / "test_01_02.PNG").touch() # Note: current implementation doesn't handle case
-        (run_dir / "test_01_03.jpg").touch()
+        # Pattern is "{prefix}_*_*.png" so files need TWO underscore-separated segments after prefix
+        (run_dir / "test_01_run_a.png").touch()
+        (run_dir / "test_01_run_b.PNG").touch()  # Case-sensitive glob won't match .PNG
+        (run_dir / "test_01_extra.jpg").touch()  # not .png — excluded
         (run_dir / "not_an_image.txt").touch()
 
         service = GalleryService(temp_dir, temp_dir)
         images = service.list_images(run_dir, prefix="test_01")
-        assert len(images) == 2 # Based on current implementation: .glob(f"{prefix}_*_*.png")
-        assert any(i.name == "test_01_01.png" for i in images)
-        assert any(i.name == "test_01_02.PNG" for i in images) # This might fail if glob is case sensitive
+        assert len(images) == 1  # only the lowercase .png matches
+        assert any(i.name == "test_01_run_a.png" for i in images)
 
-    def test_count_images(self, temp_dir):
+    def test_count_images_with_timestamps(self, temp_dir):
         """Test counting images."""
         run_dir = temp_dir / "run_dir"
         run_dir.mkdir(parents=True)
@@ -260,7 +261,7 @@ class TestGalleryService:
         service = GalleryService(temp_dir, temp_dir)
         assert service.count_images(run_dir, prefix="test_01") == 2
 
-    def test_list_images(self, temp_dir):
+    def test_list_images_multi_segment(self, temp_dir):
         """Test listing images."""
         run_dir = temp_dir / "run_dir"
         run_dir.mkdir(parents=True)
