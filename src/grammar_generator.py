@@ -176,7 +176,13 @@ def generate_grammar(
 
     Returns:
         Tuple of (grammar content, was_cached, raw_response)
+
+    Raises:
+        ValueError: If user_prompt is empty or whitespace-only
     """
+    if not user_prompt.strip():
+        raise ValueError("User prompt must not be empty")
+
     prompt_hash = hash_prompt(user_prompt)
 
     # Check cache first

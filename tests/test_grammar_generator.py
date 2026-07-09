@@ -241,6 +241,41 @@ class TestGrammarTools(unittest.TestCase):
         mock_sleep.assert_called_once_with(2.0)
 
 
+class TestEmptyPromptGuard(unittest.TestCase):
+    """Tests for rejecting empty/whitespace-only prompts at the entry point."""
+
+    @patch("grammar_generator.get_system_prompt", return_value="ERNIE instructions")
+    @patch("grammar_generator.requests.post")
+    @patch("grammar_generator.requests.get")
+    def test_generate_grammar_rejects_empty_string(self, mock_get, mock_post, _mock_prompt):
+        with self.assertRaises(ValueError, msg="empty prompt must raise ValueError"):
+            generate_grammar("")
+
+    @patch("grammar_generator.get_system_prompt", return_value="ERNIE instructions")
+    @patch("grammar_generator.requests.post")
+    @patch("grammar_generator.requests.get")
+    def test_generate_grammar_rejects_whitespace_only(self, mock_get, mock_post, _mock_prompt):
+        with self.assertRaises(ValueError):
+            generate_grammar("   \t\n  ")
+
+    @patch("grammar_generator.get_system_prompt", return_value="ERNIE instructions")
+    @patch("grammar_generator.requests.post")
+    @patch("grammar_generator.requests.get")
+    def test_generate_grammar_passes_nonempty_prompt(self, mock_get, mock_post, _mock_prompt):
+        # Sanity: a real prompt still reaches the cache-hit path (returns cached grammar).
+        mock_get.return_value.json.return_value = {
+            "models": [
+                {"key": "google/gemma-4-26b-a4b-qat", "loaded_instances": [{"id": "x"}]}
+            ]
+        }
+        # Pre-populate cache so generate_grammar returns the cached result without calling LM Studio.
+        with patch("grammar_generator.get_cached_grammar", return_value='{"origin":["#s#"]}'):
+            grammar, was_cached, raw = generate_grammar("a real prompt")
+        assert was_cached is True
+        # The cache path must be reached — no POST should have been issued.
+        mock_post.assert_not_called()
+
+
 class TestApiRoot(unittest.TestCase):
     """Tests for _api_root — URL normalization before every LM Studio call."""
 
