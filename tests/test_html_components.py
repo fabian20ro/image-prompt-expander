@@ -153,6 +153,12 @@ class TestStyleClasses:
         css = GalleryStyles.css()
         assert isinstance(css, str)
         assert len(css) > 0
+        # GalleryStyles defines three gallery-specific style groups; losing any of
+        # them silently breaks the user's gallery UI (action bar, grammar editor,
+        # card actions). Each selector must survive as a substring.
+        assert ".grammar-section-interactive" in css
+        assert ".action-bar" in css
+        assert ".card-actions" in css
 
     def test_index_styles_css(self):
         css = IndexStyles.css()
