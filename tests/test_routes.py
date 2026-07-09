@@ -501,3 +501,37 @@ class TestGrammarEndpoints:
         })
         assert response.status_code == 400
         assert "Invalid JSON grammar" in response.json()["detail"]
+
+    def test_get_grammar_success(self, client, temp_dir):
+        """Test retrieving existing grammar from gallery."""
+        prompts_dir = temp_dir / "prompts"
+        run_dir = prompts_dir / "20240101_120000_abc123"
+        run_dir.mkdir()
+
+        (run_dir / "test.metaprompt.json").write_text(json.dumps({
+            "prefix": "test",
+            "count": 5,
+        }))
+        grammar_content = '{"origin": ["a cat"], "cat": ["fluffy"]}'
+        (run_dir / "test_grammar.json").write_text(grammar_content)
+
+        response = client.get("/api/gallery/20240101_120000_abc123/grammar")
+        assert response.status_code == 200
+        data = response.json()
+        assert "grammar" in data
+        assert data["grammar"] == grammar_content
+
+    def test_get_grammar_not_found(self, client, temp_dir):
+        """Test 404 when gallery exists but no grammar file."""
+        prompts_dir = temp_dir / "prompts"
+        run_dir = prompts_dir / "20240101_120000_def456"
+        run_dir.mkdir()
+
+        (run_dir / "test.metaprompt.json").write_text(json.dumps({
+            "prefix": "test",
+            "count": 3,
+        }))
+
+        response = client.get("/api/gallery/20240101_120000_def456/grammar")
+        assert response.status_code == 404
+        assert "Grammar not found" in response.json()["detail"]

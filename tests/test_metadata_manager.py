@@ -208,6 +208,19 @@ class TestMetadataManager:
         (temp_dir / "test.metaprompt.json").write_text('{"prefix": "test"}')
         assert MetadataManager.exists(temp_dir) is True
 
+    def test_update_deletion_roundtrip(self, temp_dir):
+        """Test that deleted keys are absent after reload via load_raw."""
+        initial = {"prefix": "test", "count": 5, "user_prompt": "original", "model": "ernie"}
+        (temp_dir / "test.metaprompt.json").write_text(json.dumps(initial))
+
+        MetadataManager.update(temp_dir, user_prompt=None)
+
+        # Roundtrip through load_raw — the deleted key must not reappear
+        raw = MetadataManager.load_raw(temp_dir)
+        assert "user_prompt" not in raw
+        assert raw["count"] == 5
+        assert raw["prefix"] == "test"
+
     def test_get_prefix(self, temp_dir):
         """Test getting prefix from metadata."""
         (temp_dir / "myprefix.metaprompt.json").write_text('{"prefix": "myprefix"}')

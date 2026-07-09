@@ -74,6 +74,33 @@ def test_get_model_requires_provisioned_checkpoint(mock_settings, temp_dir):
         _get_model()
 
 
+@patch("image_generator.settings")
+@patch("image_generator._model_cache", {})
+def test_get_model_applies_tiling_when_tiled_vae(mock_settings, temp_dir):
+    model_path = temp_dir / "ernie-q4"
+    model_path.mkdir()
+    mock_settings.image_generation.model_path = model_path
+
+    config_module = ModuleType("mflux.models.common.config")
+    config_module.ModelConfig = MagicMock()
+    ernie_module = ModuleType("mflux.models.ernie_image")
+    instance = MagicMock()
+    ernie_module.ErnieImage = MagicMock(return_value=instance)
+
+    tiling_module = ModuleType("mflux.models.common.vae.tiling_config")
+    TilingConfig = MagicMock()
+    tiling_module.TilingConfig = TilingConfig
+
+    with patch.dict(sys.modules, {
+        "mflux.models.common.config": config_module,
+        "mflux.models.ernie_image": ernie_module,
+        "mflux.models.common.vae.tiling_config": tiling_module,
+    }):
+        _get_model(tiled_vae=True)
+
+    assert TilingConfig.called
+
+
 @patch("image_generator._get_model")
 @patch("image_generator.unload_all_models")
 def test_generate_image_uses_fixed_parameters(mock_unload, mock_get_model, temp_dir):

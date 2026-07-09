@@ -173,6 +173,13 @@ class TestRunTracery:
         assert len(results) == 3
         assert all(r == "alternate text" for r in results)
 
+    def test_run_tracery_zero_count(self):
+        """Test that zero count returns empty list without error."""
+        grammar_json = '{"origin": ["hello"]}'
+        results = run_tracery(grammar_json, count=0)
+
+        assert results == []
+
     def test_run_tracery_invalid_json(self):
         """Test error on invalid JSON."""
         with pytest.raises(TraceryError, match="Invalid JSON grammar"):

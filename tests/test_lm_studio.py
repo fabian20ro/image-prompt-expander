@@ -41,3 +41,21 @@ def test_unload_fails_closed(mock_which, mock_run):
 def test_unload_timeout(mock_which, mock_run):
     with pytest.raises(LMStudioUnloadError, match="Timed out"):
         unload_all_models()
+
+
+@patch("lm_studio.subprocess.run")
+@patch("lm_studio.shutil.which", return_value="/opt/lms")
+def test_unload_fails_open(mock_which, mock_run):
+    """Stdout-only error message is surfaced when stderr is empty."""
+    mock_run.return_value = MagicMock(returncode=1, stderr="", stdout="model busy")
+    with pytest.raises(LMStudioUnloadError, match="model busy"):
+        unload_all_models()
+
+
+@patch("lm_studio.subprocess.run")
+@patch("lm_studio.shutil.which", return_value="/opt/lms")
+def test_unload_fails_no_detail(mock_which, mock_run):
+    """Empty stderr+stdout falls back to the generic message."""
+    mock_run.return_value = MagicMock(returncode=1, stderr="", stdout="")
+    with pytest.raises(LMStudioUnloadError, match="unknown error"):
+        unload_all_models()

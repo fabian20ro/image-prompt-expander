@@ -133,6 +133,38 @@ class TestWorkerKillCurrent:
         worker.queue_manager.cancel_task.assert_called()
         assert worker._current_process is None
 
+    @pytest.mark.asyncio
+    async def test_kill_current_force_kills_on_timeout(self, worker):
+        """Test kill_current() force-kills process when wait times out."""
+        mock_process = MagicMock()
+        mock_process.pid = 12345
+        mock_process.terminate = MagicMock()
+        mock_process.kill = MagicMock()
+
+        # Simulate hung process: first wait times out, second returns immediately
+        call_count = [0]
+
+        async def mock_wait():
+            call_count[0] += 1
+            if call_count[0] == 1:
+                raise asyncio.TimeoutError("process did not exit")
+            return 0
+
+        mock_process.wait = mock_wait
+
+        worker._current_process = mock_process
+        worker.queue_manager.get_state.return_value = MockQueueState(
+            current_task=MockTask()
+        )
+
+        result = await worker.kill_current()
+
+        assert result is True
+        mock_process.terminate.assert_called_once()
+        mock_process.kill.assert_called_once()
+        worker.queue_manager.cancel_task.assert_called()
+        assert worker._current_process is None
+
 
 class TestWorkerReadStderr:
     """Tests for Worker._read_stderr() method."""

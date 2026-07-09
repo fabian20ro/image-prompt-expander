@@ -237,6 +237,25 @@ class TestQueueManager:
         assert len(events) == 3
         assert events[2][0] == "task_completed"
 
+    def test_listener_exception_does_not_block_other_listeners(self, queue_path):
+        """A failing listener should not prevent other listeners from receiving events."""
+        qm = QueueManager(queue_path)
+
+        received_events = []
+
+        def good_listener(event, data):
+            received_events.append(("good", event))
+
+        def bad_listener(event, data):
+            raise RuntimeError("listener boom")
+
+        qm.add_listener(bad_listener)
+        qm.add_listener(good_listener)
+
+        task = qm.add_task(TaskType.GENERATE_IMAGE, {"run_id": "test"})
+
+        assert len([e for e in received_events if e[0] == "good"]) == 1
+
     def test_listener_add_remove_thread_safety(self, queue_path):
         """Test that listeners can be added/removed safely during notification."""
         qm = QueueManager(queue_path)

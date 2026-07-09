@@ -12,6 +12,7 @@ from server.models import (
     GenerateFromGrammarRequest,
     EnhanceImageRequest,
     GalleryLayoutUpdateRequest,
+    RegeneratePromptsApiRequest,
 )
 
 
@@ -220,3 +221,60 @@ class TestInputValidation:
         # Just right
         req = EnhanceImageRequest(softness=0.7)
         assert req.softness == 0.7
+
+
+class TestRegeneratePromptsApiRequest:
+    """Tests for RegeneratePromptsApiRequest model."""
+
+    def test_regenerate_prompts_api_request_defaults(self):
+        """Test all fields default to None (optional)."""
+        from pydantic import ValidationError
+
+        req = RegeneratePromptsApiRequest()
+        assert req.grammar is None
+        assert req.count is None
+        assert req.images_per_prompt is None
+        assert req.max_prompts is None
+
+    def test_regenerate_prompts_api_request_valid_fields(self):
+        """Test setting valid field values."""
+        from pydantic import ValidationError
+
+        req = RegeneratePromptsApiRequest(
+            grammar='{\"origin\": [\"test\"]}',
+            count=100,
+            images_per_prompt=5,
+            max_prompts=20,
+        )
+        assert req.grammar == '{"origin": ["test"]}'
+        assert req.count == 100
+        assert req.images_per_prompt == 5
+        assert req.max_prompts == 20
+
+    def test_regenerate_prompts_api_request_count_bounds(self):
+        """Test that count must be within bounds."""
+        from pydantic import ValidationError
+
+        # Too low
+        with pytest.raises(ValidationError):
+            RegeneratePromptsApiRequest(count=0)
+
+        # Too high
+        with pytest.raises(ValidationError):
+            RegeneratePromptsApiRequest(count=10001)
+
+        # Just right
+        req = RegeneratePromptsApiRequest(count=500)
+        assert req.count == 500
+
+    def test_regenerate_prompts_api_request_max_prompts_bounds(self):
+        """Test that max_prompts must be >= 1."""
+        from pydantic import ValidationError
+
+        # Too low (not allowed)
+        with pytest.raises(ValidationError):
+            RegeneratePromptsApiRequest(max_prompts=0)
+
+        # Just right
+        req = RegeneratePromptsApiRequest(max_prompts=50)
+        assert req.max_prompts == 50

@@ -23,3 +23,16 @@ def test_project_system_prompt_is_ernie_specific():
     assert "Technical and capture finish" in prompt
     assert "exactly 7 distinct" in prompt
     assert "Never use 2–4 alternatives" in prompt
+
+
+def test_system_prompt_contains_all_content_type_patterns():
+    """Verify the template includes all five documented content-type patterns."""
+    prompt = get_system_prompt()
+    for pattern in ["Portrait", "Product", "Poster/infographic", "Comic", "Landscape/concept art"]:
+        assert f"- {pattern}:" in prompt, f"Missing content-type pattern: {pattern}"
+
+
+def test_system_prompt_enforces_single_quote_visible_text():
+    """Verify the template requires wrapping visible text in single quotes."""
+    prompt = get_system_prompt()
+    assert "wrap each visible string in single quotes" in prompt
