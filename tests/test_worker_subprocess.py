@@ -277,6 +277,54 @@ class TestRunGeneratePipeline:
         assert result["success"] is False
         assert "Grammar generation failed" in result["error"]
 
+    @patch("server.worker_subprocess.create_executor")
+    def test_run_generate_pipeline_passes_optional_params(self, mock_exec, capsys):
+        """Test that optional pipeline params are forwarded to the executor."""
+        from pipeline import PipelineResult
+
+        mock_executor = MagicMock()
+        mock_executor.run_full_pipeline.return_value = PipelineResult(
+            success=True, run_id="r", prompt_count=1,
+        )
+        mock_exec.return_value = mock_executor
+
+        run_generate_pipeline({
+            "prompt": "x",
+            "count": 5,
+            "width": 640,
+            "height": 480,
+            "seed": 42,
+            "max_prompts": 10,
+            "enhance": True,
+            "enhance_softness": 0.7,
+        })
+
+        kwargs = mock_executor.run_full_pipeline.call_args.kwargs
+        assert kwargs["width"] == 640
+        assert kwargs["height"] == 480
+        assert kwargs["seed"] == 42
+        assert kwargs["max_prompts"] == 10
+        assert kwargs["enhance"] is True
+        assert kwargs["enhance_softness"] == 0.7
+
+    @patch("server.worker_subprocess.create_executor")
+    def test_run_generate_pipeline_default_params_used(self, mock_exec, capsys):
+        """Test that missing optional params use defaults."""
+        from pipeline import PipelineResult
+
+        mock_executor = MagicMock()
+        mock_executor.run_full_pipeline.return_value = PipelineResult(
+            success=True, run_id="r", prompt_count=1,
+        )
+        mock_exec.return_value = mock_executor
+
+        run_generate_pipeline({"prompt": "x"})
+
+        kwargs = mock_executor.run_full_pipeline.call_args.kwargs
+        assert kwargs["width"] == 864
+        assert kwargs["height"] == 1152
+        assert kwargs["seed"] is None
+
 
 class TestRunGenerateFromGrammar:
     """Tests for grammar-import worker handler."""
@@ -593,3 +641,47 @@ class TestMainFunction:
                 main()
 
         assert exc_info.value.code == 1
+
+    def test_main_unknown_task_type(self, capsys, temp_dir):
+        """Test main() rejects unknown task types."""
+        task_file = temp_dir / "task.json"
+        task_file.write_text(json.dumps({
+            "type": "does_not_exist",
+            "params": {},
+        }))
+
+        from server.worker_subprocess import main
+
+        with patch.object(sys, "argv", ["worker_subprocess.py", str(task_file)]):
+            with pytest.raises(SystemExit) as exc_info:
+                main()
+
+        assert exc_info.value.code == 1
+        captured = capsys.readouterr()
+        result = json.loads(captured.out.strip())
+        assert result["success"] is False
+        assert "does_not_exist" in result["error"]
+
+    def test_main_catches_handler_exception(self, capsys, temp_dir):
+        """Test main() catches handler exceptions and emits error."""
+        task_file = temp_dir / "task.json"
+        task_file.write_text(json.dumps({
+            "type": "generate_pipeline",
+            "params": {"prompt": "test"},
+        }))
+
+        from server.worker_subprocess import main, TASK_HANDLERS
+
+        def boom(_):
+            raise RuntimeError("boom")
+
+        with patch.dict(TASK_HANDLERS, {"generate_pipeline": boom}), \
+             patch.object(sys, "argv", ["worker_subprocess.py", str(task_file)]), \
+             patch("server.worker_subprocess.close_log_file"):
+            with pytest.raises(SystemExit):
+                main()
+
+        captured = capsys.readouterr()
+        result = json.loads(captured.out.strip())
+        assert result["success"] is False
+        assert "boom" in result["error"]
