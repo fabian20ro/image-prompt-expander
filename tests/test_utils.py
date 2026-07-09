@@ -328,3 +328,23 @@ class TestUtils:
 
         result = scan_flat_archives(saved_dir)
         assert len(result) == 0
+
+    def test_scan_flat_archives_preserves_all_timestamps(self, temp_dir):
+        """Test scan_flat_archives returns every distinct archive present on disk.
+
+        The flat archive scanner groups PNGs by (prefix, timestamp) and yields
+        one dict per group. This test verifies all three archives are returned
+        regardless of creation order, confirming no archive is dropped silently.
+        """
+        saved_dir = temp_dir / "saved"
+        saved_dir.mkdir()
+
+        # Create three PNGs with different timestamps to verify grouping completeness
+        img = Image.new('RGB', (10, 10), color='green')
+        img.save(saved_dir / "gal_20240301_100000_0_0.png")
+        img.save(saved_dir / "gal_20240115_143022_0_0.png")
+        img.save(saved_dir / "gal_20240220_081500_0_0.png")
+
+        result = scan_flat_archives(saved_dir)
+        timestamps = sorted(a["timestamp"] for a in result)
+        assert timestamps == ["20240115_143022", "20240220_081500", "20240301_100000"]
