@@ -114,6 +114,24 @@ class TestSSEClient:
         assert "connectSSE" in js
         assert "MAX_SSE_RETRIES" in js
 
+    def test_js_exponential_backoff_with_cap(self):
+        """SSE reconnection must use exponential backoff capped at a max delay.
+
+        The implementation uses Math.min(3000 * 2^(retries-1), 30000). Losing the
+        cap silently turns network blips into permanent busy-loops; losing the
+        exponent turns it into linear retries that flood the server during outage.
+        Both behaviors are observable as substrings in the produced JS.
+        """
+        js = SSEClient.js()
+        assert "Math.pow(2," in js or "** 2" in js, (
+            "SSE reconnection must use exponential backoff to avoid flooding a "
+            "server that is still recovering."
+        )
+        assert "30000" in js, (
+            "Retry delay must be capped; without a ceiling the client would "
+            "retry indefinitely with ever-growing intervals."
+        )
+
 
 class TestButtons:
     """Tests for Buttons component."""
