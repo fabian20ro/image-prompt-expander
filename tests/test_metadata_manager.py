@@ -106,6 +106,34 @@ class TestMetadataManager:
         result = MetadataManager.find_metadata_file(temp_dir)
         assert result is None
 
+    def test_find_legacy_metadata_pattern(self, temp_dir):
+        """Test find_metadata_file returns legacy _metadata.json files for backward compatibility.
+
+        The search loop in find_metadata_file supports the old *_metadata.json naming
+        convention alongside new *.metaprompt.json files. This test ensures that legacy
+        metadata directories (pre-refactor) are still discovered correctly.
+        """
+        meta_file = temp_dir / "test_metadata.json"
+        meta_file.write_text('{"prefix": "legacy"}')
+
+        result = MetadataManager.find_metadata_file(temp_dir)
+        assert result == meta_file
+
+    def test_find_metaprompt_before_legacy(self, temp_dir):
+        """Test that new .metaprompt.json takes precedence over legacy _metadata.json.
+
+        When both naming patterns coexist in the same directory, the modern file wins —
+        matching the iteration order in find_metadata_file's glob loop.
+        """
+        legacy = temp_dir / "test_legacy_metadata.json"
+        legacy.write_text('{"prefix": "legacy"}')
+
+        modern = temp_dir / "test.metaprompt.json"
+        modern.write_text('{"prefix": "modern"}')
+
+        result = MetadataManager.find_metadata_file(temp_dir)
+        assert result == modern
+
     def test_load_success(self, temp_dir):
         """Test loading metadata successfully."""
         data = {"prefix": "test", "count": 5, "user_prompt": "hello"}
