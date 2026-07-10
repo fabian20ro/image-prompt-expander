@@ -99,6 +99,7 @@ def test_get_model_applies_tiling_when_tiled_vae(mock_settings, temp_dir):
         _get_model(tiled_vae=True)
 
     assert TilingConfig.called
+    assert instance.tiling_config is TilingConfig.return_value
 
 
 @patch("image_generator.settings")
