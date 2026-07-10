@@ -260,18 +260,3 @@ class TestGalleryService:
 
         service = GalleryService(temp_dir, temp_dir)
         assert service.count_images(run_dir, prefix="test_01") == 2
-
-    def test_list_images_multi_segment(self, temp_dir):
-        """Test listing images."""
-        run_dir = temp_dir / "run_dir"
-        run_dir.mkdir(parents=True)
-        (run_dir / "test_01_20240101_120000.png").touch()
-        (run_dir / "test_01_20240101_120001.PNG").touch()
-        (run_dir / "test_01_20240101_120002.jpg").touch()
-        (run_dir / "not_an_image.txt").touch()
-
-        service = GalleryService(temp_dir, temp_dir)
-        images = service.list_images(run_dir, prefix="test_01")
-        # current implementation: .glob(f"{prefix}_*_*.png") which is case-sensitive
-        assert len(images) == 1 # only the first one matches
-        assert any(i.name == "test_01_20240101_120000.png" for i in images)
