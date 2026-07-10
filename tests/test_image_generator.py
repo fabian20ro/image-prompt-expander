@@ -140,3 +140,21 @@ def test_generate_image_random_seed_and_tiling(mock_unload, mock_get_model, temp
 def test_generate_image_rejects_invalid_dimensions(temp_dir, width, height):
     with pytest.raises(ValueError):
         generate_image("test", temp_dir / "image.png", width=width, height=height)
+
+
+@patch("image_generator._get_model")
+@patch("image_generator.unload_all_models")
+def test_generate_image_creates_output_parent_directory(mock_unload, mock_get_model, temp_dir):
+    parent = temp_dir / "nested" / "deep"
+    output = parent / "image.png"
+    # Ensure the parent does not exist yet.
+    assert not parent.exists()
+
+    model = MagicMock()
+    generated = MagicMock()
+    model.generate_image.return_value = generated
+    mock_get_model.return_value = model
+
+    generate_image("test", output)
+
+    assert parent.is_dir()
