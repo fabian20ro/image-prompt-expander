@@ -274,3 +274,77 @@ def test_enhance_image_invalid_softness(softness):
         Image.new("RGB", (10, 10)).save(img_path)
         with pytest.raises(ValueError, match="softness must be between 0.0 and 1.0"):
             enhance_image(img_path, out_path, softness=softness)
+
+
+@pytest.mark.parametrize("width", [0, -4, 7])
+def test_enhance_image_invalid_width(width):
+    from image_enhancer import enhance_image
+    from PIL import Image
+    import tempfile
+    with tempfile.TemporaryDirectory() as tmpdir:
+        img_path = Path(tmpdir) / "test.png"
+        out_path = Path(tmpdir) / "out.png"
+        Image.new("RGB", (10, 10)).save(img_path)
+        with pytest.raises(ValueError):
+            enhance_image(img_path, out_path, width=width, height=800)
+
+
+@pytest.mark.parametrize("height", [0, -4, 7])
+def test_enhance_image_invalid_height(height):
+    from image_enhancer import enhance_image
+    from PIL import Image
+    import tempfile
+    with tempfile.TemporaryDirectory() as tmpdir:
+        img_path = Path(tmpdir) / "test.png"
+        out_path = Path(tmpdir) / "out.png"
+        Image.new("RGB", (10, 10)).save(img_path)
+        with pytest.raises(ValueError):
+            enhance_image(img_path, out_path, width=800, height=height)
+
+
+def test_enhance_image_valid_dimensions_pass():
+    from image_enhancer import enhance_image
+    from unittest.mock import MagicMock, patch
+    import tempfile
+    from PIL import Image
+    with tempfile.TemporaryDirectory() as tmpdir:
+        img_path = Path(tmpdir) / "test.png"
+        out_path = Path(tmpdir) / "out.png"
+        Image.new("RGB", (10, 10)).save(img_path)
+
+        mock_enhancer = MagicMock()
+        mock_result = MagicMock()
+        mock_enhancer.generate_image.return_value = mock_result
+
+        with patch("image_enhancer.unload_all_models"), \
+             patch("image_enhancer._get_enhancer", return_value=mock_enhancer), \
+             patch.dict(sys.modules, {"mflux.utils.scale_factor": MagicMock()}):
+            enhance_image(img_path, out_path, width=1024, height=1536)
+
+        call_kwargs = mock_enhancer.generate_image.call_args.kwargs
+        assert call_kwargs["width"] == 1024
+        assert call_kwargs["height"] == 1536
+
+
+def test_enhance_image_dimensions_not_passed_when_none():
+    from image_enhancer import enhance_image
+    from unittest.mock import MagicMock, patch
+    import tempfile
+    from PIL import Image
+    with tempfile.TemporaryDirectory() as tmpdir:
+        img_path = Path(tmpdir) / "test.png"
+        out_path = Path(tmpdir) / "out.png"
+        Image.new("RGB", (10, 10)).save(img_path)
+
+        mock_enhancer = MagicMock()
+        mock_result = MagicMock()
+        mock_enhancer.generate_image.return_value = mock_result
+
+        with patch("image_enhancer.unload_all_models"), \
+             patch("image_enhancer._get_enhancer", return_value=mock_enhancer), \
+             patch.dict(sys.modules, {"mflux.utils.scale_factor": MagicMock()}):
+            enhance_image(img_path, out_path)
+
+        call_kwargs = mock_enhancer.generate_image.call_args.kwargs
+        assert "width" not in call_kwargs
+        assert "height" not in call_kwargs
