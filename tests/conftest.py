@@ -173,3 +173,21 @@ def test_create_run_files_exist_ok(temp_dir):
 
     returned = create_run_files(run_subdir, prefix=prefix, num_prompts=1)
     assert returned == run_subdir
+
+
+def test_create_run_files_default_metadata_structure(temp_dir):
+    """Verify default metadata contains expected fields when no custom metadata provided."""
+    prefix = "default_meta"
+    run_dir = create_run_files(
+        temp_dir / "default_meta",
+        prefix=prefix,
+        num_prompts=2,
+    )
+
+    written_meta = json.loads((run_dir / f"{prefix}.metaprompt.json").read_text())
+
+    # Verify default metadata contains required fields with expected values
+    assert written_meta["prefix"] == "default_meta"
+    assert written_meta["count"] == 2
+    assert written_meta["user_prompt"] == "test prompt"
+    assert written_meta.get("image_generation", {}).get("images_per_prompt") == 1
