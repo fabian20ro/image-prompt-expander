@@ -101,6 +101,22 @@ def test_get_model_applies_tiling_when_tiled_vae(mock_settings, temp_dir):
     assert TilingConfig.called
 
 
+@patch("image_generator.settings")
+def test_get_model_import_error_when_mflux_missing(mock_settings, monkeypatch):
+    """When mflux is not installed, _get_model surfaces an actionable ImportError."""
+    model_path = MagicMock()
+    model_path.expanduser.return_value = mock_settings.image_generation.model_path
+    model_path.exists.return_value = True
+    mock_settings.image_generation.model_path = model_path
+
+    for mod in ("mflux", "mflux.models", "mflux.models.common",
+                "mflux.models.common.config", "mflux.models.ernie_image"):
+        monkeypatch.delitem(sys.modules, mod, raising=False)
+
+    with pytest.raises(ImportError, match=r"mflux 0\.18\.0\+ is required"):
+        _get_model()
+
+
 @patch("image_generator._get_model")
 @patch("image_generator.unload_all_models")
 def test_generate_image_uses_fixed_parameters(mock_unload, mock_get_model, temp_dir):
