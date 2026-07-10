@@ -278,3 +278,25 @@ class TestRegeneratePromptsApiRequest:
         # Just right
         req = RegeneratePromptsApiRequest(max_prompts=50)
         assert req.max_prompts == 50
+
+    def test_regenerate_prompts_api_request_images_per_prompt_lower_bound(self):
+        """Test that images_per_prompt cannot be negative."""
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError):
+            RegeneratePromptsApiRequest(images_per_prompt=-1)
+
+        # Boundary: 0 is allowed (ge=0)
+        req = RegeneratePromptsApiRequest(images_per_prompt=0)
+        assert req.images_per_prompt == 0
+
+    def test_regenerate_prompts_api_request_images_per_prompt_upper_bound(self):
+        """Test that images_per_prompt cannot exceed 100."""
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError):
+            RegeneratePromptsApiRequest(images_per_prompt=101)
+
+        # Boundary: 100 is allowed (le=100)
+        req = RegeneratePromptsApiRequest(images_per_prompt=100)
+        assert req.images_per_prompt == 100
