@@ -175,3 +175,26 @@ def test_generate_image_creates_output_parent_directory(mock_unload, mock_get_mo
     generate_image("test", output)
 
     assert parent.is_dir()
+
+
+@patch("image_generator.settings")
+@patch("image_generator._model_cache", {})
+def test_get_model_skips_tiling_by_default(mock_settings, temp_dir):
+    """When tiled_vae is False (default), tiling config must not be applied."""
+    model_path = temp_dir / "ernie-q4"
+    model_path.mkdir()
+    mock_settings.image_generation.model_path = model_path
+
+    config_module = ModuleType("mflux.models.common.config")
+    config_module.ModelConfig = MagicMock()
+    ernie_module = ModuleType("mflux.models.ernie_image")
+    instance = MagicMock()
+    ernie_module.ErnieImage = MagicMock(return_value=instance)
+
+    with patch.dict(sys.modules, {
+        "mflux.models.common.config": config_module,
+        "mflux.models.ernie_image": ernie_module,
+    }):
+        _get_model(tiled_vae=False)
+
+    assert not hasattr(instance.tiling_config, "_mock_name") or instance.tiling_config is None or "TilingConfig" not in str(type(instance.tiling_config))
