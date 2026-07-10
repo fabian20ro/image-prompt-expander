@@ -168,3 +168,46 @@ class TestGalleryIndexInteractive:
             # display_title should be preferred over raw user_prompt
             assert "Custom Gallery Title" in content
             assert "raw hidden prompt text" not in content
+
+    def test_index_handles_flat_archive_metadata_errors_gracefully(self, temp_dir):
+        """Flat archive metadata errors must not crash the index generator."""
+        saved_dir = temp_dir / "saved"
+        saved_dir.mkdir()
+
+        # Create a minimal valid PNG matching the naming pattern
+        import struct
+        png_path = saved_dir / "image_20240101_120000_0_0.png"
+        png_data = bytearray()
+        png_data.extend(b'\x89PNG\r\n\x1a\n')
+
+        ihdr_payload = struct.pack('>IIBBBBB', 1, 1, 8, 2, 0, 0, 0)
+        ihdr_crc = struct.pack('>I', zlib.crc32(b'IHDR' + ihdr_payload))
+        png_data.extend(struct.pack('>I', len(ihdr_payload)))
+        png_data.extend(b'IHDR')
+        png_data.extend(ihdr_payload)
+        png_data.extend(ihdr_crc)
+
+        raw_data = b'\x00\xff\x00\x00'
+        compressed = zlib.compress(raw_data)
+        idat_crc = struct.pack('>I', zlib.crc32(b'IDAT' + compressed))
+        png_data.extend(struct.pack('>I', len(compressed)))
+        png_data.extend(b'IDAT')
+        png_data.extend(compressed)
+        png_data.extend(idat_crc)
+
+        iend_crc = struct.pack('>I', zlib.crc32(b'IEND'))
+        png_data.extend(struct.pack('>I', 0))
+        png_data.extend(b'IEND')
+        png_data.extend(iend_crc)
+
+        with open(png_path, 'wb') as f:
+            f.write(bytes(png_data))
+
+        # Mock get_flat_archive_metadata to raise an exception (simulating corrupted metadata)
+        with patch('gallery_index.get_flat_archive_metadata', side_effect=RuntimeError("corrupted")):
+            index_path = generate_master_index(temp_dir, interactive=True)
+            content = index_path.read_text()
+
+            # The index should still be generated successfully
+            assert index_path.exists()
+            assert "<html" in content.lower() or "index" in content.lower()

@@ -182,10 +182,14 @@ def _extract_flat_archive_infos(saved_dir: Path, interactive: bool = False) -> l
         # Format timestamp for display
         display_time = format_run_timestamp(timestamp)
 
-        # Get metadata from first image
+        # Get metadata from first image (gracefully handle extraction errors)
         metadata = {}
         if first_image:
-            metadata = get_flat_archive_metadata(first_image)
+            try:
+                metadata = get_flat_archive_metadata(first_image)
+            except (RuntimeError, IOError, OSError):
+                # Corrupted or unreadable metadata - use defaults
+                pass
 
         # Get backup reason from embedded metadata
         backup_reason = metadata.get("backup_reason", "archived")
