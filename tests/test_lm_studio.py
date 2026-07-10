@@ -59,3 +59,18 @@ def test_unload_fails_no_detail(mock_which, mock_run):
     mock_run.return_value = MagicMock(returncode=1, stderr="", stdout="")
     with pytest.raises(LMStudioUnloadError, match="unknown error"):
         unload_all_models()
+
+
+@patch("lm_studio.subprocess.run")
+@patch("lm_studio.shutil.which", return_value="/opt/lms")
+def test_unload_custom_timeout(mock_which, mock_run):
+    """Custom timeout is forwarded to subprocess.run."""
+    mock_run.return_value = MagicMock(returncode=0)
+    unload_all_models(timeout=120.0)
+    mock_run.assert_called_once_with(
+        ["/opt/lms", "unload", "--all"],
+        capture_output=True,
+        text=True,
+        timeout=120.0,
+        check=False,
+    )
