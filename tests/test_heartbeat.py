@@ -74,6 +74,32 @@ async def test_heartbeat_no_progress_on_immediate_exit():
     assert len(progress_events) == 0
 
 
+@pytest.mark.asyncio
+async def test_heartbeat_stops_on_exception():
+    """Test that heartbeat thread stops cleanly when an exception occurs inside the with block."""
+
+    heartbeats_count = 0
+
+    def mock_emit_progress(stage: str, current: int = 0, total: int = 0, message: str = ""):
+        nonlocal heartbeats_count
+        heartbeats_count += 1
+
+    with patch('src.server.worker_subprocess.emit_progress', side_effect=mock_emit_progress):
+        # Enter heartbeat and wait for at least one emission
+        try:
+            with Heartbeat(message="test", interval=0.1) as hb:
+                await asyncio.sleep(0.25)  # Wait for at least one heartbeat
+                assert heartbeats_count >= 1  # Verify heartbeat was emitted
+
+            # Should not reach here if exception is raised after sleep
+        except ValueError:
+            pass  # Expected exception
+
+    count_after_exit = heartbeats_count
+    await asyncio.sleep(0.3)  # Wait to confirm no more heartbeats
+    assert heartbeats_count == count_after_exit  # Heartbeat thread should be stopped
+
+
 if __name__ == "__main__":
     import pytest
     pytest.main([__file__])
