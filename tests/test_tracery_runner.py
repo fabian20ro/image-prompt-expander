@@ -180,6 +180,13 @@ class TestRunTracery:
 
         assert results == []
 
+    def test_run_tracery_negative_count(self):
+        """Test that negative count returns empty list (range silently handles)."""
+        grammar_json = '{"origin": ["hello"]}'
+        results = run_tracery(grammar_json, count=-1)
+
+        assert results == []
+
     def test_run_tracery_invalid_json(self):
         """Test error on invalid JSON."""
         with pytest.raises(TraceryError, match="Invalid JSON grammar"):
