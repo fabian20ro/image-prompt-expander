@@ -410,6 +410,7 @@ class TestSavedFileEndpoint:
         assert response.headers["content-type"] == "image/png"
 
 
+
 class TestArchiveGalleryEndpoint:
     """Tests for POST /api/gallery/{run_id}/archive."""
 
