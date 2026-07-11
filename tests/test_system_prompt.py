@@ -36,3 +36,21 @@ def test_system_prompt_enforces_single_quote_visible_text():
     """Verify the template requires wrapping visible text in single quotes."""
     prompt = get_system_prompt()
     assert "wrap each visible string in single quotes" in prompt
+
+
+def test_system_prompt_forbids_vague_placeholders():
+    """The template explicitly lists forbidden vague placeholders to prevent low-quality prompts.
+
+    These phrases are listed as examples of what the generator must never emit.
+    Their presence in the system prompt confirms the quality guardrail is active.
+    """
+    prompt = get_system_prompt()
+    for placeholder in [
+        '"some text"',
+        '"a button"',
+        '"relevant facts"',
+        '"and so on"',
+    ]:
+        assert (
+            placeholder in prompt
+        ), f"Forbidden vague placeholder guardrail missing: {placeholder}"
