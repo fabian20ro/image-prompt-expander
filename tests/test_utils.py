@@ -348,3 +348,30 @@ class TestUtils:
         result = scan_flat_archives(saved_dir)
         timestamps = sorted(a["timestamp"] for a in result)
         assert timestamps == ["20240115_143022", "20240220_081500", "20240301_100000"]
+
+    def test_scan_flat_archives_first_image_is_lexicographically_smallest(self, temp_dir):
+        """Test scan_flat_archives sets first_image to the lex-smallest PNG name per group.
+
+        The flat archive scanner tracks `first_image` by comparing filenames
+        lexicographically within each (prefix, timestamp) group — this is used as
+        a thumbnail path for gallery views, so correctness matters. This test
+        verifies that given multiple images in one group, first_image points to the
+        filename that sorts lowest alphabetically, regardless of creation order.
+        """
+        saved_dir = temp_dir / "saved"
+        saved_dir.mkdir()
+
+        # Create flat archive PNGs where lex-smallest is NOT the numerically smallest index.
+        # Files: cat_20240115_143022_9_0.png (lex smallest) and cat_20240115_143022_10_1.png
+        img = Image.new('RGB', (10, 10), color='blue')
+        img.save(saved_dir / "cat_20240115_143022_9_0.png")
+        img.save(saved_dir / "cat_20240115_143022_10_1.png")
+
+        result = scan_flat_archives(saved_dir)
+        assert len(result) == 1
+        archive = result[0]
+        assert archive["image_count"] == 2
+        # '9' sorts before '10' lexicographically because '9' > '1' char-wise... actually
+        # lex: "cat_...9_0.png" vs "cat_...10_1.png": at position of 9 vs 1, '9'>'1', so
+        # "cat_20240115_143022_10_1.png" is lex-smallest.
+        assert archive["first_image"].name == "cat_20240115_143022_10_1.png"
