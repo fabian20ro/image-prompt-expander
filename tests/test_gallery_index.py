@@ -211,3 +211,20 @@ class TestGalleryIndexInteractive:
             # The index should still be generated successfully
             assert index_path.exists()
             assert "<html" in content.lower() or "index" in content.lower()
+
+    def test_index_resolves_nested_image_generation_model_fallback(self, temp_dir):
+        """_extract_run_info should fall back to image_generation.model when top-level model is absent."""
+        active_run = temp_dir / "prompts" / "20240101_120000_xyz789"
+        active_run.mkdir(parents=True)
+        (active_run / "test.metaprompt.json").write_text(json.dumps({
+            "prefix": "test",
+            "count": 1,
+            "user_prompt": "fallback test prompt",
+            "image_generation": {"model": "Flux-dev-v2"},
+        }))
+        (active_run / "test_gallery.html").write_text("<html></html>")
+
+        index_path = generate_master_index(temp_dir, interactive=True)
+        content = index_path.read_text()
+
+        assert "Flux-dev-v2" in content
