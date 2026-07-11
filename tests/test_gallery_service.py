@@ -116,6 +116,25 @@ class TestGalleryService:
         result = service.load_grammar(temp_dir, "test")
         assert result is None
 
+    def test_get_grammar_file_explicit_prefix(self, temp_dir):
+        """Test get_grammar_file with explicit prefix returns correct path."""
+        run_dir = temp_dir / "run"
+        run_dir.mkdir()
+
+        service = GalleryService(temp_dir, temp_dir)
+        result = service.get_grammar_file(run_dir, prefix="test")
+
+        assert result == run_dir / "test_grammar.json"
+
+    def test_get_grammar_file_auto_detects_prefix(self, temp_dir):
+        """Test get_grammar_file auto-detects prefix from metadata when None."""
+        (temp_dir / "cat.metaprompt.json").write_text(json.dumps({"prefix": "cat"}))
+
+        service = GalleryService(temp_dir, temp_dir)
+        result = service.get_grammar_file(temp_dir)
+
+        assert result == temp_dir / "cat_grammar.json"
+
     def test_load_prompts(self, temp_dir):
         """Test loading prompts."""
         (temp_dir / "test.metaprompt.json").write_text(json.dumps({"prefix": "test"}))
