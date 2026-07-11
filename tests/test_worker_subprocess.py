@@ -583,6 +583,22 @@ class TestRunDeleteGallery:
         mock_delete.assert_called_once()
         mock_index.assert_called_once()
 
+    @patch("server.worker_subprocess.paths")
+    def test_run_delete_gallery_not_found(self, mock_paths, capsys, temp_dir):
+        """Test run_delete_gallery emits error when gallery directory does not exist."""
+        prompts_dir = temp_dir / "prompts"
+        prompts_dir.mkdir(parents=True)
+        mock_paths.prompts_dir = prompts_dir
+
+        run_delete_gallery({"run_id": "nonexistent-run"})
+
+        captured = capsys.readouterr()
+        lines = captured.out.strip().split('\n')
+        result = json.loads(lines[-1])
+
+        assert result["success"] is False
+        assert "nonexistent-run" in result["error"]
+
 
 class TestMainFunction:
     """Tests for main() entry point."""
