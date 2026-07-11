@@ -79,6 +79,8 @@ def generate_image(
     if seed is None:
         seed = random.randint(0, 2**32 - 1)
 
+    logger.info("Generating image with seed %d", seed)
+
     output_path.parent.mkdir(parents=True, exist_ok=True)
     unload_all_models()
     model = _get_model(tiled_vae)
