@@ -249,6 +249,38 @@ class TestMetadataManager:
         assert raw["count"] == 5
         assert raw["prefix"] == "test"
 
+    def test_update_merges_dict_fields(self, temp_dir):
+        """Test that dict-valued updates merge into existing dicts."""
+        initial = {
+            "prefix": "test",
+            "image_generation": {
+                "enabled": True,
+                "width": 1024,
+                "height": 768,
+            },
+        }
+        (temp_dir / "test.metaprompt.json").write_text(json.dumps(initial))
+
+        result = MetadataManager.update(
+            temp_dir, image_generation={"width": 512, "format": "png"}
+        )
+
+        assert result.image_generation["enabled"] is True
+        assert result.image_generation["width"] == 512
+        assert result.image_generation["height"] == 768
+        assert result.image_generation["format"] == "png"
+
+    def test_update_overwrites_non_dict_value(self, temp_dir):
+        """Test that non-dict updates overwrite scalar values directly."""
+        initial = {"prefix": "test", "count": 5}
+        (temp_dir / "test.metaprompt.json").write_text(json.dumps(initial))
+
+        result = MetadataManager.update(temp_dir, count=42)
+
+        assert result.count == 42
+        saved = json.loads((temp_dir / "test.metaprompt.json").read_text())
+        assert saved["count"] == 42
+
     def test_get_prefix(self, temp_dir):
         """Test getting prefix from metadata."""
         (temp_dir / "myprefix.metaprompt.json").write_text('{"prefix": "myprefix"}')
