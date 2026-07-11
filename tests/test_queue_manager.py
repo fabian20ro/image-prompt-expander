@@ -271,3 +271,49 @@ class TestQueueManager:
         qm.remove_listener(listener)
         qm.add_task("generate_pipeline", {"prompt": "test2"})
         assert len(events) == 1  # No new events after removal
+
+    def test_update_task_pid(self, queue_path):
+        """Test that update_task_pid stores the PID on the running task."""
+        qm = QueueManager(queue_path)
+        events = []
+
+        def listener(event, data):
+            events.append((event, data))
+
+        qm.add_listener(listener)
+        task = qm.add_task(TaskType.GENERATE_IMAGE, {"run_id": "test"})
+        qm.get_next_task()
+
+        # Ignore add/get notifications
+        events.clear()
+
+        qm.update_task_pid(task.id, 4242)
+
+        state = qm.get_state()
+        assert state.current_task.pid == 4242
+        # update_task_pid does not emit a notification event
+        assert len(events) == 0
+
+    def test_update_task_pid_persists(self, queue_path):
+        """Test that the updated PID survives across QueueManager instances."""
+        qm1 = QueueManager(queue_path)
+        task = qm1.add_task(TaskType.GENERATE_IMAGE, {"run_id": "test"})
+        qm1.get_next_task()
+        qm1.update_task_pid(task.id, 9999)
+
+        qm2 = QueueManager(queue_path)
+        state = qm2.get_state()
+        assert state.current_task.pid == 9999
+
+    def test_update_task_pid_ignores_wrong_id(self, queue_path):
+        """update_task_pid should not mutate state when the task id is wrong."""
+        qm = QueueManager(queue_path)
+        task = qm.add_task(TaskType.GENERATE_IMAGE, {"run_id": "test"})
+        qm.get_next_task()
+
+        original_state = qm.get_state().current_task.pid
+        qm.update_task_pid("nonexistent-id", 1234)
+
+        state = qm.get_state()
+        assert state.current_task.id == task.id
+        assert state.current_task.pid == original_state
