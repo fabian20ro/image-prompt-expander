@@ -303,6 +303,19 @@ class TestMetadataManager:
         assert layout["images_per_prompt"] == 0
         assert layout["max_prompts"] == 2
 
+    def test_resolve_gallery_layout_with_run_metadata(self):
+        """Test fallback resolution when called with a RunMetadata object."""
+        metadata = RunMetadata(
+            prefix="test",
+            count=5,
+            image_generation={"images_per_prompt": 3, "max_prompts": 10},
+        )
+
+        layout = resolve_gallery_layout(metadata, prompt_count=4)
+
+        assert layout["images_per_prompt"] == 3
+        assert layout["max_prompts"] == 4
+
 
 class TestConvenienceFunctions:
     """Tests for convenience functions."""
