@@ -127,8 +127,9 @@ def test_generate_image_uses_fixed_parameters(mock_unload, mock_get_model, temp_
     mock_get_model.return_value = model
     output = temp_dir / "image.png"
 
-    generate_image("test prompt", output, seed=42, width=1024, height=768)
+    result = generate_image("test prompt", output, seed=42, width=1024, height=768)
 
+    assert result == output
     mock_unload.assert_called_once_with()
     model.generate_image.assert_called_once_with(
         seed=42,
