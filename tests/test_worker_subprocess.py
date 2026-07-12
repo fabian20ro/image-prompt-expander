@@ -599,6 +599,48 @@ class TestRunDeleteGallery:
         assert result["success"] is False
         assert "nonexistent-run" in result["error"]
 
+    @patch("server.worker_subprocess.delete_run")
+    @patch("server.worker_subprocess.paths")
+    def test_run_delete_gallery_value_error(self, mock_paths, mock_delete, capsys, temp_dir):
+        """Test run_delete_gallery handles ValueError from delete_run (safety guard)."""
+        prompts_dir = temp_dir / "prompts"
+        prompts_dir.mkdir(parents=True)
+        run_dir = prompts_dir / "test-run"
+        run_dir.mkdir(parents=True)
+        mock_paths.prompts_dir = prompts_dir
+
+        mock_delete.side_effect = ValueError("Gallery is in archive directory")
+
+        run_delete_gallery({"run_id": "test-run"})
+
+        captured = capsys.readouterr()
+        lines = captured.out.strip().split('\n')
+        result = json.loads(lines[-1])
+
+        assert result["success"] is False
+        assert "archive" in result["error"]
+
+    @patch("server.worker_subprocess.delete_run")
+    @patch("server.worker_subprocess.paths")
+    def test_run_delete_gallery_os_error(self, mock_paths, mock_delete, capsys, temp_dir):
+        """Test run_delete_gallery handles OSError from delete_run (filesystem error)."""
+        prompts_dir = temp_dir / "prompts"
+        prompts_dir.mkdir(parents=True)
+        run_dir = prompts_dir / "test-run"
+        run_dir.mkdir(parents=True)
+        mock_paths.prompts_dir = prompts_dir
+
+        mock_delete.side_effect = OSError("Permission denied")
+
+        run_delete_gallery({"run_id": "test-run"})
+
+        captured = capsys.readouterr()
+        lines = captured.out.strip().split('\n')
+        result = json.loads(lines[-1])
+
+        assert result["success"] is False
+        assert "Permission denied" in result["error"]
+
 
 class TestMainFunction:
     """Tests for main() entry point."""
