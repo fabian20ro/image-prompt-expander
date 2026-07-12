@@ -123,6 +123,20 @@ class TestAppendGrammarRevision:
         assert len(history) == 2
         assert history[1]["action"] == "update"
 
+    def test_appends_when_duplicate_exists_before_last(self, run_dir):
+        """Dedup only checks the last entry — earlier duplicates still append.
+
+        The dedup gate compares against `history[-1]` exclusively: if a grammar+action
+        pair appears elsewhere in history (not as the last entry), it is still appended.
+        This test characterizes that boundary so future refactors do not accidentally
+        change dedup to "global uniqueness" or break rotation semantics.
+        """
+        append_grammar_revision(run_dir, "test", grammar="rule_a", action="initial")
+        append_grammar_revision(run_dir, "test", grammar="rule_b", action="update")
+        history = append_grammar_revision(run_dir, "test", grammar="rule_a", action="initial")
+        assert len(history) == 3
+        assert history[2]["action"] == "initial"
+
     def test_creates_history_file_on_first_append(self, run_dir):
         append_grammar_revision(run_dir, "test", grammar="rule_a", action="initial")
         path = _history_path(run_dir, "test")

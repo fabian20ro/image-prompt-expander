@@ -84,20 +84,20 @@ async def test_heartbeat_stops_on_exception():
         nonlocal heartbeats_count
         heartbeats_count += 1
 
-    with patch('src.server.worker_subprocess.emit_progress', side_effect=mock_emit_progress):
-        # Enter heartbeat and wait for at least one emission
+    # Patch emit_progress so the counter tracks real emissions during the with-block.
+    with patch("src.server.worker_subprocess.emit_progress", side_effect=mock_emit_progress):
         try:
             with Heartbeat(message="test", interval=0.1) as hb:
                 await asyncio.sleep(0.25)  # Wait for at least one heartbeat
                 assert heartbeats_count >= 1  # Verify heartbeat was emitted
+                raise ValueError("simulated pipeline error")
 
-            # Should not reach here if exception is raised after sleep
         except ValueError:
-            pass  # Expected exception
+            pass  # Context manager's __exit__ should have cleaned up the thread before exception propagates
 
     count_after_exit = heartbeats_count
-    await asyncio.sleep(0.3)  # Wait to confirm no more heartbeats
-    assert heartbeats_count == count_after_exit  # Heartbeat thread should be stopped
+    await asyncio.sleep(0.3)  # Wait to confirm no more heartbeats after exit
+    assert heartbeats_count == count_after_exit  # Heartbeat thread should be stopped after context manager cleanup
 
 
 if __name__ == "__main__":

@@ -14,6 +14,7 @@ from grammar_generator import (
     clean_grammar_output,
 )
 
+
 def test_get_system_prompt_default(tmp_path):
     # Given
     generic_content = "generic content"
@@ -24,6 +25,7 @@ def test_get_system_prompt_default(tmp_path):
     
     # Then
     assert result == generic_content
+
 
 def test_hash_prompt():
     # Given
@@ -38,6 +40,7 @@ def test_hash_prompt():
     assert h1 != h3
     assert len(h1) == 12
 
+
 def test_clean_grammar_output_multiple_blocks():
     # Given
     raw = "Some text\n```json\n{\"a\": 1}\n```\nMore text\n```tracery\n{\"b\": 2}\n```"
@@ -45,6 +48,7 @@ def test_clean_grammar_output_multiple_blocks():
     result = clean_grammar_output(raw)
     # Then
     assert result == '{"a": 1}'
+
 
 def test_handles_json_array():
     # Verifies that if the LLM returns a JSON array, it is preserved
@@ -55,6 +59,7 @@ def test_handles_json_array():
     # Then
     assert result == '[1, 2, 3]'
 
+
 def test_handles_json_object_with_extra_content():
     # Verifies that content after the JSON object is discarded
     # Given
@@ -63,6 +68,7 @@ def test_handles_json_object_with_extra_content():
     result = clean_grammar_output(input_text)
     # Then
     assert result == '{"a": 1}'
+
 
 def test_handles_json_in_text_array():
     # Verifies extraction of JSON array from within text
@@ -73,6 +79,7 @@ def test_handles_json_in_text_array():
     # Then
     assert result == '[1, 2, 3]'
 
+
 def test_clean_grammar_output_no_blocks():
     # Given
     raw = "Just some text with {\"a\": 1} inside"
@@ -80,6 +87,24 @@ def test_clean_grammar_output_no_blocks():
     result = clean_grammar_output(raw)
     # Then
     assert result == '{"a": 1}'
+
+
+def test_clean_grammar_output_normalizes_smart_quotes():
+    """Smart (curly) double quotes in LLM output must be replaced with straight ASCII quotes."""
+    raw = "Here is the grammar: {\u201ckolors\u201d: [\u201cA sepia tone, soft grainy texture\u201d]}"
+    result = clean_grammar_output(raw)
+    assert '\u201c' not in result and '\u201d' not in result
+    expected = '{"kolors": ["A sepia tone, soft grainy texture"]}'
+    assert result == expected
+
+
+def test_clean_grammar_output_normalizes_smart_single_quotes():
+    """Left/right single curly quotes (U+2018, U+2019) must be replaced with straight ASCII apostrophes."""
+    raw = '{"prompt": "a cat\u2019s eye"}'  # \u2019 is right single curly quote
+    result = clean_grammar_output(raw)
+    assert '\u2019' not in result and '\u2018' not in result
+    expected = '{"prompt": "a cat\'s eye"}'
+    assert result == expected
 
 
 # ---------------------------------------------------------------------------
