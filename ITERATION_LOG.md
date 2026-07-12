@@ -20,6 +20,16 @@ Each entry should follow this structure:
 
 ---
 
+### [2026-07-12] Corrected default-branch CI trigger
+
+**Context:** Compound base-health evidence found that this repository's default branch is `master`, while CI push runs targeted `main`.
+**What happened:** Changed the CI push trigger to `master`; pull-request coverage remains unchanged.
+**Outcome:** Success — ruff passed, all 555 project tests passed, and the parent Hermes stack restarted healthy on 0.18.2.
+**Insight:** Base-branch automation must be checked against the repository's actual default branch, not a conventional branch name.
+**Promoted to Lessons Learned:** No
+
+---
+
 ### [2026-05-15] Added the shared HTML components test file to the test codemap
 
 **Context:** The test codemap and README coverage summary listed most major test surfaces, but they did not call out `tests/test_html_components.py`, which covers the shared CSS/JS building blocks used by the gallery and index pages.
