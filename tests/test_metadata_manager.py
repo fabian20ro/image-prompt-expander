@@ -106,6 +106,34 @@ class TestMetadataManager:
         result = MetadataManager.find_metadata_file(temp_dir)
         assert result is None
 
+    def test_find_legacy_metadata_pattern(self, temp_dir):
+        """Test find_metadata_file returns legacy _metadata.json files for backward compatibility.
+
+        The search loop in find_metadata_file supports the old *_metadata.json naming
+        convention alongside new *.metaprompt.json files. This test ensures that legacy
+        metadata directories (pre-refactor) are still discovered correctly.
+        """
+        meta_file = temp_dir / "test_metadata.json"
+        meta_file.write_text('{"prefix": "legacy"}')
+
+        result = MetadataManager.find_metadata_file(temp_dir)
+        assert result == meta_file
+
+    def test_find_metaprompt_before_legacy(self, temp_dir):
+        """Test that new .metaprompt.json takes precedence over legacy _metadata.json.
+
+        When both naming patterns coexist in the same directory, the modern file wins —
+        matching the iteration order in find_metadata_file's glob loop.
+        """
+        legacy = temp_dir / "test_legacy_metadata.json"
+        legacy.write_text('{"prefix": "legacy"}')
+
+        modern = temp_dir / "test.metaprompt.json"
+        modern.write_text('{"prefix": "modern"}')
+
+        result = MetadataManager.find_metadata_file(temp_dir)
+        assert result == modern
+
     def test_load_success(self, temp_dir):
         """Test loading metadata successfully."""
         data = {"prefix": "test", "count": 5, "user_prompt": "hello"}
@@ -221,6 +249,38 @@ class TestMetadataManager:
         assert raw["count"] == 5
         assert raw["prefix"] == "test"
 
+    def test_update_merges_dict_fields(self, temp_dir):
+        """Test that dict-valued updates merge into existing dicts."""
+        initial = {
+            "prefix": "test",
+            "image_generation": {
+                "enabled": True,
+                "width": 1024,
+                "height": 768,
+            },
+        }
+        (temp_dir / "test.metaprompt.json").write_text(json.dumps(initial))
+
+        result = MetadataManager.update(
+            temp_dir, image_generation={"width": 512, "format": "png"}
+        )
+
+        assert result.image_generation["enabled"] is True
+        assert result.image_generation["width"] == 512
+        assert result.image_generation["height"] == 768
+        assert result.image_generation["format"] == "png"
+
+    def test_update_overwrites_non_dict_value(self, temp_dir):
+        """Test that non-dict updates overwrite scalar values directly."""
+        initial = {"prefix": "test", "count": 5}
+        (temp_dir / "test.metaprompt.json").write_text(json.dumps(initial))
+
+        result = MetadataManager.update(temp_dir, count=42)
+
+        assert result.count == 42
+        saved = json.loads((temp_dir / "test.metaprompt.json").read_text())
+        assert saved["count"] == 42
+
     def test_get_prefix(self, temp_dir):
         """Test getting prefix from metadata."""
         (temp_dir / "myprefix.metaprompt.json").write_text('{"prefix": "myprefix"}')
@@ -274,6 +334,19 @@ class TestMetadataManager:
 
         assert layout["images_per_prompt"] == 0
         assert layout["max_prompts"] == 2
+
+    def test_resolve_gallery_layout_with_run_metadata(self):
+        """Test fallback resolution when called with a RunMetadata object."""
+        metadata = RunMetadata(
+            prefix="test",
+            count=5,
+            image_generation={"images_per_prompt": 3, "max_prompts": 10},
+        )
+
+        layout = resolve_gallery_layout(metadata, prompt_count=4)
+
+        assert layout["images_per_prompt"] == 3
+        assert layout["max_prompts"] == 4
 
 
 class TestConvenienceFunctions:

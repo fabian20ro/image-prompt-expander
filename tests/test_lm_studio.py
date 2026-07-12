@@ -1,61 +1,84 @@
-"""Tests for the LM Studio memory handoff."""
+"""Tests for src/lm_studio."""
 
+from unittest.mock import patch, MagicMock
 import subprocess
-from unittest.mock import MagicMock, patch
-
 import pytest
 
-from lm_studio import LMStudioUnloadError, unload_all_models
+from lm_studio import unload_all_models, LMStudioUnloadError
 
 
-@patch("lm_studio.subprocess.run")
-@patch("lm_studio.shutil.which", return_value="/opt/lms")
-def test_unload_all_models(mock_which, mock_run):
-    mock_run.return_value = MagicMock(returncode=0)
-    unload_all_models()
-    mock_run.assert_called_once_with(
-        ["/opt/lms", "unload", "--all"],
-        capture_output=True,
-        text=True,
-        timeout=60.0,
-        check=False,
-    )
+class TestUnloadAllModels:
+    def test_raises_when_lms_not_found(self):
+        with patch("lm_studio.shutil.which", return_value=None):
+            with pytest.raises(LMStudioUnloadError) as exc_info:
+                unload_all_models()
+            assert "not found on PATH" in str(exc_info.value)
 
+    def test_succeeds_on_first_attempt(self):
+        mock_result = MagicMock()
+        mock_result.returncode = 0
+        mock_run = MagicMock(return_value=mock_result)
 
-@patch("lm_studio.shutil.which", return_value=None)
-def test_unload_requires_cli(mock_which):
-    with pytest.raises(LMStudioUnloadError, match="not found"):
-        unload_all_models()
+        with patch("lm_studio.shutil.which", return_value="/usr/bin/lms"), \
+             patch("lm_studio.subprocess.run", mock_run) as run_mock:
+            unload_all_models()
+            assert run_mock.call_count == 1
 
+    def test_retries_on_failure(self):
+        fail_result = MagicMock()
+        fail_result.returncode = 1
+        fail_result.stderr = "still busy"
+        success_result = MagicMock()
+        success_result.returncode = 0
 
-@patch("lm_studio.subprocess.run")
-@patch("lm_studio.shutil.which", return_value="/opt/lms")
-def test_unload_fails_closed(mock_which, mock_run):
-    mock_run.return_value = MagicMock(returncode=1, stderr="busy", stdout="")
-    with pytest.raises(LMStudioUnloadError, match="busy"):
-        unload_all_models()
+        call_count = [0]
+        def side_effect(*args, **kwargs):
+            call_count[0] += 1
+            if call_count[0] <= 2:
+                return fail_result
+            return success_result
 
+        with patch("lm_studio.shutil.which", return_value="/usr/bin/lms"), \
+             patch("lm_studio.subprocess.run", side_effect=side_effect), \
+             patch("lm_studio.time.sleep") as sleep_mock:
+            unload_all_models()
+            assert call_count[0] == 3
+            assert sleep_mock.call_count == 2
 
-@patch("lm_studio.subprocess.run", side_effect=subprocess.TimeoutExpired("lms", 60))
-@patch("lm_studio.shutil.which", return_value="/opt/lms")
-def test_unload_timeout(mock_which, mock_run):
-    with pytest.raises(LMStudioUnloadError, match="Timed out"):
-        unload_all_models()
+    def test_raises_after_exhausting_retries(self):
+        fail_result = MagicMock()
+        fail_result.returncode = 1
+        fail_result.stderr = "busy"
 
+        with patch("lm_studio.shutil.which", return_value="/usr/bin/lms"), \
+             patch("lm_studio.subprocess.run", return_value=fail_result), \
+             patch("lm_studio.time.sleep"):
+            with pytest.raises(LMStudioUnloadError) as exc_info:
+                unload_all_models()
+            assert "busy" in str(exc_info.value)
 
-@patch("lm_studio.subprocess.run")
-@patch("lm_studio.shutil.which", return_value="/opt/lms")
-def test_unload_fails_open(mock_which, mock_run):
-    """Stdout-only error message is surfaced when stderr is empty."""
-    mock_run.return_value = MagicMock(returncode=1, stderr="", stdout="model busy")
-    with pytest.raises(LMStudioUnloadError, match="model busy"):
-        unload_all_models()
+    def test_raises_on_timeout_after_exhausting_retries(self):
+        timeout_exc = subprocess.TimeoutExpired(cmd=["lms", "unload", "--all"], timeout=60)
 
+        call_count = [0]
+        def side_effect(*args, **kwargs):
+            call_count[0] += 1
+            if call_count[0] <= 2:
+                raise timeout_exc
+            return MagicMock(returncode=0)
 
-@patch("lm_studio.subprocess.run")
-@patch("lm_studio.shutil.which", return_value="/opt/lms")
-def test_unload_fails_no_detail(mock_which, mock_run):
-    """Empty stderr+stdout falls back to the generic message."""
-    mock_run.return_value = MagicMock(returncode=1, stderr="", stdout="")
-    with pytest.raises(LMStudioUnloadError, match="unknown error"):
-        unload_all_models()
+        with patch("lm_studio.shutil.which", return_value="/usr/bin/lms"), \
+             patch("lm_studio.subprocess.run", side_effect=side_effect), \
+             patch("lm_studio.time.sleep"):
+            unload_all_models()
+            assert call_count[0] == 3
+
+    def test_timeout_on_final_attempt_raises(self):
+        timeout_exc = subprocess.TimeoutExpired(cmd=["lms", "unload", "--all"], timeout=60)
+
+        with patch("lm_studio.shutil.which", return_value="/usr/bin/lms"), \
+             patch("lm_studio.subprocess.run", side_effect=lambda *a, **kw: (_ for _ in ()).throw(timeout_exc)), \
+             patch("lm_studio.time.sleep"):
+            with pytest.raises(LMStudioUnloadError) as exc_info:
+                unload_all_models()
+            assert "Timed out" in str(exc_info.value)

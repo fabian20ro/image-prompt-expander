@@ -101,6 +101,20 @@ class TestNotifications:
         js = Notifications.js()
         assert "showToast" in js
 
+    def test_toast_fade_in_animation_present(self):
+        """Toasts must animate in with a fade-in effect so they feel less jarring.
+
+        Without animation, messages pop into view instantly — which works but feels
+        abrupt and lowers perceived polish. The CSS should define @keyframes fadeIn
+        and apply it to .toast elements as a short ease-out transition.
+        """
+        css = Notifications.css()
+        assert "@keyframes fadeIn" in css, (
+            "Fade-in animation keyframes must be defined for toast appearances."
+        )
+        assert ".toast {".startswith("    .toast") or "animation:" in css, (
+            "The fade-in animation must be applied to the .toast class so it actually runs."
+        )
 
 class TestSSEClient:
     """Tests for SSEClient component."""

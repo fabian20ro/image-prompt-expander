@@ -193,6 +193,35 @@ class TestGalleryInteractive:
         assert '<img src="' in content
         assert '<p class="status">Generated: 0 / 1 images</p>' in content
 
+    def test_update_gallery_preserves_sibling_action_buttons(self, temp_dir):
+        """update_gallery should replace the placeholder while keeping sibling markup intact."""
+        run_dir = temp_dir
+        prefix = "test_siblings"
+        gallery_path = run_dir / f"{prefix}_gallery.html"
+        image_path = run_dir / f"{prefix}_0_0.png"
+
+        # Create a realistic card with a pending placeholder AND action buttons (as in interactive mode)
+        gallery_path.write_text(f'''<div class="card" data-image="{prefix}_0_0.png" data-prompt-idx="0" data-image-idx="0">
+          <div class="placeholder">Pending...</div>
+          <div class="prompt">Initial prompt text</div><div class="card-actions">
+        <button class="btn-small btn-primary" onclick="generateImage(this, 0, 0)">Generate</button>
+        <button class="btn-small btn-secondary" onclick="enhanceImage(this, 0, 0)">Enhance</button>
+      </div></div>''')
+
+        image_path.write_text("new image data")
+
+        from gallery import update_gallery
+        update_gallery(gallery_path, image_path, "Updated prompt", 1, 2)
+
+        content = gallery_path.read_text()
+        # Placeholder should be replaced with actual image link (alt is the escaped prompt)
+        assert '<img src="' in content
+        assert f'alt="Updated prompt"' in content
+        # Action buttons must remain untouched after the replacement
+        assert "btn-primary" in content
+        assert "btn-secondary" in content
+        assert "generateImage(this, 0, 0)" in content
+
     def test_update_gallery_skips_missing_gallery(self, temp_dir):
         """update_gallery must be a no-op when the gallery HTML is absent."""
         from pathlib import Path
@@ -204,3 +233,39 @@ class TestGalleryInteractive:
         # Call update_gallery on a non-existent gallery — it should not raise.
         update_gallery(missing_path, image_path, "prompt", 1, 1)
         assert not missing_path.exists()
+
+    def test_update_gallery_escapes_special_chars_and_preserves_buttons(self, temp_dir):
+        """update_gallery must escape HTML chars in prompt while keeping sibling buttons intact."""
+        import html as html_mod
+
+        run_dir = temp_dir
+        prefix = "test_escape"
+        gallery_path = run_dir / f"{prefix}_gallery.html"
+        image_path = run_dir / f"{prefix}_0_0.png"
+
+        # Craft a prompt with HTML metacharacters that would break naive embedding.
+        raw_prompt = '<script>alert("xss")</script> & "bold"'
+        escaped = html_mod.escape(raw_prompt)
+
+        gallery_path.write_text(f'''<div class="card" data-image="{prefix}_0_0.png" data-prompt-idx="0" data-image-idx="0">
+          <div class="placeholder">Pending...</div>
+          <div class="prompt">{escaped}</div><div class="card-actions">
+        <button class="btn-small btn-primary" onclick="generateImage(this, 0, 0)">Generate</button>
+        <button class="btn-small btn-secondary" onclick="enhanceImage(this, 0, 0)">Enhance</button>
+      </div></div>''')
+
+        image_path.write_text("new image data")
+
+        from gallery import update_gallery
+        update_gallery(gallery_path, image_path, raw_prompt, 1, 1)
+
+        content = gallery_path.read_text()
+
+        # The placeholder must have been replaced with an actual <img>.
+        assert "<img src=" in content
+        # Alt text must be HTML-escaped, never the raw metacharacters.
+        assert f'alt="{escaped}"' in content
+        assert '<script>' not in content
+        # Sibling action buttons must remain untouched.
+        assert "btn-primary" in content
+        assert "generateImage(this, 0, 0)" in content

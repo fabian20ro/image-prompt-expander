@@ -83,3 +83,34 @@ def test_run_from_grammar_text_progress_callback_invoked(tmp_path):
     # The pipeline should report 0 then count for the expanding_prompts stage
     expand_indices = [i for i, s in enumerate(recorded_stages) if s == "expanding_prompts"]
     assert len(expand_indices) >= 1
+
+
+def test_run_from_grammar_text_empty_expansion(tmp_path):
+    """Zero-prompt expansion should produce a successful result with zero prompts."""
+
+    recorded_stages = []
+
+    def track_progress(stage, current=0, total=0, message=""):
+        recorded_stages.append(stage)
+
+    executor = PipelineExecutor(on_progress=track_progress)
+
+    grammar = json.dumps({"origin": ["test"]})
+
+    output_dir = tmp_path / "output"
+
+    with patch("pipeline.create_gallery") as mock_gallery, \
+         patch("pipeline.generate_master_index") as mock_index, \
+         patch("pipeline.append_grammar_revision"), \
+         patch("pipeline.run_tracery", return_value=[]):
+        result = executor.run_from_grammar_text(
+            grammar=grammar,
+            count=50,
+            output_dir=output_dir,
+        )
+
+    assert result.success is True
+    assert result.prompt_count == 0
+    assert result.image_count == 0
+    # Progress callback should still report all expected stages
+    assert "expanding_prompts" in recorded_stages

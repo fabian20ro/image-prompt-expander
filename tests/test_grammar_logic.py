@@ -100,3 +100,24 @@ def test_api_root_leaves_non_v1_urls_unchanged():
     """Non-LM-Studio URLs (no /v1 segment) should round-trip untouched."""
     url = "http://example.com/api"
     assert _api_root(url) == url
+
+
+def test_api_root_does_not_strip_mid_path_v1():
+    """/v1 appearing in the middle of a path must NOT be stripped — only trailing /v1 is removed."""
+    url = "http://localhost:1234/some/v1/path/extra"
+    assert _api_root(url) == url
+
+
+def test_api_root_handles_v1_with_query():
+    """A URL with query params after /v1 should round-trip unchanged (not endswith /v1)."""
+    url = "http://localhost:1234/v1?param=value"
+    assert _api_root(url) == url
+
+
+def test_api_root_case_sensitive_v1():
+    """/V1 or /V1/ variants must not be stripped — only lowercase /v1 is the LM Studio convention."""
+    url_upper = "http://localhost:1234/V1"
+    assert _api_root(url_upper) == url_upper
+
+    url_mixed = "http://localhost:1234/v1/"
+    assert _api_root(url_mixed) == "http://localhost:1234"  # lowercase stripped per contract

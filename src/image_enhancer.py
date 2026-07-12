@@ -49,6 +49,8 @@ def enhance_image(
     softness: float = 0.5,
     seed: int | None = None,
     tiled_vae: bool = False,
+    width: int | None = None,
+    height: int | None = None,
 ) -> Path:
     """
     Enhance a single image using SeedVR2 2x upscaling.
@@ -59,6 +61,8 @@ def enhance_image(
         softness: Enhancement softness (0.0-1.0, default 0.5)
         seed: Random seed for reproducibility (None for random)
         tiled_vae: Enable tiled VAE decoding to reduce memory (default: False)
+        width: Override output width in pixels (must be positive multiple of 8; None = model default)
+        height: Override output height in pixels (must be positive multiple of 8; None = model default)
 
     Returns:
         Path to the enhanced image file
@@ -73,6 +77,17 @@ def enhance_image(
     if not (0.0 <= softness <= 1.0):
         raise ValueError("softness must be between 0.0 and 1.0")
 
+    if width is not None:
+        if width <= 0:
+            raise ValueError("Width must be positive.")
+        if width % 8 != 0:
+            raise ValueError("Width must be a multiple of 8.")
+
+    if height is not None:
+        if height <= 0:
+            raise ValueError("Height must be positive.")
+        if height % 8 != 0:
+            raise ValueError("Height must be a multiple of 8.")
 
     # Import ScaleFactor for 2x upscaling
     try:
@@ -95,12 +110,17 @@ def enhance_image(
     enhancer = _get_enhancer(tiled_vae)
 
     # Enhance the image with 2x upscaling
-    result = enhancer.generate_image(
+    kwargs = dict(
         seed=seed,
         image_path=str(image_path),
         resolution=ScaleFactor(2),
         softness=softness,
     )
+    if width is not None:
+        kwargs["width"] = width
+    if height is not None:
+        kwargs["height"] = height
+    result = enhancer.generate_image(**kwargs)
 
     # Save the enhanced image (overwrite if replacing original)
     result.save(path=str(output_path), overwrite=True)

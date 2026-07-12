@@ -2,29 +2,54 @@
 
 import shutil
 import subprocess
+import time
 
 
 class LMStudioUnloadError(RuntimeError):
     """Raised when loaded LM Studio models cannot be released."""
 
 
+_MAX_RETRIES = 3
+_BACKOFF_SECONDS = (1.0, 2.0)
+
+
 def unload_all_models(timeout: float = 60.0) -> None:
-    """Unload every LM Studio model before an mflux model is loaded."""
+    """Unload every LM Studio model before an mflux model is loaded.
+
+    Retries on transient subprocess failure (e.g., model still in use).
+    Raises after exhausting retries or on non-transient errors.
+    """
     executable = shutil.which("lms")
     if executable is None:
         raise LMStudioUnloadError("LM Studio CLI `lms` was not found on PATH")
 
-    try:
-        result = subprocess.run(
-            [executable, "unload", "--all"],
-            capture_output=True,
-            text=True,
-            timeout=timeout,
-            check=False,
-        )
-    except subprocess.TimeoutExpired as exc:
-        raise LMStudioUnloadError("Timed out unloading LM Studio models") from exc
+    last_exc: Exception | None = None
+    for attempt in range(_MAX_RETRIES):
+        try:
+            result = subprocess.run(
+                [executable, "unload", "--all"],
+                capture_output=True,
+                text=True,
+                timeout=timeout,
+                check=False,
+            )
+        except subprocess.TimeoutExpired as exc:
+            last_exc = LMStudioUnloadError("Timed out unloading LM Studio models")
+            if attempt < _MAX_RETRIES - 1:
+                time.sleep(_BACKOFF_SECONDS[attempt])
+                continue
+            raise last_exc
 
-    if result.returncode != 0:
+        if result.returncode == 0:
+            return
+
         detail = result.stderr.strip() or result.stdout.strip() or "unknown error"
-        raise LMStudioUnloadError(f"Failed to unload LM Studio models: {detail}")
+        last_exc = LMStudioUnloadError(
+            f"Failed to unload LM Studio models: {detail}"
+        )
+        if attempt < _MAX_RETRIES - 1:
+            time.sleep(_BACKOFF_SECONDS[attempt])
+            continue
+        raise last_exc
+
+    raise last_exc  # type: ignore[misc]

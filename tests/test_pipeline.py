@@ -346,3 +346,129 @@ class TestRunFromGrammar:
                     result = executor.run_from_grammar(grammar_path=grammar_file, count=1)
                     assert result.success is True
                     assert result.output_dir is not None
+
+
+class TestRunFullPipelineWithImages:
+    """Tests for run_full_pipeline when generate_images=True."""
+
+    @patch("pipeline.generate_master_index")
+    @patch("pipeline.create_gallery")
+    @patch("pipeline.run_tracery")
+    @patch("pipeline.generate_grammar")
+    def test_generate_images_invokes_internal_generator(
+        self, mock_grammar, mock_tracery, mock_gallery, mock_index, temp_dir
+    ):
+        """Test that generate_images=True triggers _generate_images with correct parameters.
+
+        Verifies the public API correctly routes image generation requests
+        through the internal pipeline method without requiring mflux hardware.
+        Catches regressions in parameter passing between run_full_pipeline
+        and _generate_images.
+        """
+        mock_grammar.return_value = ('{"origin": ["test"]}', False, "raw response")
+        mock_tracery.return_value = ["prompt 1", "prompt 2"]
+        mock_gallery.return_value = temp_dir / "prompts" / "test_gallery.html"
+
+        with patch("pipeline.paths") as mock_paths:
+            mock_paths.prompts_dir = temp_dir / "prompts"
+            mock_paths.prompts_dir.mkdir(parents=True)
+            mock_paths.generated_dir = temp_dir
+
+            # Mock _generate_images to capture its call arguments without invoking mflux
+            captured_kwargs = {}
+
+            def fake_generate_images(**kwargs):
+                captured_kwargs.update(kwargs)
+                return PipelineResult(
+                    success=True, run_id="test", output_dir=temp_dir,
+                    image_count=2, skipped_count=0,
+                )
+
+            executor = PipelineExecutor()
+            with patch.object(PipelineExecutor, "_generate_images", side_effect=fake_generate_images):
+                result = executor.run_full_pipeline(
+                    prompt="a dragon flying",
+                    count=2,
+                    prefix="dragon",
+                    generate_images=True,
+                    images_per_prompt=1,
+                    width=1024,
+                    height=768,
+                    seed=42,
+                )
+
+        assert result.success is True
+        assert result.image_count == 2
+        assert captured_kwargs["width"] == 1024
+        assert captured_kwargs["height"] == 768
+        assert captured_kwargs["seed"] == 42
+        assert captured_kwargs["images_per_prompt"] == 1
+        assert captured_kwargs["tiled_vae"] is True
+        assert captured_kwargs["enhance"] is False
+
+    @patch("pipeline.generate_master_index")
+    @patch("pipeline.create_gallery")
+    @patch("pipeline.run_tracery")
+    @patch("pipeline.generate_grammar")
+    def test_generate_images_passes_enhancement_params(
+        self, mock_grammar, mock_tracery, mock_gallery, mock_index, temp_dir
+    ):
+        """Test that enhancement flags flow through to _generate_images."""
+        mock_grammar.return_value = ('{"origin": ["test"]}', False, None)
+        mock_tracery.return_value = ["prompt 1"]
+        mock_gallery.return_value = temp_dir / "prompts" / "test_gallery.html"
+
+        captured_kwargs = {}
+
+        def fake_generate_images(**kwargs):
+            captured_kwargs.update(kwargs)
+            return PipelineResult(success=True, run_id="test", output_dir=temp_dir, image_count=1, skipped_count=0)
+
+        with patch("pipeline.paths") as mock_paths:
+            mock_paths.prompts_dir = temp_dir / "prompts"
+            mock_paths.prompts_dir.mkdir(parents=True)
+            mock_paths.generated_dir = temp_dir
+
+            executor = PipelineExecutor()
+            with patch.object(PipelineExecutor, "_generate_images", side_effect=fake_generate_images):
+                result = executor.run_full_pipeline(
+                    prompt="test", count=1, generate_images=True,
+                    enhance=True, enhance_softness=0.75, enhance_after=True,
+                )
+
+        assert result.success is True
+        assert captured_kwargs["enhance"] is True
+        assert captured_kwargs["enhance_softness"] == 0.75
+        assert captured_kwargs["enhance_after"] is True
+
+    @patch("pipeline.generate_master_index")
+    @patch("pipeline.create_gallery")
+    @patch("pipeline.run_tracery")
+    @patch("pipeline.generate_grammar")
+    def test_generate_images_respect_max_prompts_limit(
+        self, mock_grammar, mock_tracery, mock_gallery, mock_index, temp_dir
+    ):
+        """Test that max_prompts correctly limits the prompt list passed to _generate_images."""
+        mock_grammar.return_value = ('{"origin": ["test"]}', False, None)
+        mock_tracery.return_value = [f"prompt {i}" for i in range(5)]  # 5 prompts generated
+        mock_gallery.return_value = temp_dir / "prompts" / "test_gallery.html"
+
+        captured_kwargs = {}
+
+        def fake_generate_images(**kwargs):
+            captured_kwargs.update(kwargs)
+            return PipelineResult(success=True, run_id="test", output_dir=temp_dir, image_count=2, skipped_count=0)
+
+        with patch("pipeline.paths") as mock_paths:
+            mock_paths.prompts_dir = temp_dir / "prompts"
+            mock_paths.prompts_dir.mkdir(parents=True)
+            mock_paths.generated_dir = temp_dir
+
+            executor = PipelineExecutor()
+            with patch.object(PipelineExecutor, "_generate_images", side_effect=fake_generate_images):
+                result = executor.run_full_pipeline(
+                    prompt="test", count=5, generate_images=True, max_prompts=2,
+                )
+
+        assert result.success is True
+        assert len(captured_kwargs["prompts"]) == 2  # Only first 2 prompts passed to image gen

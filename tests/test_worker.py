@@ -369,6 +369,24 @@ class TestWorkerExecuteTask:
                 # Should have logged a warning about invalid JSON
                 mock_warn.assert_called()
 
+    @pytest.mark.asyncio
+    async def test_execute_task_handles_nonzero_exit_empty_stderr(self, worker):
+        """Test that non-zero exit with empty stderr uses fallback error message."""
+        task = MockTask()
+
+        mock_process = self._create_mock_process(
+            stdout_lines=[b""],
+            stderr_lines=[b""],
+            return_code=1,
+        )
+
+        with patch("asyncio.create_subprocess_exec", return_value=mock_process):
+            await worker._execute_task(task)
+
+        worker.queue_manager.fail_task.assert_called_once_with(
+            task.id, "Process exited with code 1"
+        )
+
 
 class TestWorkerRun:
     """Tests for Worker.run() main loop."""

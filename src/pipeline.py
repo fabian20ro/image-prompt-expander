@@ -169,6 +169,24 @@ class PipelineConfig:
     # Output settings
     output_dir: Path | None = None
 
+    def to_dict(self) -> dict:
+        """Convert to dictionary for metadata storage.
+
+        Recursively converts nested config objects and excludes None values.
+        """
+        result = {
+            "prompt": self.prompt,
+            "count": self.count,
+            "prefix": self.prefix,
+            "temperature": self.temperature,
+            "no_cache": self.no_cache,
+            "image": self.image.to_dict(),
+            "enhancement": self.enhancement.to_dict(),
+        }
+        if self.output_dir is not None:
+            result["output_dir"] = str(self.output_dir)
+        return result
+
 def _null_progress(stage: str, current: int = 0, total: int = 0, message: str = "") -> None:
     """No-op progress callback."""
     pass

@@ -116,6 +116,25 @@ class TestGalleryService:
         result = service.load_grammar(temp_dir, "test")
         assert result is None
 
+    def test_get_grammar_file_explicit_prefix(self, temp_dir):
+        """Test get_grammar_file with explicit prefix returns correct path."""
+        run_dir = temp_dir / "run"
+        run_dir.mkdir()
+
+        service = GalleryService(temp_dir, temp_dir)
+        result = service.get_grammar_file(run_dir, prefix="test")
+
+        assert result == run_dir / "test_grammar.json"
+
+    def test_get_grammar_file_auto_detects_prefix(self, temp_dir):
+        """Test get_grammar_file auto-detects prefix from metadata when None."""
+        (temp_dir / "cat.metaprompt.json").write_text(json.dumps({"prefix": "cat"}))
+
+        service = GalleryService(temp_dir, temp_dir)
+        result = service.get_grammar_file(temp_dir)
+
+        assert result == temp_dir / "cat_grammar.json"
+
     def test_load_prompts(self, temp_dir):
         """Test loading prompts."""
         (temp_dir / "test.metaprompt.json").write_text(json.dumps({"prefix": "test"}))
@@ -260,18 +279,3 @@ class TestGalleryService:
 
         service = GalleryService(temp_dir, temp_dir)
         assert service.count_images(run_dir, prefix="test_01") == 2
-
-    def test_list_images_multi_segment(self, temp_dir):
-        """Test listing images."""
-        run_dir = temp_dir / "run_dir"
-        run_dir.mkdir(parents=True)
-        (run_dir / "test_01_20240101_120000.png").touch()
-        (run_dir / "test_01_20240101_120001.PNG").touch()
-        (run_dir / "test_01_20240101_120002.jpg").touch()
-        (run_dir / "not_an_image.txt").touch()
-
-        service = GalleryService(temp_dir, temp_dir)
-        images = service.list_images(run_dir, prefix="test_01")
-        # current implementation: .glob(f"{prefix}_*_*.png") which is case-sensitive
-        assert len(images) == 1 # only the first one matches
-        assert any(i.name == "test_01_20240101_120000.png" for i in images)

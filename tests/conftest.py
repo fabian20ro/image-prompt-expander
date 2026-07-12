@@ -173,3 +173,45 @@ def test_create_run_files_exist_ok(temp_dir):
 
     returned = create_run_files(run_subdir, prefix=prefix, num_prompts=1)
     assert returned == run_subdir
+
+
+def test_create_run_files_default_metadata_structure(temp_dir):
+    """Verify default metadata contains expected fields when no custom metadata provided."""
+    prefix = "default_meta"
+    run_dir = create_run_files(
+        temp_dir / "default_meta",
+        prefix=prefix,
+        num_prompts=2,
+    )
+
+    written_meta = json.loads((run_dir / f"{prefix}.metaprompt.json").read_text())
+
+    # Verify default metadata contains required fields with expected values
+    assert written_meta["prefix"] == "default_meta"
+    assert written_meta["count"] == 2
+    assert written_meta["user_prompt"] == "test prompt"
+    assert written_meta.get("image_generation", {}).get("images_per_prompt") == 1
+
+
+def test_create_run_files_zero_prompts(temp_dir):
+    """Verify create_run_files handles num_prompts=0 by creating no prompt files."""
+    prefix = "zero_run"
+    run_dir = temp_dir / "zero_run"
+
+    returned = create_run_files(
+        run_dir,
+        prefix=prefix,
+        num_prompts=0,
+    )
+
+    # Metadata and grammar still created even with zero prompts
+    assert (returned / f"{prefix}.metaprompt.json").exists()
+    assert (returned / f"{prefix}_grammar.json").exists()
+
+    # No prompt files should be created when num_prompts is 0
+    for i in range(0):
+        assert not (returned / f"{prefix}_{i}.txt").exists()
+
+    # Verify no unexpected prompt files exist
+    txt_files = list((returned).glob(f"{prefix}_*.txt"))
+    assert len(txt_files) == 0

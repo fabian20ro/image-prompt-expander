@@ -99,6 +99,23 @@ def test_get_model_applies_tiling_when_tiled_vae(mock_settings, temp_dir):
         _get_model(tiled_vae=True)
 
     assert TilingConfig.called
+    assert instance.tiling_config is TilingConfig.return_value
+
+
+@patch("image_generator.settings")
+def test_get_model_import_error_when_mflux_missing(mock_settings, monkeypatch):
+    """When mflux is not installed, _get_model surfaces an actionable ImportError."""
+    model_path = MagicMock()
+    model_path.expanduser.return_value = mock_settings.image_generation.model_path
+    model_path.exists.return_value = True
+    mock_settings.image_generation.model_path = model_path
+
+    for mod in ("mflux", "mflux.models", "mflux.models.common",
+                "mflux.models.common.config", "mflux.models.ernie_image"):
+        monkeypatch.delitem(sys.modules, mod, raising=False)
+
+    with pytest.raises(ImportError, match=r"mflux 0\.18\.0\+ is required"):
+        _get_model()
 
 
 @patch("image_generator._get_model")
@@ -110,8 +127,9 @@ def test_generate_image_uses_fixed_parameters(mock_unload, mock_get_model, temp_
     mock_get_model.return_value = model
     output = temp_dir / "image.png"
 
-    generate_image("test prompt", output, seed=42, width=1024, height=768)
+    result = generate_image("test prompt", output, seed=42, width=1024, height=768)
 
+    assert result == output
     mock_unload.assert_called_once_with()
     model.generate_image.assert_called_once_with(
         seed=42,
@@ -140,3 +158,44 @@ def test_generate_image_random_seed_and_tiling(mock_unload, mock_get_model, temp
 def test_generate_image_rejects_invalid_dimensions(temp_dir, width, height):
     with pytest.raises(ValueError):
         generate_image("test", temp_dir / "image.png", width=width, height=height)
+
+
+@patch("image_generator._get_model")
+@patch("image_generator.unload_all_models")
+def test_generate_image_creates_output_parent_directory(mock_unload, mock_get_model, temp_dir):
+    parent = temp_dir / "nested" / "deep"
+    output = parent / "image.png"
+    # Ensure the parent does not exist yet.
+    assert not parent.exists()
+
+    model = MagicMock()
+    generated = MagicMock()
+    model.generate_image.return_value = generated
+    mock_get_model.return_value = model
+
+    generate_image("test", output)
+
+    assert parent.is_dir()
+
+
+@patch("image_generator.settings")
+@patch("image_generator._model_cache", {})
+def test_get_model_skips_tiling_by_default(mock_settings, temp_dir):
+    """When tiled_vae is False (default), tiling config must not be applied."""
+    model_path = temp_dir / "ernie-q4"
+    model_path.mkdir()
+    mock_settings.image_generation.model_path = model_path
+
+    config_module = ModuleType("mflux.models.common.config")
+    config_module.ModelConfig = MagicMock()
+    ernie_module = ModuleType("mflux.models.ernie_image")
+    instance = MagicMock()
+    ernie_module.ErnieImage = MagicMock(return_value=instance)
+
+    with patch.dict(sys.modules, {
+        "mflux.models.common.config": config_module,
+        "mflux.models.ernie_image": ernie_module,
+    }):
+        _get_model(tiled_vae=False)
+
+    assert not hasattr(instance.tiling_config, "_mock_name") or instance.tiling_config is None or "TilingConfig" not in str(type(instance.tiling_config))

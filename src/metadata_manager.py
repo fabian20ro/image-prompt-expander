@@ -260,7 +260,12 @@ class MetadataManager:
             # Apply updates
             for key, value in updates.items():
                 if value is not None:
-                    data[key] = value
+                    existing = data.get(key)
+                    if isinstance(existing, dict) and isinstance(value, dict):
+                        merged = {**existing, **value}
+                        data[key] = merged
+                    else:
+                        data[key] = value
                 elif key in data:
                     del data[key]
 
