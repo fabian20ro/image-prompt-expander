@@ -405,6 +405,10 @@ class TestRunFullPipelineWithImages:
         assert captured_kwargs["images_per_prompt"] == 1
         assert captured_kwargs["tiled_vae"] is True
         assert captured_kwargs["enhance"] is False
+        # Verify prompt files were created with numbered naming convention: {prefix}_{i}.txt
+        expected_files = [result.output_dir / f"dragon_{i}.txt" for i in range(2)]
+        for ef in expected_files:
+            assert ef.exists(), f"Expected prompt file {ef.name} not found"
 
     @patch("pipeline.generate_master_index")
     @patch("pipeline.create_gallery")

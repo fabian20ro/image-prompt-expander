@@ -54,3 +54,20 @@ def test_system_prompt_forbids_vague_placeholders():
         assert (
             placeholder in prompt
         ), f"Forbidden vague placeholder guardrail missing: {placeholder}"
+
+
+def test_system_prompt_forbids_markdown_and_commentary():
+    """Verify the template explicitly forbids Markdown formatting, commentary, and reasoning output.
+
+    The generator must return pure JSON — never prose, explanations, or markdown-wrapped blocks.
+    These prohibitions are listed in the system prompt to prevent low-quality responses.
+    """
+    prompt = get_system_prompt()
+    for prohibition in [
+        "No Markdown",
+        "commentary",
+        "reasoning",
+    ]:
+        assert (
+            prohibition in prompt
+        ), f"Output guardrail missing from system prompt: {prohibition}"

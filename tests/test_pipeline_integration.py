@@ -85,6 +85,23 @@ def test_run_from_grammar_text_progress_callback_invoked(tmp_path):
     assert len(expand_indices) >= 1
 
 
+def test_run_full_pipeline_grammar_failure_returns_error(tmp_path):
+    """Pipeline should return failure result when grammar generation fails."""
+
+    executor = PipelineExecutor()
+
+    with patch("pipeline.generate_grammar", side_effect=Exception("LM unavailable")):
+        result = executor.run_full_pipeline(
+            prompt="a dragon flying",
+            count=10,
+            output_dir=tmp_path / "output",
+        )
+
+    assert result.success is False
+    assert isinstance(result.error, str)
+    assert "Grammar generation failed" in result.error
+
+
 def test_run_from_grammar_text_empty_expansion(tmp_path):
     """Zero-prompt expansion should produce a successful result with zero prompts."""
 

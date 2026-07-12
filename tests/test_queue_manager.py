@@ -317,3 +317,20 @@ class TestQueueManager:
         state = qm.get_state()
         assert state.current_task.id == task.id
         assert state.current_task.pid == original_state
+
+    def test_update_task_pid_no_current_task(self, queue_path):
+        """update_task_pid should be a no-op when the queue is empty."""
+        qm = QueueManager(queue_path)
+        events = []
+
+        def listener(event, data):
+            events.append((event, data))
+
+        qm.add_listener(listener)
+
+        # No current task — update_task_pid should not raise or mutate state.
+        qm.update_task_pid("any-id", 1111)
+
+        state = qm.get_state()
+        assert state.current_task is None
+        assert len(events) == 0

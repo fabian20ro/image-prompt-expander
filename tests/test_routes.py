@@ -536,3 +536,13 @@ class TestGrammarEndpoints:
         response = client.get("/api/gallery/20240101_120000_def456/grammar")
         assert response.status_code == 404
         assert "Grammar not found" in response.json()["detail"]
+
+
+class TestGrammarHistoryNotFoundEndpoint:
+    """Tests for GET /api/gallery/{run_id}/grammar/history error paths."""
+
+    def test_grammar_history_gallery_not_found(self, client):
+        """Test 404 when requesting history for a missing gallery."""
+        response = client.get("/api/gallery/nonexistent_abc/grammar/history")
+        assert response.status_code == 404
+        assert "not found" in response.json()["detail"].lower()

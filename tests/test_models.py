@@ -106,8 +106,11 @@ class TestModels:
     def test_generate_request_rejects_removed_model_controls(self, legacy_field):
         from pydantic import ValidationError
 
-        with pytest.raises(ValidationError):
+        with pytest.raises(ValidationError) as exc_info:
             GenerateRequest(prompt="a cat", **{legacy_field: 4})
+
+        error = exc_info.value.errors()[0]
+        assert error["loc"][0] == legacy_field
 
     def test_generate_from_grammar_request_defaults(self):
         req = GenerateFromGrammarRequest(grammar='{"origin": ["test"]}')
