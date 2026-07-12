@@ -1,9 +1,12 @@
 """FastAPI application for the web UI."""
 
 import asyncio
+import logging
 import sys
 from contextlib import asynccontextmanager
 from pathlib import Path
+
+import uvicorn
 
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
@@ -15,6 +18,9 @@ from config import paths
 
 from .queue_manager import QueueManager
 from .worker import Worker
+
+
+logger = logging.getLogger("image-prompt-expander")
 
 
 # Global instances
@@ -49,8 +55,10 @@ def get_shutdown_event() -> asyncio.Event:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Handle app startup and shutdown."""
+    """Handle app startup and shutdown with structured logging."""
     global queue_manager, worker, shutdown_event
+
+    logger.info("Starting Image Prompt Generator application")
 
     # Ensure generated directory exists
     paths.generated_dir.mkdir(parents=True, exist_ok=True)
@@ -67,7 +75,11 @@ async def lifespan(app: FastAPI):
     worker = Worker(queue_manager, paths.generated_dir)
     worker_task = asyncio.create_task(worker.run())
 
+    logger.info("Application startup complete")
+
     yield
+
+    logger.info("Shutting down Image Prompt Generator application")
 
     # Shutdown: signal SSE connections to close
     shutdown_event.set()
@@ -80,6 +92,8 @@ async def lifespan(app: FastAPI):
         await worker_task
     except asyncio.CancelledError:
         pass
+
+    logger.info("Application shutdown complete")
 
 
 def create_app() -> FastAPI:
