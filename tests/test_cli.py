@@ -491,11 +491,11 @@ class TestCliFullPipeline:
         mock_executor.run_full_pipeline.assert_called_once()
 
     @patch("cli.PipelineExecutor")
-    def test_from_grammar_calls_run_from_grammar(self, mock_executor_cls):
+    def test_from_grammar_calls_run_from_grammar(self, mock_executor_cls, tmp_path):
         """Test that --from-grammar invokes run_from_grammar with correct args."""
         import json as _json
 
-        grammar_file = Path("/tmp/test_grammar.json")
+        grammar_file = tmp_path / "test_grammar.json"
         grammar_file.write_text(_json.dumps({"origin": ["test"]}))
 
         mock_result = MagicMock()
