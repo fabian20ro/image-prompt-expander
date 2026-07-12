@@ -375,3 +375,31 @@ class TestUtils:
         # lex: "cat_...9_0.png" vs "cat_...10_1.png": at position of 9 vs 1, '9'>'1', so
         # "cat_20240115_143022_10_1.png" is lex-smallest.
         assert archive["first_image"].name == "cat_20240115_143022_10_1.png"
+
+    def test_scan_flat_archives_images_list_covers_all_prompt_indices(self, temp_dir):
+        """Test scan_flat_archives populates images list for every prompt index.
+
+        A flat archive may contain PNGs from multiple prompts (different promptIdx)
+        sharing the same prefix+timestamp. This test verifies that all such images
+        are collected in `images`, not just the first or last one encountered.
+        """
+        saved_dir = temp_dir / "saved"
+        saved_dir.mkdir()
+
+        img = Image.new('RGB', (10, 10), color='red')
+        # Same prefix+timestamp but different promptIdx values (3, 7) and imgIdx values (0, 2)
+        img.save(saved_dir / "gal_20240510_180000_3_0.png")
+        img.save(saved_dir / "gal_20240510_180000_7_2.png")
+        img.save(saved_dir / "gal_20240510_180000_3_1.png")
+
+        result = scan_flat_archives(saved_dir)
+        assert len(result) == 1
+        archive = result[0]
+        assert archive["image_count"] == 3
+        names = {p.name for p in archive["images"]}
+        expected_names = {
+            "gal_20240510_180000_3_0.png",
+            "gal_20240510_180000_7_2.png",
+            "gal_20240510_180000_3_1.png",
+        }
+        assert names == expected_names

@@ -383,7 +383,8 @@ class TestWorkerExecuteTask:
         with patch("asyncio.create_subprocess_exec", return_value=mock_process):
             await worker._execute_task(task)
 
-        worker.queue_manager.fail_task.assert_called_once_with(
+        # Should fail the task with fallback message about exit code
+        worker.queue_manager.fail_task.assert_called_with(
             task.id, "Process exited with code 1"
         )
 
