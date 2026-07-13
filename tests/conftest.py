@@ -215,3 +215,34 @@ def test_create_run_files_zero_prompts(temp_dir):
     # Verify no unexpected prompt files exist
     txt_files = list((returned).glob(f"{prefix}_*.txt"))
     assert len(txt_files) == 0
+
+
+def test_full_run_dir_fixture(temp_dir):
+    """Verify the full_run_dir fixture produces a valid run directory structure."""
+    from tests.conftest import create_run_files
+
+    # Simulate what the full_run_dir fixture does
+    run_subdir = temp_dir / "prompts" / "20240101_120000_test"
+    run_subdir.mkdir(parents=True)
+
+    returned = create_run_files(run_subdir)
+
+    # Verify directory structure is valid
+    assert (returned / "test.metaprompt.json").exists()
+    assert (returned / "test_grammar.json").exists()
+
+    # Default metadata should have expected fields
+    meta = json.loads((returned / "test.metaprompt.json").read_text())
+    assert meta["prefix"] == "test"
+    assert meta["count"] == 2
+    assert meta["user_prompt"] == "test prompt"
+
+    # Default grammar should be present
+    gram = json.loads((returned / "test_grammar.json").read_text())
+    assert gram["origin"] == ["test"]
+
+    # Two default prompts created (num_prompts=2)
+    for i in range(2):
+        prompt_path = returned / f"test_{i}.txt"
+        assert prompt_path.exists()
+        assert prompt_path.read_text() == f"Prompt {i}"
