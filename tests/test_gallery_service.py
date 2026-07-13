@@ -279,3 +279,44 @@ class TestGalleryService:
 
         service = GalleryService(temp_dir, temp_dir)
         assert service.count_images(run_dir, prefix="test_01") == 2
+
+    def test_get_metadata_file_alternate_pattern(self, temp_dir):
+        """Test get_metadata_file returns *_metadata.json when metaprompt is absent."""
+        run_dir = temp_dir / "run"
+        run_dir.mkdir()
+        (run_dir / "test_metadata.json").write_text(json.dumps({"prefix": "test"}))
+
+        service = GalleryService(temp_dir, temp_dir)
+        meta_file = service.get_metadata_file(run_dir)
+
+        assert meta_file.name == "test_metadata.json"
+
+    def test_count_images_zero_matches(self, temp_dir):
+        """Test count_images returns 0 when no matching images exist."""
+        run_dir = temp_dir / "run"
+        run_dir.mkdir()
+        (run_dir / "other_0_0.png").write_bytes(b"fake")
+
+        service = GalleryService(temp_dir, temp_dir)
+        assert service.count_images(run_dir, prefix="test") == 0
+
+    def test_list_images_empty_directory(self, temp_dir):
+        """Test list_images returns empty list when no images match."""
+        run_dir = temp_dir / "run"
+        run_dir.mkdir()
+
+        service = GalleryService(temp_dir, temp_dir)
+        assert service.list_images(run_dir, prefix="test") == []
+
+    def test_load_prompts_filters_multi_segment_stems(self, temp_dir):
+        """Test load_prompts excludes files with multiple underscores in stem."""
+        run_dir = temp_dir / "run"
+        run_dir.mkdir()
+        (run_dir / "test_0.txt").write_text("valid")       # 1 underscore — kept
+        (run_dir / "test_a_b.txt").write_text("invalid")   # 2 underscores — filtered
+        (run_dir / "test_c_d_e.txt").write_text("filtered") # 3 underscores — filtered
+
+        service = GalleryService(temp_dir, temp_dir)
+        prompts = service.load_prompts(run_dir, prefix="test")
+
+        assert prompts == ["valid"]

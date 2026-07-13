@@ -137,6 +137,22 @@ class TestAppendGrammarRevision:
         assert len(history) == 3
         assert history[2]["action"] == "initial"
 
+    def test_empty_grammar_no_side_effects_when_no_prior_state(self, run_dir):
+        """Empty/whitespace-only grammar must be a true no-op — no history file created.
+
+        The early return on `not grammar.strip()` runs before any file I/O; this test
+        characterizes that boundary so future refactors do not accidentally write files
+        or append empty entries when the input is blank.
+        """
+        path = _history_path(run_dir, "empty_test")
+        assert not path.exists()
+
+        history = append_grammar_revision(
+            run_dir, "empty_test", grammar="   ", action="initial"
+        )
+        assert history == []
+        assert not path.exists()
+
     def test_creates_history_file_on_first_append(self, run_dir):
         append_grammar_revision(run_dir, "test", grammar="rule_a", action="initial")
         path = _history_path(run_dir, "test")
