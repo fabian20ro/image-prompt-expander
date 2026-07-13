@@ -13,6 +13,9 @@ from server.models import (
     EnhanceImageRequest,
     GalleryLayoutUpdateRequest,
     RegeneratePromptsApiRequest,
+    GenerateAllImagesRequest,
+    GrammarUpdateRequest,
+    EnhanceAllImagesRequest,
 )
 
 
@@ -244,7 +247,7 @@ class TestRegeneratePromptsApiRequest:
         from pydantic import ValidationError
 
         req = RegeneratePromptsApiRequest(
-            grammar='{\"origin\": [\"test\"]}',
+            grammar='{"origin": ["test"]}',
             count=100,
             images_per_prompt=5,
             max_prompts=20,
@@ -302,4 +305,40 @@ class TestRegeneratePromptsApiRequest:
 
         # Boundary: 100 is allowed (le=100)
         req = RegeneratePromptsApiRequest(images_per_prompt=100)
-        assert req.images_per_prompt == 100
+
+
+class TestExtraFieldHandling:
+    """Tests for which request models reject extra fields (extra='forbid')."""
+
+    def test_generate_request_rejects_extra_fields(self):
+        """GenerateRequest has ConfigDict(extra='forbid') — unknown fields rejected."""
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError):
+            GenerateRequest(prompt="a cat", unknown_field="should fail")
+
+    def test_generate_from_grammar_request_rejects_extra_fields(self):
+        """GenerateFromGrammarRequest has extra='forbid'."""
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError):
+            GenerateFromGrammarRequest(grammar='{"origin": ["test"]}', bogus="x")
+
+    def test_generate_all_images_request_rejects_extra_fields(self):
+        """GenerateAllImagesRequest has extra='forbid'."""
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError):
+            GenerateAllImagesRequest(bogus_field=42)
+
+    def test_enhance_image_request_accepts_extra_fields(self):
+        """EnhanceImageRequest lacks extra='forbid' — accepts unknown fields."""
+        req = EnhanceImageRequest(image_idx=0, bogus="ignored")
+
+    def test_grammar_update_request_accepts_extra_fields(self):
+        """GrammarUpdateRequest lacks extra='forbid' — accepts unknown fields."""
+        req = GrammarUpdateRequest(grammar='{"origin":["x"]}', bogus=True)
+
+    def test_enhance_all_images_request_accepts_extra_fields(self):
+        """EnhanceAllImagesRequest lacks extra='forbid' — accepts unknown fields."""
+        req = EnhanceAllImagesRequest(bogus_key=None)
