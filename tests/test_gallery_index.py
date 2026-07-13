@@ -228,3 +228,30 @@ class TestGalleryIndexInteractive:
         content = index_path.read_text()
 
         assert "Flux-dev-v2" in content
+
+    def test_build_generation_form_returns_complete_markup(self):
+        from gallery_index import _build_generation_form
+        html = _build_generation_form()
+        assert "<form id=\"generate-form\">" in html
+        assert 'name="prompt"' in html
+        assert 'name="prefix"' in html
+        assert 'id="count"' in html
+        assert 'id="temperature"' in html
+
+    def test_build_queue_status_bar_contains_queue_element(self):
+        from gallery_index import _build_queue_status_bar
+        html = _build_queue_status_bar()
+        assert "queue-status" in html
+        assert "<div" in html and "</div>" in html
+
+    def test_build_log_panel_returns_collapsible_markup(self):
+        from gallery_index import _build_log_panel
+        html = _build_log_panel()
+        assert "log-panel" in html or "Log Panel" in html or "LogPanel" in html
+        assert "<details" in html or "<div" in html
+
+    def test_build_notifications_contains_toast_and_confirm(self):
+        from gallery_index import _build_notifications
+        html = _build_notifications()
+        assert "toast-region" in html or "showToast" in html
+        assert "confirm-modal" in html or "confirmAction" in html

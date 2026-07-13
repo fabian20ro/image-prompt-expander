@@ -269,3 +269,26 @@ class TestGalleryInteractive:
         # Sibling action buttons must remain untouched.
         assert "btn-primary" in content
         assert "generateImage(this, 0, 0)" in content
+
+
+    def test_update_gallery_handles_empty_prompt(self, temp_dir):
+        """update_gallery must handle empty/None prompt without erroring."""
+        run_dir = temp_dir
+        prefix = "test_empty"
+        gallery_path = run_dir / f"{prefix}_gallery.html"
+        image_path = run_dir / f"{prefix}_0_0.png"
+
+        # Create a card with placeholder
+        gallery_path.write_text(f'''<div class="card" data-image="{prefix}_0_0.png" data-prompt-idx="0" data-image-idx="0">
+          <div class="placeholder">Pending...</div>
+          <p class="status">Generated: 0 / 1 images</p></div>''')
+
+        image_path.write_text("image data")
+
+        from gallery import update_gallery
+
+        # Call with empty string prompt
+        update_gallery(gallery_path, image_path, "", 1, 1)
+        content = gallery_path.read_text()
+        assert '<img src="' in content
+        assert "alt=" not in content or 'alt=""' in content
