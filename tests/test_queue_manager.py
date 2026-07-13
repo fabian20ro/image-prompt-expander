@@ -334,3 +334,25 @@ class TestQueueManager:
         state = qm.get_state()
         assert state.current_task is None
         assert len(events) == 0
+
+
+    def test_cancel_nonexistent_task_returns_false(self, queue_path):
+        """cancel_task should return False for a non-existent task id without mutating state."""
+        qm = QueueManager(queue_path)
+        events = []
+
+        def listener(event, data):
+            events.append((event, data))
+
+        qm.add_listener(listener)
+
+        result = qm.cancel_task("nonexistent-id")
+
+        assert result is False
+        # No mutation: no pending tasks affected, no completed list touched.
+        state = qm.get_state()
+        assert len(state.pending) == 0
+        assert len(state.completed) == 0
+        assert state.current_task is None
+        # And no spurious event was emitted for a miss.
+        assert len(events) == 0
