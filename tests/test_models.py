@@ -331,14 +331,23 @@ class TestExtraFieldHandling:
         with pytest.raises(ValidationError):
             GenerateAllImagesRequest(bogus_field=42)
 
-    def test_enhance_image_request_accepts_extra_fields(self):
-        """EnhanceImageRequest lacks extra='forbid' — accepts unknown fields."""
-        req = EnhanceImageRequest(image_idx=0, bogus="ignored")
+    def test_enhance_image_request_rejects_extra_fields(self):
+        """EnhanceImageRequest has extra='forbid' — unknown fields rejected."""
+        from pydantic import ValidationError
 
-    def test_grammar_update_request_accepts_extra_fields(self):
-        """GrammarUpdateRequest lacks extra='forbid' — accepts unknown fields."""
-        req = GrammarUpdateRequest(grammar='{"origin":["x"]}', bogus=True)
+        with pytest.raises(ValidationError):
+            EnhanceImageRequest(image_idx=0, bogus_field="should fail")
 
-    def test_enhance_all_images_request_accepts_extra_fields(self):
-        """EnhanceAllImagesRequest lacks extra='forbid' — accepts unknown fields."""
-        req = EnhanceAllImagesRequest(bogus_key=None)
+    def test_grammar_update_request_rejects_extra_fields(self):
+        """GrammarUpdateRequest has extra='forbid' — unknown fields rejected."""
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError):
+            GrammarUpdateRequest(grammar='{"origin":["x"]}', bogus=True)
+
+    def test_enhance_all_images_request_rejects_extra_fields(self):
+        """EnhanceAllImagesRequest has extra='forbid' — unknown fields rejected."""
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError):
+            EnhanceAllImagesRequest(softness=0.5, bogus_key="ignored")
