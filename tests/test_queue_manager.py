@@ -356,3 +356,51 @@ class TestQueueManager:
         assert state.current_task is None
         # And no spurious event was emitted for a miss.
         assert len(events) == 0
+
+
+class TestGetTask:
+    """Tests for QueueManager.get_task lookup."""
+
+    def test_get_task_pending(self, queue_path):
+        """get_task should find pending tasks by id."""
+        qm = QueueManager(queue_path)
+        task = qm.add_task(TaskType.GENERATE_IMAGE, {"run_id": "test"})
+
+        found = qm.get_task(task.id)
+
+        assert found is not None
+        assert found.id == task.id
+        assert found.status == TaskStatus.PENDING
+
+    def test_get_task_running(self, queue_path):
+        """get_task should find running tasks by id."""
+        qm = QueueManager(queue_path)
+        task = qm.add_task(TaskType.GENERATE_IMAGE, {"run_id": "test"})
+        qm.get_next_task()  # moves to RUNNING
+
+        found = qm.get_task(task.id)
+
+        assert found is not None
+        assert found.id == task.id
+        assert found.status == TaskStatus.RUNNING
+
+    def test_get_task_completed(self, queue_path):
+        """get_task should find completed tasks by id."""
+        qm = QueueManager(queue_path)
+        task = qm.add_task(TaskType.GENERATE_IMAGE, {"run_id": "test"})
+        qm.get_next_task()
+        qm.complete_task(task.id, {"result": "ok"})
+
+        found = qm.get_task(task.id)
+
+        assert found is not None
+        assert found.id == task.id
+        assert found.status == TaskStatus.COMPLETED
+
+    def test_get_task_not_found(self, queue_path):
+        """get_task should return None for non-existent ids."""
+        qm = QueueManager(queue_path)
+
+        found = qm.get_task("nonexistent-id")
+
+        assert found is None
