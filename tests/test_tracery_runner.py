@@ -3,6 +3,7 @@
 import json
 
 import pytest
+import tracery
 
 from tracery_runner import (
     TraceryError,
@@ -118,17 +119,16 @@ class TestGenerateOne:
         result = generate_one(grammar, origin="custom")
         assert result == "custom text"
 
-    def test_generate_recursive_rule(self):
-        """Test generating with recursive rules (limited depth)."""
-        # Tracery handles recursive rules with a depth limit
+    def test_generate_finite_recursive_rule(self, monkeypatch):
+        """Test a recursive expansion with a deterministic finite choice path."""
         grammar = {
             "origin": ["#item#"],
             "item": ["leaf", "#item# and #item#"],
         }
+        choices = iter(["#item#", "#item# and #item#", "leaf", "leaf"])
+        monkeypatch.setattr(tracery.random, "choice", lambda _rules: next(choices))
         result = generate_one(grammar)
-        # Should produce some result without infinite recursion
-        assert isinstance(result, str)
-        assert len(result) > 0
+        assert result == "leaf and leaf"
 
 
 class TestRunTracery:
