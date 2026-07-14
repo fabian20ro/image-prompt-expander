@@ -1,6 +1,7 @@
 """Tests for API routes."""
 
 import json
+import os
 from pathlib import Path
 from unittest.mock import MagicMock, patch, AsyncMock
 
@@ -433,6 +434,34 @@ class TestArchiveGalleryEndpoint:
         response = client.post("/api/gallery/20240101_120000_abc123/archive")
         assert response.status_code == 400
         assert "backup" in response.json()["detail"].lower()
+
+
+class TestArchiveFileEndpoint:
+    """Tests for /archive/{run_id}/{filename:path} endpoint."""
+
+    def test_archive_file_path_traversal_rejected(self, client, temp_dir):
+        """Test that path traversal via symlink is rejected with 403.
+
+        Symlinks are used because HTTP clients (requests) normalize '..' segments
+        out of URLs before they reach the framework. A symlink inside run_dir
+        pointing outside forces resolve() to escape the directory at filesystem level,
+        triggering the security guard in routes.py.
+        """
+        saved_dir = temp_dir / "saved"
+        run_id = "20240101_120000_abc123"
+        run_dir = saved_dir / run_id
+        run_dir.mkdir()
+
+        # Target file outside the archive directory but under saved/
+        escape_target = (temp_dir / "escape_file.txt")
+        escape_target.write_text("should not be served")
+
+        # Symlink inside the run dir that escapes to the target
+        os.symlink(escape_target, run_dir / "link_to_escape")
+
+        response = client.get(f"/archive/{run_id}/link_to_escape")
+        assert response.status_code == 403
+        assert "Access denied" in response.json()["detail"]
 
 
 class TestQueueEndpoints:
