@@ -464,6 +464,34 @@ class TestArchiveFileEndpoint:
         assert "Access denied" in response.json()["detail"]
 
 
+class TestGalleryFileEndpoint:
+    """Tests for /gallery/{run_id}/{filename:path} endpoint."""
+
+    def test_gallery_file_path_traversal_rejected(self, client, temp_dir):
+        """Test that path traversal via symlink is rejected with 403.
+
+        Symlinks are used because HTTP clients (requests) normalize '..' segments
+        out of URLs before they reach the framework. A symlink inside run_dir
+        pointing outside forces resolve() to escape the directory at filesystem level,
+        triggering the security guard in routes.py.
+        """
+        prompts_dir = temp_dir / "prompts"
+        run_id = "20240101_120000_abc123"
+        run_dir = prompts_dir / run_id
+        run_dir.mkdir()
+
+        # Target file outside the gallery directory but under prompts/
+        escape_target = (temp_dir / "escape_file.txt")
+        escape_target.write_text("should not be served")
+
+        # Symlink inside the run dir that escapes to the target
+        os.symlink(escape_target, run_dir / "link_to_escape")
+
+        response = client.get(f"/gallery/{run_id}/link_to_escape")
+        assert response.status_code == 403
+        assert "Access denied" in response.json()["detail"]
+
+
 class TestQueueEndpoints:
     """Tests for queue management endpoints."""
 
