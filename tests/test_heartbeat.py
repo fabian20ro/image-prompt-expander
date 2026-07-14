@@ -100,6 +100,17 @@ async def test_heartbeat_stops_on_exception():
     assert heartbeats_count == count_after_exit  # Heartbeat thread should be stopped after context manager cleanup
 
 
+@pytest.mark.asyncio
+async def test_heartbeat_creates_daemon_thread():
+    """Test that Heartbeat creates a daemon thread for process-safe cleanup."""
+
+    with patch('src.server.worker_subprocess.emit_progress'):
+        with Heartbeat(message="test", interval=1.0) as hb:
+            # Verify thread is created and configured as daemon
+            assert hb._thread is not None
+            assert hb._thread.daemon is True, "Heartbeat should use daemon threads for safe cleanup"
+
+
 if __name__ == "__main__":
     import pytest
     pytest.main([__file__])

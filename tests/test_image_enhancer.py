@@ -412,3 +412,49 @@ def test_enhance_image_width_only_invalid_passes_validation():
 
         with pytest.raises(ValueError):
             enhance_image(img_path, out_path, width=9)
+
+
+def test_enhance_image_tiled_vae_true_passes_to_get_enhancer():
+    """Test that tiled_vae=True is forwarded to _get_enhancer."""
+    from image_enhancer import enhance_image, _get_enhancer
+    from unittest.mock import MagicMock, patch
+    import tempfile
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        img_path = Path(tmpdir) / "test.png"
+        out_path = Path(tmpdir) / "out.png"
+        Image.new("RGB", (10, 10)).save(img_path)
+
+        mock_enhancer = MagicMock()
+        mock_result = MagicMock()
+        mock_enhancer.generate_image.return_value = mock_result
+
+        with patch("image_enhancer.unload_all_models"), \
+             patch("image_enhancer._get_enhancer", return_value=mock_enhancer) as mock_get, \
+             patch.dict(sys.modules, {"mflux.utils.scale_factor": MagicMock()}):
+            enhance_image(img_path, out_path, tiled_vae=True)
+
+        mock_get.assert_called_once_with(True)
+
+
+def test_enhance_image_tiled_vae_false_default_passes_to_get_enhancer():
+    """Test that default tiled_vae=False is forwarded to _get_enhancer."""
+    from image_enhancer import enhance_image, _get_enhancer
+    from unittest.mock import MagicMock, patch
+    import tempfile
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        img_path = Path(tmpdir) / "test.png"
+        out_path = Path(tmpdir) / "out.png"
+        Image.new("RGB", (10, 10)).save(img_path)
+
+        mock_enhancer = MagicMock()
+        mock_result = MagicMock()
+        mock_enhancer.generate_image.return_value = mock_result
+
+        with patch("image_enhancer.unload_all_models"), \
+             patch("image_enhancer._get_enhancer", return_value=mock_enhancer) as mock_get, \
+             patch.dict(sys.modules, {"mflux.utils.scale_factor": MagicMock()}):
+            enhance_image(img_path, out_path)
+
+        mock_get.assert_called_once_with(False)
