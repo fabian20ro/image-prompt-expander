@@ -595,6 +595,29 @@ class TestGrammarEndpoints:
         assert "Grammar not found" in response.json()["detail"]
 
 
+class TestRegenerateEndpointInvalidGrammar:
+    """Tests for POST /api/gallery/{run_id}/regenerate error paths."""
+
+    def test_regenerate_rejects_invalid_json_grammar(self, client, temp_dir):
+        """Test that invalid JSON grammar is rejected with 400."""
+        prompts_dir = temp_dir / "prompts"
+        run_dir = prompts_dir / "20240101_120000_abc123"
+        run_dir.mkdir()
+
+        (run_dir / "test.metaprompt.json").write_text(json.dumps({
+            "prefix": "test",
+            "count": 5,
+        }))
+        (run_dir / "test_grammar.json").write_text(json.dumps({"origin": ["old"]}))
+
+        response = client.post("/api/gallery/20240101_120000_abc123/regenerate", json={
+            "grammar": "not valid json {",
+        })
+
+        assert response.status_code == 400
+        assert "Invalid JSON grammar" in response.json()["detail"]
+
+
 class TestGrammarHistoryNotFoundEndpoint:
     """Tests for GET /api/gallery/{run_id}/grammar/history error paths."""
 
