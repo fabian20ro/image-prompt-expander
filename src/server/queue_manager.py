@@ -312,6 +312,27 @@ class QueueManager:
             "path": path,
         })
 
+    def get_task(self, task_id: str) -> Task | None:
+        """Find and return any task by id (pending / current / completed).
+
+        Args:
+            task_id: ID of the task to look up
+
+        Returns:
+            The matching task, or None if not found.
+        """
+        with self._lock:
+            state = self._state
+            for t in state.pending:
+                if t.id == task_id:
+                    return t
+            if state.current_task and state.current_task.id == task_id:
+                return state.current_task
+            for t in state.completed[:]:
+                if t.id == task_id:
+                    return t
+            return None
+
     def emit_log(self, task_id: str, message: str) -> None:
         """Emit a log line from the worker subprocess.
 
