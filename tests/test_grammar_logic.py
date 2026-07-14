@@ -107,6 +107,31 @@ def test_clean_grammar_output_normalizes_smart_single_quotes():
     assert result == expected
 
 
+def test_clean_grammar_output_strips_thinking_blocks():
+    """Thinking blocks (``...``) must be removed before JSON extraction."""
+    raw = '``thinking block\n\n```json\n{"origin": ["a", "b"]}\n```\n'
+    result = clean_grammar_output(raw)
+    assert 'thinking' not in result
+    expected = '{"origin": ["a", "b"]}'
+    assert result == expected
+
+
+def test_clean_grammar_output_no_json_returns_stripped_input():
+    """When no JSON object/array is found, clean returns the stripped input unchanged."""
+    raw = "Here's a description of what I want to see."
+    result = clean_grammar_output(raw)
+    assert result == raw
+
+
+def test_clean_grammar_output_strips_thinking_blocks_with_smart_quotes():
+    """Thinking block removal and smart quote normalization must compose correctly in one pass."""
+    raw = '``thinking\n\n```json\n{"kolors": [\u201cA sepia tone\u201d]}\n```\n'
+    result = clean_grammar_output(raw)
+    assert '\u201c' not in result and '\u201d' not in result
+    expected = '{"kolors": ["A sepia tone"]}'
+    assert result == expected
+
+
 # ---------------------------------------------------------------------------
 # _api_root — pure URL transformation (no side effects, no mocks needed)
 # ---------------------------------------------------------------------------
