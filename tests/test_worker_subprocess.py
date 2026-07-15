@@ -29,6 +29,8 @@ from server.worker_subprocess import (
     close_log_file,
     log_to_file,
 )
+from metadata_manager import MetadataError
+from pipeline import PipelineResult
 
 
 class TestEmitFunctions:
@@ -119,16 +121,13 @@ class TestHeartbeat:
 
     def test_heartbeat_emits_progress(self, capsys):
         """Test Heartbeat emits progress at intervals."""
-        import time
+        with patch("server.worker_subprocess.emit_progress") as mock_emit:
+            with Heartbeat("Working...", interval=0.1):
+                import time; time.sleep(0.25)
 
-        with Heartbeat("Working...", interval=0.1):
-            time.sleep(0.25)  # Wait for at least one heartbeat
-
-        captured = capsys.readouterr()
-        # Should have emitted at least one heartbeat
-        lines = [l for l in captured.out.strip().split('\n') if l]
-        heartbeats = [json.loads(l) for l in lines if json.loads(l).get("stage") == "heartbeat"]
-        assert len(heartbeats) >= 1
+            # Should have emitted at least one heartbeat
+            heartbeats = [c for c in mock_emit.call_args_list if c.args and c.args[0] == "heartbeat"]
+            assert len(heartbeats) >= 1, f"No heartbeat progress events emitted; calls: {[c.args + tuple(c.kwargs.items()) for c in mock_emit.call_args_list]}"
 
 
 class TestCreateExecutor:
@@ -743,3 +742,129 @@ class TestMainFunction:
         result = json.loads(captured.out.strip())
         assert result["success"] is False
         assert "boom" in result["error"]
+
+
+class TestRunDeleteGallery:
+    """Tests for run_delete_gallery error and success paths."""
+
+    def test_run_delete_gallery_gallery_not_found(self, capsys):
+        """Test that missing gallery returns a failure result."""
+        with patch("server.worker_subprocess.paths") as mock_paths:
+            mock_paths.prompts_dir = Path("/tmp/does-not-exist/prompts")
+            run_delete_gallery({"run_id": "nonexistent-gallery"})
+
+        captured = capsys.readouterr()
+        lines = [l for l in captured.out.strip().split("\n") if l]
+        result = json.loads(lines[-1])
+        assert result["success"] is False
+        assert "Gallery not found" in result["error"]
+
+    def test_run_delete_gallery_value_error_propagated(self, capsys):
+        """Test that ValueError from delete_run is captured and emitted."""
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmpdir:
+            gallery_dir = Path(tmpdir) / "bad-gallery"
+            gallery_dir.mkdir()
+            prompts_dir = Path(tmpdir)
+
+            with patch("server.worker_subprocess.paths") as mock_paths:
+                mock_paths.prompts_dir = prompts_dir
+                with patch(
+                    "server.worker_subprocess.delete_run",
+                    side_effect=ValueError("Gallery is in archive"),
+                ):
+                    run_delete_gallery({"run_id": "bad-gallery"})
+
+        captured = capsys.readouterr()
+        lines = [l for l in captured.out.strip().split("\n") if l]
+        result = json.loads(lines[-1])
+        assert result["success"] is False
+        assert "Gallery is in archive" in result["error"]
+
+    def test_run_delete_gallery_os_error_propagated(self, capsys):
+        """Test that OSError from delete_run is captured and emitted."""
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmpdir:
+            gallery_dir = Path(tmpdir) / "bad-gallery"
+            gallery_dir.mkdir()
+            prompts_dir = Path(tmpdir)
+
+            with patch("server.worker_subprocess.paths") as mock_paths:
+                mock_paths.prompts_dir = prompts_dir
+                with patch(
+                    "server.worker_subprocess.delete_run",
+                    side_effect=OSError("Permission denied"),
+                ):
+                    run_delete_gallery({"run_id": "bad-gallery"})
+
+        captured = capsys.readouterr()
+        lines = [l for l in captured.out.strip().split("\n") if l]
+        result = json.loads(lines[-1])
+        assert result["success"] is False
+        assert "Permission denied" in result["error"]
+
+    def test_run_delete_gallery_success_calls_generate_master_index(self, capsys):
+        """Test that successful deletion regenerates the master index."""
+        prompts_dir = Path("/tmp/prompts")
+        gallery_dir = prompts_dir / "test-run"
+        gallery_dir.mkdir(parents=True)
+
+        with patch("server.worker_subprocess.paths") as mock_paths:
+            mock_paths.prompts_dir = prompts_dir
+
+            def fake_delete_run(output_dir, prompts_dir):
+                import shutil
+                if output_dir.exists():
+                    shutil.rmtree(output_dir)
+
+            with patch(
+                "server.worker_subprocess.delete_run",
+                side_effect=fake_delete_run,
+            ) as mock_del:
+                with patch("server.worker_subprocess.generate_master_index") as mock_gen:
+                    run_delete_gallery({"run_id": "test-run"})
+
+        captured = capsys.readouterr()
+        lines = [l for l in captured.out.strip().split("\n") if l]
+        result = json.loads(lines[-1])
+        assert result["success"] is True
+        assert result["data"]["deleted"] is True
+        mock_gen.assert_called_once()
+
+    def test_run_enhance_image_metadata_error_fallback(self, capsys):
+        """Test that MetadataError in run_enhance_image falls back to default prefix."""
+        from conftest import create_run_files
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            prompts_dir = Path(tmpdir) / "prompts"
+            prompts_dir.mkdir(parents=True)
+            run_dir = prompts_dir / "test-run"
+            run_dir.mkdir(parents=True)
+            create_run_files(run_dir, prefix="test", num_prompts=2, create_images=True)
+
+            with patch("server.worker_subprocess.paths") as mock_paths:
+                mock_paths.prompts_dir = prompts_dir
+
+                with patch(
+                    "server.worker_subprocess.MetadataManager.load",
+                    side_effect=MetadataError("metadata not found"),
+                ):
+                    mock_executor = MagicMock()
+                    mock_executor.enhance_single_image.return_value = PipelineResult(
+                        success=True,
+                        run_id="test-run",
+                        data={"image_path": "test_0_0.png"},
+                    )
+
+                    with patch("server.worker_subprocess.create_executor") as mock_exec:
+                        mock_exec.return_value = mock_executor
+                        run_enhance_image({
+                            "run_id": "test-run",
+                            "prompt_idx": 0,
+                            "image_idx": 0,
+                        })
+
+            captured = capsys.readouterr()
+            lines = [l for l in captured.out.strip().split("\n") if l]
+            result = json.loads(lines[-1])
+            assert result["success"] is True
