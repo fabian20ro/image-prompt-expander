@@ -107,6 +107,14 @@ class TestUtils:
         assert prompts[0] == "First prompt"
         assert prompts[2] == "Third prompt"
 
+    def test_get_prompts_from_run_empty_directory(self, temp_dir):
+        """Test get_prompts_from_run returns [] when no prompt files exist."""
+        (temp_dir / "test.metaprompt.json").write_text(json.dumps({"prefix": "test"}))
+
+        prompts = get_prompts_from_run(temp_dir)
+        assert prompts == []
+        assert len(prompts) == 0
+
     def test_backup_run(self, temp_dir):
         """Test backing up a run directory to flat files with EXIF metadata."""
         run_dir = temp_dir / "prompts" / "20240101_120000_abc123"
