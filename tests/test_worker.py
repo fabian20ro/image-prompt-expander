@@ -340,7 +340,29 @@ class TestWorkerExecuteTask:
         with patch("asyncio.create_subprocess_exec", return_value=mock_process):
             await worker._execute_task(task)
 
-        worker.queue_manager.fail_task.assert_called()
+        # Should fail the task with error from stderr lines joined by "; "
+        worker.queue_manager.fail_task.assert_called_with(
+            task.id, "Error occurred"
+        )
+
+    @pytest.mark.asyncio
+    async def test_execute_task_handles_nonzero_exit_multiple_stderr(self, worker):
+        """Test that multiple stderr lines are joined with '; ' as error message."""
+        task = MockTask()
+
+        mock_process = self._create_mock_process(
+            stdout_lines=[b""],
+            stderr_lines=[b"Err1\n", b"Err2\n", b"Err3\n", b"Err4\n", b""],
+            return_code=2,
+        )
+
+        with patch("asyncio.create_subprocess_exec", return_value=mock_process):
+            await worker._execute_task(task)
+
+        # Should join at most 3 stderr lines with "; " separator
+        worker.queue_manager.fail_task.assert_called_with(
+            task.id, "Err1; Err2; Err3"
+        )
 
     @pytest.mark.asyncio
     async def test_execute_task_handles_exception(self, worker):
