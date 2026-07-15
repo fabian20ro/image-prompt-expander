@@ -196,6 +196,39 @@ class TestWorkerReadStderr:
 class TestWorkerExecuteTask:
     """Tests for Worker._execute_task() method."""
 
+    @pytest.mark.asyncio
+    async def test_execute_task_times_out_on_hung_process(self, worker):
+        """Test that _execute_task times out and fails the task on a hung process."""
+        # Use a very short timeout so the test is fast
+        worker.task_timeout = 0.1
+
+        task = MockTask()
+
+        mock_process = MagicMock()
+        mock_process.pid = 12345
+        mock_process.returncode = None
+
+        class HungStdout:
+            async def readline(self):
+                await asyncio.sleep(10)
+                return b""
+
+        mock_process.stdout = HungStdout()
+        mock_process.stderr = MagicMock()
+
+        async def mock_wait():
+            return 0
+
+        mock_process.wait = mock_wait
+
+        with patch("asyncio.create_subprocess_exec", return_value=mock_process):
+            await worker._execute_task(task)
+
+        worker.queue_manager.fail_task.assert_called_once()
+        call_args = worker.queue_manager.fail_task.call_args[0]
+        assert "timeout" in call_args[1].lower() or "exceeded" in call_args[1].lower()
+        mock_process.terminate.assert_called_once()
+
     def _create_mock_process(self, stdout_lines, stderr_lines, return_code=0):
         """Create a mock process with given stdout/stderr lines."""
         stdout_idx = 0
