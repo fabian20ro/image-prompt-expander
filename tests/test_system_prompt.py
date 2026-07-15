@@ -71,3 +71,19 @@ def test_system_prompt_forbids_markdown_and_commentary():
         assert (
             prohibition in prompt
         ), f"Output guardrail missing from system prompt: {prohibition}"
+
+
+def test_system_prompt_forbids_duplicate_alternatives():
+    """Verify the template explicitly forbids duplicating or near-duplicating Tracery alternatives.
+
+    The grammar generator must produce truly distinct options per rule — not inflated counts of
+    nearly identical entries. This guardrail prevents wasted variation and low-quality grammars.
+    """
+    prompt = get_system_prompt()
+    for prohibition in [
+        "duplicate",
+        "rephrase",
+    ]:
+        assert (
+            prohibition in prompt
+        ), f"Anti-duplicate guardrail missing from system prompt: {prohibition}"
