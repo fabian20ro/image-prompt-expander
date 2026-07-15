@@ -2,6 +2,8 @@
 
 import json
 
+import pytest
+
 from conftest import create_run_files
 from gallery import generate_gallery_for_directory, update_gallery
 
@@ -292,3 +294,12 @@ class TestGalleryInteractive:
         content = gallery_path.read_text()
         assert '<img src="' in content
         assert "alt=" not in content or 'alt=""' in content
+
+    def test_generate_gallery_raises_when_no_metadata(self, temp_dir):
+        """generate_gallery_for_directory must refuse to fabricate a gallery when no metadata exists."""
+        from gallery import generate_gallery_for_directory
+
+        with pytest.raises(ValueError) as exc_info:
+            generate_gallery_for_directory(temp_dir, interactive=True)
+
+        assert "No metadata file found" in str(exc_info.value)
