@@ -246,3 +246,35 @@ def test_full_run_dir_fixture(temp_dir):
         prompt_path = returned / f"test_{i}.txt"
         assert prompt_path.exists()
         assert prompt_path.read_text() == f"Prompt {i}"
+
+
+def test_create_run_files_no_images_when_flag_false(temp_dir):
+    """Verify create_run_files creates no image files when create_images=False."""
+    prefix = "no_img"
+    num_prompts = 2
+    run_subdir = temp_dir / "no_img"
+
+    returned = create_run_files(
+        run_subdir,
+        prefix=prefix,
+        num_prompts=num_prompts,
+        create_images=False,
+    )
+
+    # Metadata and grammar should still exist
+    assert (returned / f"{prefix}.metaprompt.json").exists()
+    assert (returned / f"{prefix}_grammar.json").exists()
+
+    # Prompt files should be created normally
+    for i in range(num_prompts):
+        prompt_path = returned / f"{prefix}_{i}.txt"
+        assert prompt_path.exists()
+
+    # No image files should exist when create_images=False
+    png_files = list((returned).glob("*.png"))
+    assert len(png_files) == 0
+
+    # Explicit check: no file matching the image pattern exists
+    for i in range(num_prompts):
+        img_path = returned / f"{prefix}_{i}_0.png"
+        assert not img_path.exists()
