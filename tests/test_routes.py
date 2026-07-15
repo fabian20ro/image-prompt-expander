@@ -618,6 +618,77 @@ class TestRegenerateEndpointInvalidGrammar:
         assert "Invalid JSON grammar" in response.json()["detail"]
 
 
+class TestGalleryLogsEndpoint:
+    """Tests for GET /api/gallery/{run_id}/logs."""
+
+    def test_logs_negative_tail_rejected(self, client, temp_dir):
+        """Test that negative tail is rejected with 400."""
+        prompts_dir = temp_dir / "prompts"
+        run_dir = prompts_dir / "20240101_120000_abc123"
+        run_dir.mkdir()
+
+        (run_dir / "test.metaprompt.json").write_text(json.dumps({
+            "prefix": "test",
+        }))
+
+        response = client.get("/api/gallery/20240101_120000_abc123/logs?tail=-5")
+        assert response.status_code == 400
+        assert "non-negative" in response.json()["detail"].lower()
+
+    def test_logs_no_log_file_found(self, client, temp_dir):
+        """Test that missing log file returns empty logs."""
+        prompts_dir = temp_dir / "prompts"
+        run_dir = prompts_dir / "20240101_120000_abc123"
+        run_dir.mkdir()
+
+        (run_dir / "test.metaprompt.json").write_text(json.dumps({
+            "prefix": "test",
+        }))
+
+        response = client.get("/api/gallery/20240101_120000_abc123/logs")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["logs"] == ""
+        assert "No log file" in data["message"]
+
+    def test_logs_with_tail(self, client, temp_dir):
+        """Test returning a tail of lines from log."""
+        prompts_dir = temp_dir / "prompts"
+        run_dir = prompts_dir / "20240101_120000_abc123"
+        run_dir.mkdir()
+
+        (run_dir / "test.metaprompt.json").write_text(json.dumps({
+            "prefix": "test",
+        }))
+        log_content = "line 1\nline 2\nline 3\nline 4\nline 5"
+        (run_dir / "test_worker.log").write_text(log_content)
+
+        response = client.get("/api/gallery/20240101_120000_abc123/logs?tail=2")
+        assert response.status_code == 200
+        data = response.json()
+        assert "line 4" in data["logs"]
+        assert "line 5" in data["logs"]
+        assert "line 1" not in data["logs"]
+
+    def test_logs_zero_tail_returns_all(self, client, temp_dir):
+        """Test that tail=0 returns all lines."""
+        prompts_dir = temp_dir / "prompts"
+        run_dir = prompts_dir / "20240101_120000_abc123"
+        run_dir.mkdir()
+
+        (run_dir / "test.metaprompt.json").write_text(json.dumps({
+            "prefix": "test",
+        }))
+        log_content = "first\nsecond\nthird\n"
+        (run_dir / "test_worker.log").write_text(log_content)
+
+        response = client.get("/api/gallery/20240101_120000_abc123/logs?tail=0")
+        assert response.status_code == 200
+        data = response.json()
+        assert "first" in data["logs"]
+        assert "third" in data["logs"]
+
+
 class TestGrammarHistoryNotFoundEndpoint:
     """Tests for GET /api/gallery/{run_id}/grammar/history error paths."""
 

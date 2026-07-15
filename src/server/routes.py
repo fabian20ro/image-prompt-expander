@@ -675,6 +675,9 @@ async def get_gallery_logs(
         Log file contents
     """
 
+    if tail < 0:
+        raise HTTPException(status_code=400, detail="tail must be non-negative")
+
     try:
         run_dir = service.get_run_directory(run_id)
     except GalleryNotFoundError:
