@@ -82,3 +82,29 @@ class TestUnloadAllModels:
             with pytest.raises(LMStudioUnloadError) as exc_info:
                 unload_all_models()
             assert "Timed out" in str(exc_info.value)
+
+    def test_uses_stdout_when_stderr_empty_on_failure(self):
+        fail_result = MagicMock()
+        fail_result.returncode = 1
+        fail_result.stderr = ""
+        fail_result.stdout = "model locked by another process"
+
+        with patch("lm_studio.shutil.which", return_value="/usr/bin/lms"), \
+             patch("lm_studio.subprocess.run", return_value=fail_result), \
+             patch("lm_studio.time.sleep"):
+            with pytest.raises(LMStudioUnloadError) as exc_info:
+                unload_all_models()
+            assert "model locked" in str(exc_info.value)
+
+    def test_uses_unknown_error_when_both_streams_empty(self):
+        fail_result = MagicMock()
+        fail_result.returncode = 1
+        fail_result.stderr = ""
+        fail_result.stdout = ""
+
+        with patch("lm_studio.shutil.which", return_value="/usr/bin/lms"), \
+             patch("lm_studio.subprocess.run", return_value=fail_result), \
+             patch("lm_studio.time.sleep"):
+            with pytest.raises(LMStudioUnloadError) as exc_info:
+                unload_all_models()
+            assert "unknown error" in str(exc_info.value)

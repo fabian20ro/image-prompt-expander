@@ -476,3 +476,35 @@ class TestRunFullPipelineWithImages:
 
         assert result.success is True
         assert len(captured_kwargs["prompts"]) == 2  # Only first 2 prompts passed to image gen
+
+    @patch("pipeline.generate_master_index")
+    @patch("pipeline.create_gallery")
+    @patch("pipeline.run_tracery")
+    @patch("pipeline.generate_grammar")
+    def test_generate_images_passes_resume_param(
+        self, mock_grammar, mock_tracery, mock_gallery, mock_index, temp_dir
+    ):
+        """Test that resume flag flows through to _generate_images."""
+        mock_grammar.return_value = ('{"origin": ["test"]}', False, None)
+        mock_tracery.return_value = ["prompt 1"]
+        mock_gallery.return_value = temp_dir / "prompts" / "test_gallery.html"
+
+        captured_kwargs = {}
+
+        def fake_generate_images(**kwargs):
+            captured_kwargs.update(kwargs)
+            return PipelineResult(success=True, run_id="test", output_dir=temp_dir, image_count=1, skipped_count=0)
+
+        with patch("pipeline.paths") as mock_paths:
+            mock_paths.prompts_dir = temp_dir / "prompts"
+            mock_paths.prompts_dir.mkdir(parents=True)
+            mock_paths.generated_dir = temp_dir
+
+            executor = PipelineExecutor()
+            with patch.object(PipelineExecutor, "_generate_images", side_effect=fake_generate_images):
+                result = executor.run_full_pipeline(
+                    prompt="test", count=1, generate_images=True, resume=True,
+                )
+
+        assert result.success is True
+        assert captured_kwargs["resume"] is True
