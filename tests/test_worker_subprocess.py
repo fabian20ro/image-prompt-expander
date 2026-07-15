@@ -121,16 +121,13 @@ class TestHeartbeat:
 
     def test_heartbeat_emits_progress(self, capsys):
         """Test Heartbeat emits progress at intervals."""
-        import time
+        with patch("server.worker_subprocess.emit_progress") as mock_emit:
+            with Heartbeat("Working...", interval=0.1):
+                import time; time.sleep(0.25)
 
-        with Heartbeat("Working...", interval=0.1):
-            time.sleep(0.25)  # Wait for at least one heartbeat
-
-        captured = capsys.readouterr()
-        # Should have emitted at least one heartbeat
-        lines = [l for l in captured.out.strip().split('\n') if l]
-        heartbeats = [json.loads(l) for l in lines if json.loads(l).get("stage") == "heartbeat"]
-        assert len(heartbeats) >= 1
+            # Should have emitted at least one heartbeat
+            heartbeats = [c for c in mock_emit.call_args_list if c.args and c.args[0] == "heartbeat"]
+            assert len(heartbeats) >= 1, f"No heartbeat progress events emitted; calls: {[c.args + tuple(c.kwargs.items()) for c in mock_emit.call_args_list]}"
 
 
 class TestCreateExecutor:
