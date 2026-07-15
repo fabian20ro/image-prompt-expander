@@ -3,7 +3,13 @@ import json
 import pytest
 from pathlib import Path
 from unittest.mock import MagicMock, patch
-from pipeline import PipelineExecutor, PipelineResult
+from pipeline import (
+    PipelineExecutor,
+    PipelineResult,
+    PipelineConfig,
+    ImageGenerationConfig,
+    EnhancementConfig,
+)
 
 
 @pytest.fixture
@@ -131,3 +137,51 @@ def test_run_from_grammar_text_empty_expansion(tmp_path):
     assert result.image_count == 0
     # Progress callback should still report all expected stages
     assert "expanding_prompts" in recorded_stages
+
+
+def test_run_from_grammar_text_metadata_structure(tmp_path):
+    """run_from_grammar_text should produce correct metadata structure."""
+
+    output_dir = tmp_path / "output"
+
+    with patch("pipeline.create_gallery"), \
+         patch("pipeline.generate_master_index"):
+        result = PipelineExecutor().run_from_grammar_text(
+            grammar='{"origin": ["dragon"]}',
+            count=1,
+            output_dir=output_dir,
+            user_prompt="test prompt",
+            source="manual",
+            display_title="custom title",
+        )
+
+    assert result.success is True
+    metadata_file = output_dir / "image.metaprompt.json"
+    import json as _json
+    metadata = _json.loads(metadata_file.read_text())
+    assert metadata["source"] == "manual"
+    assert metadata["user_prompt"] == "test prompt"
+    assert metadata["display_title"] == "custom title"
+
+
+def test_pipeline_config_to_dict_serialization():
+    """PipelineConfig.to_dict() should convert all fields correctly."""
+
+    config = PipelineConfig(
+        prompt="test",
+        count=10,
+        prefix="img",
+        temperature=0.8,
+        no_cache=True,
+        image=ImageGenerationConfig(enabled=True, width=1024, height=1024),
+        enhancement=EnhancementConfig(enabled=False),
+    )
+
+    d = config.to_dict()
+    assert d["prompt"] == "test"
+    assert d["count"] == 10
+    assert d["prefix"] == "img"
+    assert d["temperature"] == 0.8
+    assert d["no_cache"] is True
+    assert d["image"]["enabled"] is True
+    assert d["image"]["width"] == 1024
