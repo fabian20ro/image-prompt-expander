@@ -111,6 +111,32 @@ async def test_heartbeat_creates_daemon_thread():
             assert hb._thread.daemon is True, "Heartbeat should use daemon threads for safe cleanup"
 
 
+@pytest.mark.asyncio
+async def test_heartbeat_thread_stops_when_emit_raises():
+    """Test that the heartbeat loop exits cleanly when emit_progress raises inside the thread.
+
+    This ensures a transient failure in progress emission does not cause the
+    Heartbeat thread to hang or block __exit__ indefinitely.
+    """
+
+    call_count = 0
+
+    def failing_emit(stage: str, current: int = 0, total: int = 0, message: str = ""):
+        nonlocal call_count
+        call_count += 1
+        if call_count >= 2:
+            raise RuntimeError("emit_progress failure")
+
+    with patch('src.server.worker_subprocess.emit_progress', side_effect=failing_emit):
+        with Heartbeat(message="test", interval=0.05) as hb:
+            await asyncio.sleep(0.3)
+
+        # After __exit__, the stop event must be set and thread joined cleanly
+        assert hb._stop_event.is_set(), "Stop event should be set after context manager exit"
+        # Thread should still exist (join happened) but no more heartbeats emitted
+        assert call_count > 0, "At least one heartbeat was emitted before the error"
+
+
 if __name__ == "__main__":
     import pytest
     pytest.main([__file__])
