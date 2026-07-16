@@ -108,3 +108,22 @@ class TestUnloadAllModels:
             with pytest.raises(LMStudioUnloadError) as exc_info:
                 unload_all_models()
             assert "unknown error" in str(exc_info.value)
+
+    def test_backoff_sleep_values_on_retry(self):
+        fail_result = MagicMock()
+        fail_result.returncode = 1
+        success_result = MagicMock()
+        success_result.returncode = 0
+
+        call_count = [0]
+        def side_effect(*args, **kwargs):
+            call_count[0] += 1
+            if call_count[0] <= 2:
+                return fail_result
+            return success_result
+
+        with patch("lm_studio.shutil.which", return_value="/usr/bin/lms"), \
+             patch("lm_studio.subprocess.run", side_effect=side_effect), \
+             patch("lm_studio.time.sleep") as sleep_mock:
+            unload_all_models()
+            assert [a.args[0] for a in sleep_mock.call_args_list] == [1.0, 2.0]
