@@ -185,3 +185,61 @@ def test_pipeline_config_to_dict_serialization():
     assert d["no_cache"] is True
     assert d["image"]["enabled"] is True
     assert d["image"]["width"] == 1024
+
+
+def test_run_from_grammar_text_gallery_layout_in_metadata(tmp_path):
+    """run_from_grammar_text should store gallery_layout in metadata."""
+
+    output_dir = tmp_path / "output"
+
+    with patch("pipeline.create_gallery"), \
+         patch("pipeline.generate_master_index"):
+        result = PipelineExecutor().run_from_grammar_text(
+            grammar='{"origin": ["dragon"]}',
+            count=1,
+            output_dir=output_dir,
+            user_prompt="test prompt",
+            source="manual",
+            display_title="custom title",
+            images_per_prompt=3,
+            max_prompts=2,
+        )
+
+    assert result.success is True
+    metadata_file = output_dir / "image.metaprompt.json"
+    import json as _json
+    metadata = _json.loads(metadata_file.read_text())
+    gallery_layout = metadata.get("gallery_layout")
+    assert gallery_layout is not None
+    assert gallery_layout["images_per_prompt"] == 3
+    assert gallery_layout["max_prompts"] == 2
+
+
+def test_run_full_pipeline_resume_skips_existing_images(tmp_path):
+    """Pipeline should skip existing images and report them in skipped_count."""
+
+    output_dir = tmp_path / "output"
+
+    executor = PipelineExecutor()
+
+    def mock_generate_images(**kwargs):
+        # Simulate all prompts already have images, so they get skipped
+        return PipelineResult(
+            success=True, run_id="test", prompt_count=5, image_count=0, skipped_count=5
+        )
+
+    with patch("pipeline.generate_grammar", return_value=('{ "root": {"origin": ["a dragon"]}}', False, None)), \
+         patch("pipeline.create_gallery"), \
+         patch("pipeline.generate_master_index"), \
+         patch("pipeline.append_grammar_revision"), \
+         patch.object(PipelineExecutor, "_generate_images", side_effect=mock_generate_images):
+        result = executor.run_full_pipeline(
+            prompt="a dragon flying",
+            count=5,
+            output_dir=output_dir,
+            generate_images=True,
+            resume=True,
+        )
+
+    assert result.success is True
+    assert result.skipped_count == 5
