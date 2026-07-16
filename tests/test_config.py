@@ -129,15 +129,6 @@ class TestConfig:
             settings = Settings.from_env()
             assert settings.server.sse_timeout == ServerConfig.sse_timeout
 
-    def test_get_env_float_logs_warning_on_nan(self):
-        """Test that _get_env_float emits a warning when NaN is encountered."""
-        from config import _get_env_float, logger
-        with patch.dict(os.environ, {"PROMPT_GEN_SSE_TIMEOUT": "nan"}), \
-             patch.object(logger, "warning") as mock_warn:
-            result = _get_env_float("PROMPT_GEN_SSE_TIMEOUT", ServerConfig.sse_timeout)
-            assert result == ServerConfig.sse_timeout
-            mock_warn.assert_called_once()
-
     def test_get_env_str_ignores_empty_string(self):
         """Test that _get_env_str returns default when env var is empty."""
         from config import _get_env_str, LMStudioConfig
@@ -153,6 +144,27 @@ class TestConfig:
             result = _get_env_float("PROMPT_GEN_SSE_TIMEOUT", ServerConfig.sse_timeout)
             assert result == ServerConfig.sse_timeout
             mock_warn.assert_called_once()
+
+    def test_negative_float_softness_env_var_falls_back(self):
+        """Test that negative float values via env var fall back to defaults."""
+        from config import Settings, EnhancementConfig
+        with patch.dict(os.environ, {"PROMPT_GEN_ENHANCE_SOFTNESS": "-0.5"}):
+            settings = Settings.from_env()
+            assert settings.enhancement.default_softness == EnhancementConfig.default_softness
+
+    def test_negative_float_timeout_env_var_falls_back(self):
+        """Test that negative float timeout values via env var fall back to defaults."""
+        from config import Settings, ServerConfig
+        with patch.dict(os.environ, {"PROMPT_GEN_WORKER_TIMEOUT": "-10"}):
+            settings = Settings.from_env()
+            assert settings.server.worker_timeout == ServerConfig.worker_timeout
+
+    def test_non_numeric_seed_falls_back(self):
+        """Test that non-numeric seed values fall back to default 0."""
+        from config import Settings
+        with patch.dict(os.environ, {"PROMPT_GEN_IMAGE_SEED": "abc"}):
+            settings = Settings.from_env()
+            assert settings.image_generation.seed == 0
 
     def test_nan_timeout_raises(self):
         """Test that NaN timeout values raise ValueError instead of silently passing."""

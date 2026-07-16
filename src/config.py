@@ -24,7 +24,7 @@ def _get_env_int(key: str, default: int) -> int:
         logger.warning("Invalid value for %s: %s. Using default: %d", key, val, default)
         return default
 
-def _get_env_float(key: str, default: float) -> float:
+def _get_env_float(key: str, default: float, negative_allowed: bool = True) -> float:
     val = os.environ.get(key)
     if val is None or not val.strip():
         return default
@@ -37,6 +37,9 @@ def _get_env_float(key: str, default: float) -> float:
             logger.warning(
                 "Invalid value for %s: %s (Infinity). Using default: %f", key, val, default
             )
+            return default
+        if not negative_allowed and fval < 0:
+            logger.warning("Negative value for %s: %s. Using default: %f", key, val, default)
             return default
         return fval
     except ValueError:
@@ -173,11 +176,11 @@ class Settings:
         )
         server = ServerConfig(
             sse_queue_size=_get_env_int("PROMPT_GEN_SSE_QUEUE_SIZE", ServerConfig.sse_queue_size),
-            sse_timeout=_get_env_float("PROMPT_GEN_SSE_TIMEOUT", ServerConfig.sse_timeout),
-            worker_timeout=_get_env_float("PROMPT_GEN_WORKER_TIMEOUT", ServerConfig.worker_timeout),
+            sse_timeout=_get_env_float("PROMPT_GEN_SSE_TIMEOUT", ServerConfig.sse_timeout, negative_allowed=False),
+            worker_timeout=_get_env_float("PROMPT_GEN_WORKER_TIMEOUT", ServerConfig.worker_timeout, negative_allowed=False),
         )
         enhancement = EnhancementConfig(
-            default_softness=_get_env_float("PROMPT_GEN_ENHANCE_SOFTNESS", EnhancementConfig.default_softness),
+            default_softness=_get_env_float("PROMPT_GEN_ENHANCE_SOFTNESS", EnhancementConfig.default_softness, negative_allowed=False),
             default_scale=_get_env_int("PROMPT_GEN_ENHANCE_SCALE", EnhancementConfig.default_scale),
         )
         return cls(
