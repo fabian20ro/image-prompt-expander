@@ -281,6 +281,26 @@ class TestMetadataManager:
         saved = json.loads((temp_dir / "test.metaprompt.json").read_text())
         assert saved["count"] == 42
 
+    def test_update_overwrites_scalar_with_dict(self, temp_dir):
+        """Test that a dict value overwrites an existing scalar field on disk.
+
+        When the existing key holds a non-dict (e.g. int) and the update
+        supplies a dict, the merge branch is skipped and the dict replaces
+        the value wholesale — matching line 268 in metadata_manager.py's
+        isinstance guard logic. Note: this also exposes that RunMetadata
+        rejects non-int counts via __post_init__, so we assert only on-disk.
+        """
+        initial = {"prefix": "test", "count": 5}
+        (temp_dir / "test.metaprompt.json").write_text(json.dumps(initial))
+
+        with pytest.raises((TypeError, ValueError)):
+            MetadataManager.update(temp_dir, count={"nested": "value"})
+
+        saved = json.loads((temp_dir / "test.metaprompt.json").read_text())
+        assert saved["count"] == {"nested": "value"}
+        # Confirm the field was replaced entirely — not merged into an int
+        assert isinstance(saved["count"], dict)
+
     def test_get_prefix(self, temp_dir):
         """Test getting prefix from metadata."""
         (temp_dir / "myprefix.metaprompt.json").write_text('{"prefix": "myprefix"}')
