@@ -773,7 +773,8 @@ class TestRunDeleteGallery:
                     "server.worker_subprocess.delete_run",
                     side_effect=ValueError("Gallery is in archive"),
                 ):
-                    run_delete_gallery({"run_id": "bad-gallery"})
+                    with pytest.raises(SystemExit):
+                        run_delete_gallery({"run_id": "bad-gallery"})
 
         captured = capsys.readouterr()
         lines = [l for l in captured.out.strip().split("\n") if l]
@@ -795,7 +796,8 @@ class TestRunDeleteGallery:
                     "server.worker_subprocess.delete_run",
                     side_effect=OSError("Permission denied"),
                 ):
-                    run_delete_gallery({"run_id": "bad-gallery"})
+                    with pytest.raises(SystemExit):
+                        run_delete_gallery({"run_id": "bad-gallery"})
 
         captured = capsys.readouterr()
         lines = [l for l in captured.out.strip().split("\n") if l]
