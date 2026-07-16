@@ -476,18 +476,17 @@ def run_delete_gallery(params: dict):
         emit_result(False, error=f"Gallery not found: {run_id}")
         return
 
-    emit_progress("deleting", 0, 1, f"Deleting gallery: {run_id}")
-
-    try:
-        # Delete the directory
-        delete_run(output_dir, paths.prompts_dir)
-    except ValueError as e:
-        # delete_run raises ValueError for validation errors (not in prompts_dir, is archive, etc.)
-        emit_result(False, error=str(e))
-        return
-    except OSError as e:
-        emit_result(False, error=f"Failed to delete gallery: {e}")
-        return
+    with Heartbeat(f"Deleting gallery: {run_id}"):
+        try:
+            # Delete the directory
+            delete_run(output_dir, paths.prompts_dir)
+        except ValueError as e:
+            # delete_run raises ValueError for validation errors (not in prompts_dir, is archive, etc.)
+            emit_result(False, error=str(e))
+            sys.exit(1)
+        except OSError as e:
+            emit_result(False, error=f"Failed to delete gallery: {e}")
+            sys.exit(1)
 
     # Regenerate master index - best effort, don't fail if this fails
     try:

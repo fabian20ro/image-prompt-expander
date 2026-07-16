@@ -773,7 +773,8 @@ class TestRunDeleteGallery:
                     "server.worker_subprocess.delete_run",
                     side_effect=ValueError("Gallery is in archive"),
                 ):
-                    run_delete_gallery({"run_id": "bad-gallery"})
+                    with pytest.raises(SystemExit):
+                        run_delete_gallery({"run_id": "bad-gallery"})
 
         captured = capsys.readouterr()
         lines = [l for l in captured.out.strip().split("\n") if l]
@@ -795,7 +796,8 @@ class TestRunDeleteGallery:
                     "server.worker_subprocess.delete_run",
                     side_effect=OSError("Permission denied"),
                 ):
-                    run_delete_gallery({"run_id": "bad-gallery"})
+                    with pytest.raises(SystemExit):
+                        run_delete_gallery({"run_id": "bad-gallery"})
 
         captured = capsys.readouterr()
         lines = [l for l in captured.out.strip().split("\n") if l]
@@ -803,33 +805,40 @@ class TestRunDeleteGallery:
         assert result["success"] is False
         assert "Permission denied" in result["error"]
 
-    def test_run_delete_gallery_success_calls_generate_master_index(self, capsys):
+    def test_run_delete_gallery_success_calls_generate_master_index(
+        self, capsys, temp_dir
+    ):
         """Test that successful deletion regenerates the master index."""
-        prompts_dir = Path("/tmp/prompts")
+        import shutil
+
+        prompts_dir = temp_dir / "prompts"
+        prompts_dir.mkdir(parents=True)
         gallery_dir = prompts_dir / "test-run"
         gallery_dir.mkdir(parents=True)
 
-        with patch("server.worker_subprocess.paths") as mock_paths:
-            mock_paths.prompts_dir = prompts_dir
+        try:
+            with patch("server.worker_subprocess.paths") as mock_paths:
+                mock_paths.prompts_dir = prompts_dir
 
-            def fake_delete_run(output_dir, prompts_dir):
-                import shutil
-                if output_dir.exists():
-                    shutil.rmtree(output_dir)
+                def fake_delete_run(output_dir, prompts_dir):
+                    if output_dir.exists():
+                        shutil.rmtree(output_dir)
 
-            with patch(
-                "server.worker_subprocess.delete_run",
-                side_effect=fake_delete_run,
-            ) as mock_del:
-                with patch("server.worker_subprocess.generate_master_index") as mock_gen:
-                    run_delete_gallery({"run_id": "test-run"})
+                with patch(
+                    "server.worker_subprocess.delete_run",
+                    side_effect=fake_delete_run,
+                ) as mock_del:
+                    with patch("server.worker_subprocess.generate_master_index") as mock_gen:
+                        run_delete_gallery({"run_id": "test-run"})
 
-        captured = capsys.readouterr()
-        lines = [l for l in captured.out.strip().split("\n") if l]
-        result = json.loads(lines[-1])
-        assert result["success"] is True
-        assert result["data"]["deleted"] is True
-        mock_gen.assert_called_once()
+            captured = capsys.readouterr()
+            lines = [l for l in captured.out.strip().split("\n") if l]
+            result = json.loads(lines[-1])
+            assert result["success"] is True
+            assert result["data"]["deleted"] is True
+            mock_gen.assert_called_once()
+        finally:
+            shutil.rmtree(prompts_dir, ignore_errors=True)
 
     def test_run_enhance_image_metadata_error_fallback(self, capsys):
         """Test that MetadataError in run_enhance_image falls back to default prefix."""

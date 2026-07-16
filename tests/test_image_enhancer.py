@@ -458,3 +458,57 @@ def test_enhance_image_tiled_vae_false_default_passes_to_get_enhancer():
             enhance_image(img_path, out_path)
 
         mock_get.assert_called_once_with(False)
+
+
+def test_enhance_image_resolution_always_scale_factor_2():
+    """Test that resolution is always ScaleFactor(2) regardless of other kwargs."""
+    from image_enhancer import enhance_image
+    from unittest.mock import MagicMock, patch
+    import tempfile
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        img_path = Path(tmpdir) / "test.png"
+        out_path = Path(tmpdir) / "out.png"
+        Image.new("RGB", (10, 10)).save(img_path)
+
+        mock_enhancer = MagicMock()
+        mock_result = MagicMock()
+        mock_enhancer.generate_image.return_value = mock_result
+        mock_scale_factor_instance = MagicMock()
+        mock_scale_factor_cls = MagicMock(return_value=mock_scale_factor_instance)
+
+        with patch("image_enhancer.unload_all_models"), \
+             patch("image_enhancer._get_enhancer", return_value=mock_enhancer), \
+             patch.dict(sys.modules, {"mflux.utils.scale_factor": MagicMock(ScaleFactor=mock_scale_factor_cls)}):
+            enhance_image(img_path, out_path, width=800, height=1200)
+
+        mock_scale_factor_cls.assert_called_once_with(2)
+        call_kwargs = mock_enhancer.generate_image.call_args.kwargs
+        assert isinstance(call_kwargs["resolution"], MagicMock)
+
+
+def test_enhance_image_scale_factor_passed_to_generate_image():
+    """Test that ScaleFactor(2) is correctly forwarded to generate_image."""
+    from image_enhancer import enhance_image
+    from unittest.mock import MagicMock, patch
+    import tempfile
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        img_path = Path(tmpdir) / "test.png"
+        out_path = Path(tmpdir) / "out.png"
+        Image.new("RGB", (10, 10)).save(img_path)
+
+        mock_enhancer = MagicMock()
+        mock_result = MagicMock()
+        mock_enhancer.generate_image.return_value = mock_result
+        mock_scale_factor_instance = MagicMock()
+        mock_scale_factor_cls = MagicMock(return_value=mock_scale_factor_instance)
+
+        with patch("image_enhancer.unload_all_models"), \
+             patch("image_enhancer._get_enhancer", return_value=mock_enhancer), \
+             patch.dict(sys.modules, {"mflux.utils.scale_factor": MagicMock(ScaleFactor=mock_scale_factor_cls)}):
+            enhance_image(img_path, out_path)
+
+        mock_scale_factor_cls.assert_called_once_with(2)
+        call_kwargs = mock_enhancer.generate_image.call_args.kwargs
+        assert isinstance(call_kwargs["resolution"], MagicMock)
