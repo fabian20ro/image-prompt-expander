@@ -145,6 +145,24 @@ class TestConfig:
             assert result == ServerConfig.sse_timeout
             mock_warn.assert_called_once()
 
+    def test_get_env_float_accepts_valid_positive_float(self):
+        """Test that _get_env_float returns valid positive float unchanged with no warning."""
+        from config import _get_env_float, logger
+        with patch.dict(os.environ, {"PROMPT_GEN_SSE_TIMEOUT": "42.5"}), \
+             patch.object(logger, "warning") as mock_warn:
+            result = _get_env_float("PROMPT_GEN_SSE_TIMEOUT", ServerConfig.sse_timeout)
+            assert result == 42.5
+            mock_warn.assert_not_called()
+
+    def test_get_env_float_accepts_positive_zero(self):
+        """Test that _get_env_float returns zero (positive boundary) unchanged."""
+        from config import _get_env_float, logger
+        with patch.dict(os.environ, {"PROMPT_GEN_SSE_TIMEOUT": "0.0"}), \
+             patch.object(logger, "warning") as mock_warn:
+            result = _get_env_float("PROMPT_GEN_SSE_TIMEOUT", ServerConfig.sse_timeout)
+            assert result == 0.0
+            mock_warn.assert_not_called()
+
     def test_negative_float_softness_env_var_falls_back(self):
         """Test that negative float values via env var fall back to defaults."""
         from config import Settings, EnhancementConfig
