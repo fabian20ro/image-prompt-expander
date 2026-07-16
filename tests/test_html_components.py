@@ -55,6 +55,24 @@ class TestLogPanel:
         assert "textContent" in js
         assert "innerHTML" in js
 
+    def test_error_warning_classification_uses_else_if(self):
+        """Log line classification uses exclusive branching for error/warning classes.
+
+        The implementation assigns `.error` and `.warning` CSS classes based on the
+        message content to make errors visually distinct from normal log lines. Using
+        two independent `if` blocks would allow a single line like 'Error in warning
+        handler' to get BOTH classes — doubling its visual weight and potentially
+        confusing users into thinking it's an error when it's really just a warning.
+        The `else if` chain guarantees at most one styling class is applied per line,
+        preserving the intended visual hierarchy: error > warning > info.
+        """
+        js = LogPanel.js()
+        # Pattern: 'if (...) className += " error"; else if (...) className += " warning"'
+        assert "else if" in js, (
+            "Error/warning classification must use `else if` to prevent double-class "
+            "assignment on lines containing both keywords."
+        )
+
 
 class TestQueueStatusBar:
     """Tests for QueueStatusBar component."""
