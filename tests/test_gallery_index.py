@@ -255,3 +255,84 @@ class TestGalleryIndexInteractive:
         html = _build_notifications()
         assert "toast-region" in html or "showToast" in html
         assert "confirm-modal" in html or "confirmAction" in html
+
+    def test_extract_run_info_returns_none_when_no_metadata(self, temp_dir):
+        """_extract_run_info should return None when no metadata file exists."""
+        from gallery_index import _extract_run_info
+        empty_run = temp_dir / "prompts" / "20240101_120000_empty"
+        empty_run.mkdir(parents=True)
+
+        result = _extract_run_info(empty_run, is_archive=False)
+        assert result is None
+
+    def test_extract_run_info_returns_none_for_corrupt_metadata(self, temp_dir):
+        """_extract_run_info should return None for corrupt JSON metadata."""
+        from gallery_index import _extract_run_info
+        bad_run = temp_dir / "prompts" / "20240101_120000_bad"
+        bad_run.mkdir(parents=True)
+        (bad_run / "test.metaprompt.json").write_text("{not valid json")
+
+        result = _extract_run_info(bad_run, is_archive=False)
+        assert result is None
+
+    def test_extract_run_info_returns_none_when_no_gallery(self, temp_dir):
+        """_extract_run_info should return None if gallery file missing."""
+        from gallery_index import _extract_run_info
+        no_gallery = temp_dir / "prompts" / "20240101_120000_nogal"
+        no_gallery.mkdir(parents=True)
+        (no_gallery / "test.metaprompt.json").write_text(json.dumps({
+            "prefix": "test",
+            "count": 1,
+        }))
+
+        result = _extract_run_info(no_gallery, is_archive=False)
+        assert result is None
+
+    def test_build_card_html_truncates_long_prompt(self):
+        """_build_card_html should truncate prompts longer than 100 chars."""
+        from gallery_index import _build_card_html
+        long_prompt = "x" * 150
+        run = {
+            "user_prompt": long_prompt,
+            "display_time": "2024-01-01 12:00",
+            "image_count": 5,
+            "prompt_count": 3,
+            "model": "test-model",
+            "dir_name": "20240101_120000_xxx",
+            "gallery_path": "prompts/20240101_120000_xxx/test_gallery.html",
+            "thumbnail_file": None,
+            "thumbnail": None,
+        }
+        html = _build_card_html(run, interactive=False)
+        assert "...".encode() in html.encode("utf-8") or '...' in html
+        # The full long prompt should NOT appear as visible text (only in title attribute)
+        # Check that truncated prompt appears: first 100 chars + "..." = 103 chars
+        expected_visible = f'{"x" * 100}...'
+        assert expected_visible.encode() in html.encode("utf-8") or expected_visible in html
+
+    def test_build_flat_archive_card_no_thumbnail_fallback(self):
+        """_build_flat_archive_card_html should show no-thumbnail when no first_image."""
+        from gallery_index import _build_flat_archive_card_html
+        archive = {
+            "user_prompt": "simple prompt",
+            "display_time": "2024-01-01 12:00",
+            "image_count": 3,
+            "model": "test-model",
+            "first_image": None,
+        }
+        html = _build_flat_archive_card_html(archive, interactive=False)
+        assert "No images" in html
+
+    def test_build_index_html_empty_state_shows_message(self):
+        """_build_index_html should show empty-state message when no active runs."""
+        from gallery_index import _build_index_html
+        html = _build_index_html(active_runs=[])
+        assert "No galleries found" in html
+
+    def test_format_run_timestamp_produces_expected_output(self):
+        """format_run_timestamp should produce a readable timestamp string."""
+        from utils import format_run_timestamp
+        result = format_run_timestamp("20240101_120000")
+        assert isinstance(result, str)
+        # Should not be the raw input unchanged
+        assert result != "20240101_120000"

@@ -320,3 +320,26 @@ class TestGalleryService:
         prompts = service.load_prompts(run_dir, prefix="test")
 
         assert prompts == ["valid"]
+
+    def test_get_metadata_file_prefers_metaprompt(self, temp_dir):
+        """Test get_metadata_file prefers *.metaprompt.json over *_metadata.json."""
+        run_dir = temp_dir / "run"
+        run_dir.mkdir()
+        (run_dir / "test.metaprompt.json").write_text(json.dumps({"prefix": "test"}))
+        (run_dir / "test_metadata.json").write_text(json.dumps({"prefix": "test_alt"}))
+
+        service = GalleryService(temp_dir, temp_dir)
+        meta_file = service.get_metadata_file(run_dir)
+
+        assert meta_file.name == "test.metaprompt.json"
+
+    def test_get_metadata_file_fallback_to_metadata(self, temp_dir):
+        """Test get_metadata_file falls back to *_metadata.json when no metaprompt exists."""
+        run_dir = temp_dir / "run"
+        run_dir.mkdir()
+        (run_dir / "test_metadata.json").write_text(json.dumps({"prefix": "test"}))
+
+        service = GalleryService(temp_dir, temp_dir)
+        meta_file = service.get_metadata_file(run_dir)
+
+        assert meta_file.name == "test_metadata.json"

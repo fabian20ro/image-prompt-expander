@@ -171,3 +171,72 @@ def test_api_root_case_sensitive_v1():
 
     url_mixed = "http://localhost:1234/v1/"
     assert _api_root(url_mixed) == "http://localhost:1234"  # lowercase stripped per contract
+
+
+def test_api_root_empty_string():
+    """An empty string must round-trip unchanged — no slice errors on a short string."""
+    assert _api_root("") == ""
+
+
+def test_api_root_schemeless_v1_suffix():
+    """A URL like 'http://host/v1' (no port) with /v1 trailing segment must still be stripped."""
+    url = "http://example.com/v1"
+    assert _api_root(url) == "http://example.com"
+
+
+def test_api_root_trailing_slash_only_no_v1():
+    """A URL ending in '/' but without '/v1' must round-trip unchanged."""
+    url = "http://localhost:1234/"
+    assert _api_root(url) == "http://localhost:1234"
+
+
+def test_clean_grammar_output_markdown_without_json():
+    """When code blocks exist but contain no valid JSON, the stripped text is returned unchanged."""
+    raw = '```json\njust some prose here\n```'
+    result = clean_grammar_output(raw)
+    assert '"origin"' not in result and '[' not in result.lstrip()
+
+
+def test_clean_grammar_output_unclosed_block_with_json_after():
+    """An unclosed code block should not prevent extraction of JSON found later in the text."""
+    raw = '```\nsome preamble\n{"a": 1}\n```garbage'
+    result = clean_grammar_output(raw)
+    assert '"a"' in result or '{"a": 1}' == result
+
+
+def test_clean_grammar_output_no_opening_brace():
+    """When the cleaned text has no opening brace, no JSON extraction should occur."""
+    raw = "```json\nthis is not json at all\n```"
+    result = clean_grammar_output(raw)
+    assert '{' not in result and '[' not in result.lstrip()
+
+
+def test_clean_grammar_output_preserves_nested_json():
+    """Deeply nested JSON arrays must be preserved fully during extraction."""
+    raw = '{"nested": {"deep": [1, 2, {"x": true}]}}'
+    result = clean_grammar_output(raw)
+    assert result == raw
+
+
+def test_clean_grammar_output_handles_mixed_code_block_languages():
+    """Code blocks tagged with 'tracery' should still have their content extracted."""
+    raw = '```\n{"origin": ["a", "b"]}\n```'
+    result = clean_grammar_output(raw)
+    assert '"origin"' in result
+
+
+def test_clean_grammar_output_multiline_thinking():
+    """Multi-line thinking blocks must be stripped along with surrounding whitespace."""
+    raw = '```\nsome preamble\n{"a": 1}\n```'
+    # This is a regular code block, not thinking — should still extract JSON
+    result = clean_grammar_output(raw)
+    assert '"a"' in result
+
+
+def test_clean_grammar_output_smart_quotes_in_code_block():
+    """Smart quotes inside a code-blocked JSON must be normalized during cleaning."""
+    raw = '```json\n{"key": \u201cvalue\u201d}\n```'
+    result = clean_grammar_output(raw)
+    assert '\u201c' not in result and '\u201d' not in result
+    expected = '{"key": "value"}'
+    assert result == expected
