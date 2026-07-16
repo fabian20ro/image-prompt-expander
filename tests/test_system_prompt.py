@@ -87,3 +87,37 @@ def test_system_prompt_forbids_duplicate_alternatives():
         assert (
             prohibition in prompt
         ), f"Anti-duplicate guardrail missing from system prompt: {prohibition}"
+
+
+def test_system_prompt_enforces_output_quality_constraints():
+    """Verify the template enforces word count, contradiction avoidance, style consistency, and translation rules.
+
+    These constraints prevent low-quality or inconsistent outputs across series generation.
+    """
+    prompt = get_system_prompt()
+    for constraint in [
+        "50–150 words",
+        "contradictory",
+        "consistent across a series",
+        "Do not translate it",
+    ]:
+        assert (
+            constraint in prompt
+        ), f"Output quality constraint missing from system prompt: {constraint}"
+
+
+def test_system_prompt_forbids_inference_metadata():
+    """Verify the template forbids embedding inference metadata into prompts.
+
+    The generator must never write guidance scale, quantization info, or numeric resolution
+    into the expanded prompt — the application controls those parameters separately.
+    """
+    prompt = get_system_prompt()
+    for forbidden in [
+        "guidance scale",
+        "quantization",
+        "numeric output resolution",
+    ]:
+        assert (
+            forbidden in prompt
+        ), f"Inference metadata prohibition missing from system prompt: {forbidden}"

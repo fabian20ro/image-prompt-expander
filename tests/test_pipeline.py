@@ -508,3 +508,53 @@ class TestRunFullPipelineWithImages:
 
         assert result.success is True
         assert captured_kwargs["resume"] is True
+
+    @patch("pipeline.create_gallery")
+    @patch("pipeline.generate_master_index")
+    def test_run_full_pipeline_passes_gallery_and_index_arguments(
+        self, mock_index, mock_gallery, temp_dir
+    ):
+        """Test that gallery and master index receive correct arguments from pipeline.
+
+        Verifies create_gallery receives the full prompt list (or max_prompts slice),
+        grammar string, raw response reference, and user display title; also verifies
+        generate_master_index is called with the resolved generated directory path.
+        Catches regressions where gallery content or index location drifts from pipeline state.
+        """
+        mock_gallery.return_value = temp_dir / "prompts" / "test_gallery.html"
+
+        with patch("pipeline.generate_grammar") as mock_grammar, \
+             patch("pipeline.run_tracery") as mock_tracery:
+            mock_grammar.return_value = ('{"origin": ["test"]}', False, "raw response")
+            mock_tracery.return_value = [f"prompt {i}" for i in range(3)]
+
+            with patch("pipeline.paths") as mock_paths:
+                mock_paths.prompts_dir = temp_dir / "prompts"
+                mock_paths.prompts_dir.mkdir(parents=True)
+                mock_paths.generated_dir = temp_dir / "generated"
+
+                executor = PipelineExecutor()
+                result = executor.run_full_pipeline(
+                    prompt="a dragon flying",
+                    count=3,
+                    prefix="dragon",
+                    generate_images=False,
+                    max_prompts=2,
+                )
+
+        assert result.success is True
+        # Gallery should receive only the first max_prompts prompts (not all 3)
+        gallery_call = mock_gallery.call_args
+        positional = gallery_call[0]
+        assert len(positional) >= 4
+        assert positional[1] == "dragon"  # prefix
+        assert list(positional[2]) == [f"prompt {i}" for i in range(2)]  # prompts slice
+        assert positional[3] == 1  # images_per_prompt default
+
+        keyword = gallery_call[1]
+        assert keyword["grammar"] == '{"origin": ["test"]}'
+        assert keyword["raw_response_file"] == "dragon_raw_response.txt"
+        assert keyword["user_prompt"] == "a dragon flying"
+
+        # Master index should be called with resolved generated_dir
+        mock_index.assert_called_once_with(temp_dir / "generated")
