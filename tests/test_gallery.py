@@ -303,3 +303,51 @@ class TestGalleryInteractive:
             generate_gallery_for_directory(temp_dir, interactive=True)
 
         assert "No metadata file found" in str(exc_info.value)
+
+
+class TestBuildCardHtml:
+    """Tests for _build_card_html rendering branches."""
+
+    def test_build_card_exists_renders_image_with_prompt_alt(self):
+        """When image exists the card renders an <img> tag with escaped prompt as alt text and links to it."""
+        import html
+
+        from gallery import _build_card_html
+
+        raw_prompt = "<b>bold & italic</b>"
+        escaped = html.escape(raw_prompt)
+
+        html_out = _build_card_html(
+            "test_0_0.png", escaped, 0, 0, exists=True,
+        )
+
+        assert '<a href="test_0_0.png" target="_blank">' in html_out
+        assert '<img src="test_0_0.png"' in html_out
+        assert f'alt="{escaped}"' in html_out
+        assert "Pending..." not in html_out
+
+    def test_build_card_pending_renders_placeholder_no_link(self):
+        """A pending card must render a placeholder div and no <a>/<img> tags."""
+        from gallery import _build_card_html
+
+        html = _build_card_html("pending.png", "my prompt", 1, 2, exists=False)
+
+        assert '<div class="placeholder">Pending...</div>' in html
+        assert "<a href=" not in html
+        assert "<img" not in html
+        assert 'class="card"' in html
+        assert 'data-image="pending.png"' in html
+        assert 'data-prompt-idx="1"' in html
+        assert 'data-image-idx="2"' in html
+
+    def test_build_card_prompt_only_renders_prompt_only_layout(self):
+        """When no_image_expected is True the card renders a prompt-only layout."""
+        from gallery import _build_card_html
+
+        html = _build_card_html("pp_0.png", "prompt-only text", 0, 0, exists=False, no_image_expected=True)
+
+        assert 'class="card prompt-only"' in html
+        assert '<div class="placeholder no-image">#0</div>' in html
+        assert "<a href=" not in html
+        assert "<img" not in html
+        assert "prompt-only text" in html
