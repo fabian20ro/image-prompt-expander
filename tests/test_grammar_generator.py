@@ -351,6 +351,37 @@ class TestGrammarStructureValidation(unittest.TestCase):
                 "h": ["s"],
             })
 
+    def test_rejects_non_dict_grammar(self):
+        # validate_grammar_structure must reject any non-dict input (lists,
+        # strings, primitives) so the caller cannot accidentally feed a malformed
+        # LLM response into cache or rendering without an explicit error.
+        with self.assertRaises(ValueError):
+            validate_grammar_structure([])
+
+    def test_rejects_dict_without_origin(self):
+        # A dict that omits "origin" is structurally incomplete; the validator
+        # must refuse it before any further processing occurs.
+        with self.assertRaisesRegex(ValueError, '"origin" rule'):
+            validate_grammar_structure({"foo": ["bar"]})
+
+    def test_rejects_empty_rule_array(self):
+        # An empty array for a rule is rejected because an empty list cannot be
+        # sampled — catching this early prevents silent failures downstream.
+        with self.assertRaisesRegex(ValueError, "non-empty array"):
+            validate_grammar_structure({
+                "origin": ["#foo#"],
+                "foo": [],
+            })
+
+    def test_rejects_duplicate_alternatives(self):
+        # Duplicate alternatives in a rule break the randomness guarantee; the
+        # validator must surface them so LLM output is rejected before caching.
+        with self.assertRaisesRegex(ValueError, "duplicate alternatives"):
+            validate_grammar_structure({
+                "origin": ["#subject#"],
+                "subject": ["fox", "owl", "fox", "hare", "deer"],
+            })
+
 
 if __name__ == "__main__":
     unittest.main()
