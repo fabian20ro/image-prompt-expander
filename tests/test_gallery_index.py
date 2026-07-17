@@ -336,3 +336,45 @@ class TestGalleryIndexInteractive:
         assert isinstance(result, str)
         # Should not be the raw input unchanged
         assert result != "20240101_120000"
+
+    def test_build_flat_archive_card_shows_saved_badge(self):
+        """_build_flat_archive_card_html should render 'Saved' for manual_archive backup reason."""
+        from gallery_index import _build_flat_archive_card_html
+        archive = {
+            "user_prompt": "manual save",
+            "display_time": "2024-01-01 12:00",
+            "image_count": 3,
+            "model": "test-model",
+            "first_image": None,
+            "backup_reason": "manual_archive",
+        }
+        html = _build_flat_archive_card_html(archive, interactive=False)
+        assert '<span class="archive-badge">Saved</span>' in html
+
+    def test_build_flat_archive_card_shows_pre_enhance_badge(self):
+        """_build_flat_archive_card_html should render 'Pre-Enhance' for pre_enhance backup reason."""
+        from gallery_index import _build_flat_archive_card_html
+        archive = {
+            "user_prompt": "pre enhance",
+            "display_time": "2024-01-01 12:00",
+            "image_count": 3,
+            "model": "test-model",
+            "first_image": None,
+            "backup_reason": "pre_enhance",
+        }
+        html = _build_flat_archive_card_html(archive, interactive=False)
+        assert '<span class="archive-badge">Pre-Enhance</span>' in html
+
+    def test_build_flat_archive_card_unknown_backup_reason(self):
+        """_build_flat_archive_card_html should render 'Backup' for unrecognized backup reason."""
+        from gallery_index import _build_flat_archive_card_html
+        archive = {
+            "user_prompt": "unknown",
+            "display_time": "2024-01-01 12:00",
+            "image_count": 3,
+            "model": "test-model",
+            "first_image": None,
+            "backup_reason": "some_obscure_reason",
+        }
+        html = _build_flat_archive_card_html(archive, interactive=False)
+        assert '<span class="archive-badge">Backup</span>' in html
