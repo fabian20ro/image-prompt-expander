@@ -1,6 +1,7 @@
 """Tests for GalleryService."""
 
 import json
+from pathlib import Path
 
 import pytest
 
@@ -375,3 +376,27 @@ class TestGalleryService:
         meta_file = service.get_metadata_file(run_dir)
 
         assert meta_file.name.endswith(".metaprompt.json")
+
+    def test_load_metadata_empty_file(self, temp_dir):
+        """Test loading metadata from an empty file raises JSONDecodeError."""
+        (temp_dir / "test.metaprompt.json").write_text("")
+
+        service = GalleryService(temp_dir, temp_dir)
+        with pytest.raises(json.JSONDecodeError):
+            service.load_metadata(temp_dir)
+
+    def test_load_prompts_nonexistent_directory(self, temp_dir):
+        """Test load_prompts returns empty list for missing directory."""
+        nonexistent = temp_dir / "does_not_exist"
+
+        service = GalleryService(temp_dir, temp_dir)
+        prompts = service.load_prompts(nonexistent)
+        assert prompts == []
+
+    def test_validate_file_access_absolute_path_outside_base(self, temp_dir):
+        """Test validate_file_access raises ValueError for absolute paths outside base."""
+        real_root = Path("/tmp")
+
+        service = GalleryService(temp_dir, temp_dir)
+        with pytest.raises(ValueError, match="Access denied"):
+            service.validate_file_access(real_root.resolve(), temp_dir)
