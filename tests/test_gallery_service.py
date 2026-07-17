@@ -83,7 +83,7 @@ class TestGalleryService:
         (temp_dir / "test.metaprompt.json").write_text("not valid json")
 
         service = GalleryService(temp_dir, temp_dir)
-        with pytest.raises(json.JSONDecodeError):
+        with pytest.raises(json.JSONDecodeError, match="Expecting value"):
             service.load_metadata(temp_dir)
 
     def test_get_prefix(self, temp_dir):
