@@ -263,6 +263,28 @@ class TestCollectImages:
         with pytest.raises(ValueError, match="No images found matching pattern"):
             collect_images(str(temp_dir / "*.xyz"))
 
+def test_enhance_image_scale_factor_missing_raises_import_error(temp_dir):
+    """Test that missing ScaleFactor triggers install-hint ImportError."""
+    from image_enhancer import enhance_image
+    from unittest.mock import MagicMock, patch
+
+    img = Image.new("RGB", (10, 10))
+    img_path = temp_dir / "test.png"
+    out_path = temp_dir / "out.png"
+    img.save(img_path)
+
+    mock_enhancer = MagicMock()
+    mock_enhancer.generate_image.return_value = MagicMock()
+
+    with patch("image_enhancer.unload_all_models"), \
+         patch("image_enhancer._get_enhancer", return_value=mock_enhancer), \
+         patch.dict(sys.modules, {"mflux.utils.scale_factor": None}, clear=False):
+        # Remove ScaleFactor from sys.modules if present to trigger ImportError
+        sys.modules.pop("mflux.utils.scale_factor", None)
+        with pytest.raises(ImportError, match="mflux is required"):
+            enhance_image(img_path, out_path)
+
+
 @pytest.mark.parametrize("softness", [-0.1, 1.1])
 def test_enhance_image_invalid_softness(softness):
     from image_enhancer import enhance_image
