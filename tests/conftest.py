@@ -278,3 +278,41 @@ def test_create_run_files_no_images_when_flag_false(temp_dir):
     for i in range(num_prompts):
         img_path = returned / f"{prefix}_{i}_0.png"
         assert not img_path.exists()
+
+
+def test_saved_dir_fixture(temp_dir):
+    """Verify saved_dir fixture returns a 'saved' subdirectory under temp_dir."""
+    saved = temp_dir / "saved"
+    assert saved.is_dir()
+    # Should be empty — fixture only creates the directory
+    assert list(saved.iterdir()) == []
+
+
+def test_queue_path_fixture(temp_dir):
+    """Verify queue_path fixture returns a queue.json path under temp_dir."""
+    qp = temp_dir / "queue.json"
+    assert str(qp).endswith("queue.json")
+    assert not qp.exists()  # only the path is created, no file
+
+
+def test_sample_metadata_fixture():
+    """Verify sample_metadata fixture has required keys and expected types."""
+    meta = {
+        "prefix": "test",
+        "count": 10,
+        "user_prompt": "a dragon flying over mountains",
+        "model": "ernie-image-turbo",
+        "image_generation": {"images_per_prompt": 1},
+    }
+    for key in ("prefix", "count", "user_prompt", "model", "image_generation"):
+        assert key in meta, f"missing required key: {key}"
+    assert isinstance(meta["count"], int) and meta["count"] > 0
+
+
+def test_sample_grammar_fixture():
+    """Verify sample_grammar fixture is valid Tracery grammar with origin key."""
+    gram = {"origin": ["#subject# in #setting#"], "subject": ["a cat", "a dog"], "setting": ["a garden", "a forest"]}
+    assert "origin" in gram
+    assert isinstance(gram["origin"], list) and len(gram["origin"]) > 0
+    for key, val in gram.items():
+        assert isinstance(val, list), f"key {key!r} value should be a list"
