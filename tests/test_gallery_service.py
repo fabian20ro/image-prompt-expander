@@ -343,3 +343,24 @@ class TestGalleryService:
         meta_file = service.get_metadata_file(run_dir)
 
         assert meta_file.name == "test_metadata.json"
+
+    def test_get_metadata_file_nonexistent_run_dir(self, temp_dir):
+        """Test get_metadata_file raises MetadataNotFoundError for missing directory."""
+        nonexistent = temp_dir / "does_not_exist"
+
+        service = GalleryService(temp_dir, temp_dir)
+        with pytest.raises(MetadataNotFoundError, match="No metadata file found"):
+            service.get_metadata_file(nonexistent)
+
+    def test_get_metadata_file_both_patterns_match(self, temp_dir):
+        """Test get_metadata_file returns a metaprompt file when both patterns have files."""
+        run_dir = temp_dir / "run"
+        run_dir.mkdir()
+        (run_dir / "a.metaprompt.json").write_text(json.dumps({"prefix": "mp"}))
+        (run_dir / "b.metaprompt.json").write_text(json.dumps({"prefix": "mp2"}))
+        (run_dir / "c_metadata.json").write_text(json.dumps({"prefix": "md"}))
+
+        service = GalleryService(temp_dir, temp_dir)
+        meta_file = service.get_metadata_file(run_dir)
+
+        assert meta_file.name.endswith(".metaprompt.json")
