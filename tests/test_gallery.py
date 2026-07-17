@@ -340,6 +340,16 @@ class TestBuildCardHtml:
         assert 'data-prompt-idx="1"' in html
         assert 'data-image-idx="2"' in html
 
+    def test_build_card_pending_has_accessible_aria_label(self):
+        """Pending cards must expose the prompt as an aria-label for assistive tech."""
+        from gallery import _build_card_html
+
+        raw_prompt = '<script> & "bold"'
+        escaped = __import__("html").escape(raw_prompt)
+        html_out = _build_card_html("pending.png", escaped, 0, 0, exists=False)
+
+        assert f'aria-label="Generating: {escaped}"' in html_out
+
     def test_build_card_prompt_only_renders_prompt_only_layout(self):
         """When no_image_expected is True the card renders a prompt-only layout."""
         from gallery import _build_card_html
