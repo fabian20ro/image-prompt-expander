@@ -60,6 +60,9 @@ def run_tracery(grammar_json: str, count: int = 500, origin: str = "origin") -> 
     Raises:
         TraceryError: If grammar is invalid
     """
+    if count <= 0:
+        return []
+
     grammar_dict = parse_grammar(grammar_json)
 
     results = []

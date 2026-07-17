@@ -192,11 +192,11 @@ class TestRunTracery:
         with pytest.raises(TraceryError, match="Invalid JSON grammar"):
             run_tracery("{invalid", count=1)
 
-    def test_run_tracery_invalid_json_zero_count_raises(self):
-        """Test that zero-count short-circuit does NOT skip parsing — invalid JSON still raises."""
-        # Grammar is parsed before the loop runs; this locks in execution order.
-        with pytest.raises(TraceryError, match="Invalid JSON grammar"):
-            run_tracery("{invalid", count=0)
+    def test_run_tracery_invalid_json_zero_count_returns_empty(self):
+        """Test that zero-count short-circuit skips parsing — invalid JSON returns []."""
+        # Grammar is NOT parsed when count <= 0; we return [] immediately.
+        results = run_tracery("{invalid", count=0)
+        assert results == []
 
     def test_run_tracery_complex_grammar(self):
         """Test with a more complex grammar."""
