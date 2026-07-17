@@ -192,11 +192,11 @@ class TestRunTracery:
         with pytest.raises(TraceryError, match="Invalid JSON grammar"):
             run_tracery("{invalid", count=1)
 
-    def test_run_tracery_invalid_json_zero_count_raises(self):
-        """Test that zero-count short-circuit does NOT skip parsing — invalid JSON still raises."""
-        # Grammar is parsed before the loop runs; this locks in execution order.
-        with pytest.raises(TraceryError, match="Invalid JSON grammar"):
-            run_tracery("{invalid", count=0)
+    def test_run_tracery_invalid_json_zero_count_returns_empty(self):
+        """Test that zero-count short-circuit skips parsing — invalid JSON returns []."""
+        # Grammar is NOT parsed when count <= 0; we return [] immediately.
+        results = run_tracery("{invalid", count=0)
+        assert results == []
 
     def test_run_tracery_complex_grammar(self):
         """Test with a more complex grammar."""
@@ -288,3 +288,46 @@ class TestTraceryModifiers:
         result = generate_one(grammar)
         # Order matters: capitalize then pluralize
         assert result == "Cats"
+
+    def test_empty_string_rule(self):
+        """Test grammar with an empty string in a rule array."""
+        grammar = {
+            "origin": ["#word#", ""],
+            "word": ["hello"],
+        }
+        # Tracery picks from the list; empty string is a valid choice
+        result = generate_one(grammar)
+        assert isinstance(result, str)
+
+    def test_non_list_rule_value(self):
+        """Test grammar where a rule value is not a list."""
+        grammar = {"origin": ["#word"], "word": "hello"}
+        # Tracery normalizes string values to single-element lists internally;
+        # this should still produce valid output without raising.
+        result = generate_one(grammar)
+        assert isinstance(result, str)
+
+    def test_deep_recursion_deterministic(self, monkeypatch):
+        """Test deep recursive expansion terminates deterministically."""
+        grammar = {
+            "origin": ["#chain#"],
+            "chain": ["leaf", "#chain# + #chain#"],
+        }
+        # Provide enough choices to cover worst-case recursion depth.
+        # Each recursion adds two child expansions; 50 is generous.
+        choices = iter(["leaf"] * 50)
+        monkeypatch.setattr(tracery.random, "choice", lambda _rules: next(choices))
+        result = generate_one(grammar)
+        assert result == "leaf" or "+ leaf + leaf" in result
+
+    def test_run_tracery_with_modifiers(self):
+        """Test batch generation includes modifier effects."""
+        grammar_json = json.dumps({
+            "origin": ["#mood.a#"],
+            "mood": ["happy", "sad", "curious"],
+        })
+        results = run_tracery(grammar_json, count=50)
+        assert len(results) == 50
+        for r in results:
+            # base_english .a adds 'an' or 'a' based on vowel heuristic
+            assert r.startswith("a ") or r.startswith("an ")

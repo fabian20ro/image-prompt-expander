@@ -10,6 +10,7 @@ from utils import (
     get_prefix_from_metadata,
     count_images_in_run,
     get_prompts_from_run,
+    _get_prompt_text,
     backup_run,
     is_backup_run,
     scan_flat_archives,
@@ -106,6 +107,24 @@ class TestUtils:
         assert len(prompts) == 3
         assert prompts[0] == "First prompt"
         assert prompts[2] == "Third prompt"
+
+    def test_get_prompt_text_found(self, temp_dir):
+        """Test _get_prompt_text returns file content when the prompt file exists."""
+        run_dir = temp_dir / "prompts" / "run123"
+        run_dir.mkdir(parents=True)
+        (run_dir / "image_5.txt").write_text("My dragon prompt")
+
+        result = _get_prompt_text(run_dir, "image", 5)
+        assert result == "My dragon prompt"
+
+    def test_get_prompt_text_missing(self, temp_dir):
+        """Test _get_prompt_text returns empty string when the prompt file is absent."""
+        run_dir = temp_dir / "prompts" / "run123"
+        run_dir.mkdir(parents=True)
+        # No image_9.txt created
+
+        result = _get_prompt_text(run_dir, "image", 9)
+        assert result == ""
 
     def test_get_prompts_from_run_empty_directory(self, temp_dir):
         """Test get_prompts_from_run returns [] when no prompt files exist."""
