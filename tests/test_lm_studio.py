@@ -127,3 +127,15 @@ class TestUnloadAllModels:
              patch("lm_studio.time.sleep") as sleep_mock:
             unload_all_models()
             assert [a.args[0] for a in sleep_mock.call_args_list] == [1.0, 2.0]
+
+    def test_custom_timeout_propagates_to_subprocess_run(self):
+        success_result = MagicMock()
+        success_result.returncode = 0
+        success_result.stderr = ""
+        success_result.stdout = ""
+
+        with patch("lm_studio.shutil.which", return_value="/usr/bin/lms"), \
+             patch("lm_studio.subprocess.run", return_value=success_result) as run_mock:
+            unload_all_models(timeout=45.0)
+            call_kwargs = run_mock.call_args.kwargs
+            assert call_kwargs["timeout"] == 45.0
