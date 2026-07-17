@@ -301,6 +301,27 @@ class TestMetadataManager:
         # Confirm the field was replaced entirely — not merged into an int
         assert isinstance(saved["count"], dict)
 
+    def test_update_overwrites_dict_with_scalar(self, temp_dir):
+        """Test that a scalar value overwrites an existing dict field on disk.
+
+        When the existing key holds a dict and the update supplies a
+        non-dict (e.g. string), the merge branch is skipped and the
+        scalar replaces the dict wholesale — matching line 267 in
+        metadata_manager.py's isinstance guard logic.
+        """
+        initial = {
+            "prefix": "test",
+            "image_generation": {"enabled": True, "width": 1024},
+        }
+        (temp_dir / "test.metaprompt.json").write_text(json.dumps(initial))
+
+        result = MetadataManager.update(temp_dir, image_generation="removed")
+
+        saved = json.loads((temp_dir / "test.metaprompt.json").read_text())
+        assert saved["image_generation"] == "removed"
+        # Confirm the dict was replaced entirely — not merged with a string
+        assert isinstance(saved["image_generation"], str)
+
     def test_get_prefix(self, temp_dir):
         """Test getting prefix from metadata."""
         (temp_dir / "myprefix.metaprompt.json").write_text('{"prefix": "myprefix"}')
