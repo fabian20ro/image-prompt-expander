@@ -403,6 +403,42 @@ class TestUtils:
         # "cat_20240115_143022_10_1.png" is lex-smallest.
         assert archive["first_image"].name == "cat_20240115_143022_10_1.png"
 
+    def test_backup_run_embeds_image_generation_settings(self, temp_dir):
+        """Test backup_run embeds image generation settings in PNG text chunks."""
+        run_dir = temp_dir / "prompts" / "20240101_120000_abc123"
+        saved_dir = temp_dir / "saved"
+        run_dir.mkdir(parents=True)
+
+        # Create test files with image_generation settings in metadata
+        (run_dir / "test.metaprompt.json").write_text(json.dumps({
+            "prefix": "test",
+            "user_prompt": "a dragon",
+            "model": "test-model",
+            "created_at": "2024-01-01T12:00:00Z",
+            "image_generation": {
+                "width": 512,
+                "height": 768,
+                "steps": 30,
+            },
+        }))
+        (run_dir / "test_0.txt").write_text("Prompt 0")
+
+        # Create a real PNG file for Pillow to process
+        img = Image.new('RGB', (10, 10), color='red')
+        img.save(run_dir / "test_0_0.png")
+
+        # Create backup
+        saved_files = backup_run(run_dir, saved_dir, reason="pre_regenerate")
+
+        assert len(saved_files) == 1
+
+        # Check that image generation settings are embedded in PNG text chunks
+        metadata = get_flat_archive_metadata(saved_files[0])
+        assert metadata.get("width") == "512"
+        assert metadata.get("height") == "768"
+        assert metadata.get("steps") == "30"
+        assert metadata.get("created_at") == "2024-01-01T12:00:00Z"
+
     def test_scan_flat_archives_images_list_covers_all_prompt_indices(self, temp_dir):
         """Test scan_flat_archives populates images list for every prompt index.
 
