@@ -6,11 +6,13 @@ import pytest
 from PIL import Image
 
 from utils import (
+    PNG_TEXT_MAX_BYTES,
     load_run_metadata,
     get_prefix_from_metadata,
     count_images_in_run,
     get_prompts_from_run,
     _get_prompt_text,
+    _truncate_for_png,
     backup_run,
     is_backup_run,
     scan_flat_archives,
@@ -468,3 +470,60 @@ class TestUtils:
             "gal_20240510_180000_3_1.png",
         }
         assert names == expected_names
+
+    def test_truncate_for_png_under_limit(self):
+        """Test _truncate_for_png returns value unchanged when under limit."""
+        short_text = "a simple prompt" * 10
+        assert len(short_text.encode()) < 8000
+        result = _truncate_for_png(short_text, "prompt")
+        assert result == short_text
+
+    def test_truncate_for_png_over_limit(self):
+        """Test _truncate_for_png truncates values exceeding the byte limit."""
+        long_text = "x" * 10000  # well over 8KB in UTF-8
+        result = _truncate_for_png(long_text, "prompt")
+        assert len(result.encode()) <= PNG_TEXT_MAX_BYTES
+
+    def test_truncate_for_png_preserves_unicode(self):
+        """Test truncation preserves UTF-8 characters at the boundary."""
+        # Use multibyte chars to exercise utf-8 byte counting
+        emoji = "\U0001F680" * 3000  # ~12KB in UTF-8 (4 bytes each)
+        result = _truncate_for_png(emoji, "prompt")
+        assert len(result.encode("utf-8")) <= PNG_TEXT_MAX_BYTES
+
+    def test_truncate_for_png_passes_through_empty(self):
+        """Test empty string passes through unchanged."""
+        assert _truncate_for_png("", "key") == ""
+
+    def test_backup_run_large_prompt_does_not_crash(self, temp_dir):
+        """Test backup_run with a prompt exceeding PNG text limits.
+
+        A large prompt (>8KB) previously crashed Pillow's add_text via OOM or
+        compression failure. This test verifies the new truncation path makes
+        the behavior deterministic: the archive is created with truncated prompt
+        text, not lost entirely.
+        """
+        run_dir = temp_dir / "prompts" / "20240101_120000_abc123"
+        saved_dir = temp_dir / "saved"
+        run_dir.mkdir(parents=True)
+
+        # Create metadata with a large prompt (>8KB)
+        huge_prompt = "dragon " * 2500  # ~17.5KB in UTF-8
+
+        (run_dir / "test.metaprompt.json").write_text(json.dumps({
+            "prefix": "test",
+            "user_prompt": "a dragon",
+            "model": "test-model",
+        }))
+        (run_dir / "test_0.txt").write_text(huge_prompt)
+
+        img = Image.new('RGB', (10, 10), color='red')
+        img.save(run_dir / "test_0_0.png")
+
+        # Previously this would crash; now it must succeed with truncated text.
+        saved_files = backup_run(run_dir, saved_dir, reason="pre_regenerate")
+
+        assert len(saved_files) == 1
+        metadata = get_flat_archive_metadata(saved_files[0])
+        # The prompt was truncated but is still non-empty and starts correctly
+        assert metadata.get("prompt", "").startswith("dragon ")

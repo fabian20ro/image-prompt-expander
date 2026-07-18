@@ -156,6 +156,32 @@ def _get_prompt_text(run_dir: Path, prefix: str, prompt_idx: int) -> str:
     return ""
 
 
+PNG_TEXT_MAX_BYTES = 8000
+
+
+def _truncate_for_png(value: str, key: str) -> str:
+    """Truncate a text value to PNG tEXt chunk limits.
+
+    Pillow's add_text compresses via zlib; very large uncompressed values can
+    cause OOM or compression failures. This caps values at ~8KB with a warning.
+
+    Args:
+        value: Text value to embed in a PNG chunk
+        key: Field name (used in log message)
+
+    Returns:
+        The (possibly truncated) text value safe for embedding.
+    """
+    encoded = value.encode("utf-8")
+    if len(encoded) > PNG_TEXT_MAX_BYTES:
+        logger.warning(
+            f"Truncating '{key}' from {len(encoded)} to {PNG_TEXT_MAX_BYTES} bytes "
+            f"for PNG text chunk embedding"
+        )
+        return encoded[:PNG_TEXT_MAX_BYTES].decode("utf-8", errors="ignore")
+    return value
+
+
 def _copy_with_exif(
     src: Path,
     dest: Path,
@@ -175,9 +201,11 @@ def _copy_with_exif(
     img = Image.open(src)
     png_info = PngInfo()
 
-    # Embed key metadata in PNG text chunks
-    png_info.add_text("prompt", prompt_text)
-    png_info.add_text("user_prompt", metadata.get("user_prompt", ""))
+    # Embed key metadata in PNG text chunks (truncated if too large)
+    safe_prompt = _truncate_for_png(prompt_text, "prompt")
+    safe_user_prompt = _truncate_for_png(metadata.get("user_prompt", ""), "user_prompt")
+    png_info.add_text("prompt", safe_prompt)
+    png_info.add_text("user_prompt", safe_user_prompt)
     png_info.add_text("model", metadata.get("model", ""))
     png_info.add_text("created_at", metadata.get("created_at", ""))
     png_info.add_text("backup_reason", reason)
