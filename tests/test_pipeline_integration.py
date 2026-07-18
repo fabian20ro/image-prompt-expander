@@ -213,6 +213,8 @@ def test_run_from_grammar_text_gallery_layout_in_metadata(tmp_path):
     assert gallery_layout is not None
     assert gallery_layout["images_per_prompt"] == 3
     assert gallery_layout["max_prompts"] == 2
+    # display_title must be persisted in the metadata file for gallery rendering
+    assert metadata.get("display_title") == "custom title"
 
 
 def test_run_full_pipeline_resume_skips_existing_images(tmp_path):

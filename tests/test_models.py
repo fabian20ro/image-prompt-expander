@@ -228,6 +228,39 @@ class TestInputValidation:
         req = EnhanceImageRequest(softness=0.7)
         assert req.softness == 0.7
 
+    def test_gallery_layout_images_per_prompt_lower_bound(self):
+        """Test that images_per_prompt cannot be negative on GalleryLayoutUpdateRequest."""
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError):
+            GalleryLayoutUpdateRequest(images_per_prompt=-1)
+
+        # Boundary: 0 is allowed (ge=0)
+        req = GalleryLayoutUpdateRequest(images_per_prompt=0)
+        assert req.images_per_prompt == 0
+
+    def test_gallery_layout_images_per_prompt_upper_bound(self):
+        """Test that images_per_prompt cannot exceed 100 on GalleryLayoutUpdateRequest."""
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError):
+            GalleryLayoutUpdateRequest(images_per_prompt=101)
+
+        # Boundary: 100 is allowed (le=100)
+        req = GalleryLayoutUpdateRequest(images_per_prompt=100)
+        assert req.images_per_prompt == 100
+
+    def test_gallery_layout_max_prompts_lower_bound(self):
+        """Test that max_prompts must be >= 1 on GalleryLayoutUpdateRequest."""
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError):
+            GalleryLayoutUpdateRequest(max_prompts=0)
+
+        # Just right
+        req = GalleryLayoutUpdateRequest(max_prompts=50)
+        assert req.max_prompts == 50
+
 
 class TestRegeneratePromptsApiRequest:
     """Tests for RegeneratePromptsApiRequest model."""
