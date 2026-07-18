@@ -133,6 +133,7 @@ async def test_heartbeat_thread_stops_when_emit_raises():
 
         # After __exit__, the stop event must be set and thread joined cleanly
         assert hb._stop_event.is_set(), "Stop event should be set after context manager exit"
+        assert hb._thread is not None and not hb._thread.is_alive()
         # Thread should still exist (join happened) but no more heartbeats emitted
         assert call_count > 0, "At least one heartbeat was emitted before the error"
 
