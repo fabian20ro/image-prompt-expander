@@ -192,6 +192,33 @@ class TestWorkerReadStderr:
         assert result == ["Line 1", "Line 2"]
         assert worker.queue_manager.emit_log.call_count == 2
 
+    @pytest.mark.asyncio
+    async def test_read_stderr_filters_empty_lines(self, worker):
+        """Test that _read_stderr filters empty/whitespace-only lines."""
+        # Real content first; blanks come after so EOF doesn't cut early.
+        _content = [b"Line 1\n", b"Line 2\n", b"\n", b"  \t  \n"]
+
+        class MockStderr:
+            def __init__(self):
+                self._idx = 0
+
+            async def readline(self):
+                if self._idx < len(_content):
+                    result = _content[self._idx]
+                    self._idx += 1
+                    return result
+                # EOF sentinel — only after all real content exhausted
+                return b""
+
+        mock_process = MagicMock()
+        mock_process.stderr = MockStderr()
+
+        result = await worker._read_stderr(mock_process, "test-task-id")
+
+        assert result == ["Line 1", "Line 2"]
+        # emit_log should only be called for non-empty lines (2 calls)
+        assert worker.queue_manager.emit_log.call_count == 2
+
 
 class TestWorkerExecuteTask:
     """Tests for Worker._execute_task() method."""
