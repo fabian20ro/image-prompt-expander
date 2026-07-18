@@ -318,12 +318,22 @@ class TestRunFromGrammar:
         from pipeline import PipelineExecutor
         executor = PipelineExecutor()
 
+        captured_kwargs = {}
+
+        def capture_gallery(*args, **kwargs):
+            captured_kwargs.update(kwargs)
+            return temp_dir / "prompts" / "test_gallery.html"
+
         with patch("pipeline.run_tracery") as mock_tracery:
             mock_tracery.return_value = ["prompt 1"]
-            with patch("pipeline.create_gallery"):
+            with patch("pipeline.create_gallery", side_effect=capture_gallery):
                 with patch("pipeline.generate_master_index"):
                     result = executor.run_from_grammar(grammar_path=grammar_file, count=1)
-                    assert result.success is True
+
+        assert result.success is True
+        assert captured_kwargs["user_prompt"] == "correct"
+        # Verify raw_response_file resolves to None when no .txt raw response exists
+        assert captured_kwargs.get("raw_response_file") is None
 
     def test_run_from_grammar_metadata_mismatch_fallback(self, temp_dir):
         """Test fallback to any metaprompt in the same directory if no direct match."""
