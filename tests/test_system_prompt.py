@@ -121,3 +121,28 @@ def test_system_prompt_forbids_inference_metadata():
         assert (
             forbidden in prompt
         ), f"Inference metadata prohibition missing from system prompt: {forbidden}"
+
+
+def test_system_prompt_requires_origin_rule():
+    """Verify the template requires an "origin" rule in every grammar.
+
+    The origin rule is the entry point for all expansion; without it
+    no valid Tracery grammar can be generated. Its presence confirms
+    the structural invariant is enforced by the prompt itself.
+    """
+    prompt = get_system_prompt()
+    assert '"origin"' in prompt, "Origin rule requirement missing from system prompt"
+
+
+def test_system_prompt_requires_hash_references():
+    """Verify the template mandates #rule# references and forbids square brackets.
+
+    Tracery grammar validity depends on hash-delimited references;
+    square-bracket placeholders would produce invalid grammars.
+    This assertion confirms the format contract is enforced upstream.
+    """
+    prompt = get_system_prompt()
+    assert "#rule#" in prompt, "Hash-reference requirement missing from system prompt"
+    assert "square-bracket" in prompt or "[placeholder" in prompt, (
+        "Square-bracket placeholder prohibition missing from system prompt"
+    )
