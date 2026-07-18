@@ -358,6 +358,32 @@ class TestQueueManager:
         assert len(events) == 0
 
 
+    def test_complete_task_wrong_id_is_noop(self, queue_path):
+        """complete_task should not mutate state when the task id doesn't match."""
+        qm = QueueManager(queue_path)
+        events = []
+
+        def listener(event, data):
+            events.append((event, data))
+
+        qm.add_listener(listener)
+        task = qm.add_task(TaskType.GENERATE_IMAGE, {"run_id": "test"})
+        qm.get_next_task()
+
+        # Ignore notifications from add/get.
+        events.clear()
+
+        original_completed_count = len(qm.get_state().completed)
+        qm.complete_task("nonexistent-id", {"result": "ok"})
+
+        state = qm.get_state()
+        assert state.current_task is not None  # current task unchanged
+        assert state.current_task.id == task.id
+        assert state.current_task.status == TaskStatus.RUNNING
+        assert len(state.completed) == original_completed_count  # no completed entry added
+        assert len(events) == 0  # no spurious event emitted
+
+
 class TestGetTask:
     """Tests for QueueManager.get_task lookup."""
 
