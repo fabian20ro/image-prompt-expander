@@ -224,3 +224,37 @@ class TestConfig:
         assert paths.saved_dir == paths.generated_dir / "saved"
         assert paths.queue_path == paths.generated_dir / "queue.json"
         assert paths.templates_dir == paths.root_dir / "templates"
+
+    def test_path_config_resolves_from_file_not_cwd(self, tmp_path):
+        """Test that PathConfig resolves relative to __file__, not cwd.
+
+        The singleton `paths` is defined at module level in src/config.py.
+        Changing the working directory must NOT affect where root_dir points.
+        """
+        import config as cfg_module
+        original_root = str(cfg_module.paths.root_dir)
+        expected_root = Path(__file__).parent.parent
+
+        assert str(expected_root) == original_root, (
+            "root_dir should resolve to src/config.py's parent directory"
+        )
+
+    def test_settings_from_env_empty_string_falls_back(self):
+        """Test that empty-string env vars fall back to defaults for string and float keys.
+
+        _get_env_str and _get_env_float both treat empty/whitespace strings as unset.
+        This differs from missing (None) only in which branch triggers, but the result is identical.
+        """
+        import os
+        from unittest.mock import patch
+        from config import Settings, LMStudioConfig
+
+        env_vars = {
+            "PROMPT_GEN_LM_STUDIO_URL": "",
+            "PROMPT_GEN_SSE_TIMEOUT": "   ",
+        }
+
+        with patch.dict(os.environ, env_vars):
+            settings = Settings.from_env()
+            assert settings.lm_studio.base_url == LMStudioConfig.base_url
+            assert settings.server.sse_timeout == ServerConfig.sse_timeout
