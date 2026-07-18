@@ -115,7 +115,15 @@ class Heartbeat:
     def _heartbeat_loop(self):
         """Emit heartbeat every interval seconds until stopped."""
         while not self._stop_event.wait(timeout=self.interval):
-            emit_progress("heartbeat", 0, 0, self.message)
+            try:
+                emit_progress("heartbeat", 0, 0, self.message)
+            except Exception as exc:
+                log_to_file(
+                    "Heartbeat stopped after progress emission failed: "
+                    f"{type(exc).__name__}"
+                )
+                self._stop_event.set()
+                break
 
     def __enter__(self):
         """Start the heartbeat thread."""

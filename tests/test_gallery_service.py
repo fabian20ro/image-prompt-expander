@@ -400,3 +400,23 @@ class TestGalleryService:
         service = GalleryService(temp_dir, temp_dir)
         with pytest.raises(ValueError, match="Access denied"):
             service.validate_file_access(real_root.resolve(), temp_dir)
+
+    def test_validate_file_access_symlink_targeting_inside_base(self, temp_dir):
+        """Test validate_file_access allows symlinks whose resolved target is inside base dir."""
+        import os
+
+        # Create a real file inside temp_dir
+        subdir = temp_dir / "subdir"
+        subdir.mkdir()
+        target_file = subdir / "real.txt"
+        target_file.touch()
+
+        # Create a symlink inside temp_dir pointing to the same target
+        link_path = temp_dir / "link_to_subdir"
+        os.symlink(subdir, link_path)
+        resolved_link = link_path.resolve(strict=True)
+
+        service = GalleryService(temp_dir, temp_dir)
+        result = service.validate_file_access(resolved_link, temp_dir)
+
+        assert result is True
