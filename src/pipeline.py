@@ -437,10 +437,11 @@ class PipelineExecutor:
 
         # Try to find metadata for original prompt
         # Match metadata specifically to the grammar file name
-        meta_path = grammar_path.with_suffix('.metaprompt.json')
+        grammar_stem = grammar_path.stem.removesuffix('.tracery')
+        meta_path = grammar_path.with_name(f"{grammar_stem}.metaprompt.json")
         if not meta_path.exists():
             # Fallback to any metaprompt in directory if not a direct match
-            for p in grammar_path.parent.glob("*.metaprompt.json"):
+            for p in sorted(grammar_path.parent.glob("*.metaprompt.json")):
                 if p != meta_path:
                     meta_path = p
                     break
@@ -460,7 +461,7 @@ class PipelineExecutor:
 
 
         # Try to find raw response
-        grammar_hash = grammar_path.stem.replace('.tracery', '')
+        grammar_hash = grammar_stem
         raw_path = grammar_path.parent / f"{grammar_hash}.raw.txt"
         raw_response = raw_path.read_text() if raw_path.exists() else None
 

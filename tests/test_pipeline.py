@@ -306,11 +306,13 @@ class TestRunFromGrammar:
         grammar_dir = temp_dir / "grammars"
         grammar_dir.mkdir()
 
+        # A lexically earlier fallback makes the direct-match contract
+        # deterministic instead of depending on filesystem iteration order.
+        meta2 = grammar_dir / "aaa_wrong.metaprompt.json"
+        meta2.write_text(json.dumps({"user_prompt": "wrong"}))
+
         meta1 = grammar_dir / "match_me.metaprompt.json"
         meta1.write_text(json.dumps({"user_prompt": "correct"}))
-
-        meta2 = grammar_dir / "wrong.metaprompt.json"
-        meta2.write_text(json.dumps({"user_prompt": "wrong"}))
 
         grammar_file = grammar_dir / "match_me.tracery.json"
         grammar_file.write_text('{"origin": ["test"]}')
