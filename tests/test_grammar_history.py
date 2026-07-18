@@ -257,3 +257,50 @@ class TestAppendGrammarRotation:
         loaded = load_grammar_history(run_dir, "small_test")
         assert len(loaded) == 3
         assert loaded[0]["grammar"] == "s2"
+
+
+class TestAppendGrammarMalformedHistory:
+    def test_skipped_dedup_when_last_entry_missing_action(self, run_dir):
+        """Malformed last entry (missing 'action') must fall through to append.
+
+        The dedup gate checks `last.get("action") == action`. If the existing
+        history's last entry is missing the 'action' key, .get() returns None,
+        which never equals a real action string — so the revision appends rather
+        than being silently dropped. This characterizes defensive handling of
+        corrupt/incomplete entries in existing history files.
+        """
+        path = _history_path(run_dir, "malformed_test")
+        # Pre-seed a malformed entry missing 'action'
+        malformed_history = [
+            {"id": "old", "created_at": "2024-01-01T00:00:00", "grammar": "rule_a"},
+        ]
+        path.write_text(json.dumps(malformed_history))
+
+        history = append_grammar_revision(
+            run_dir, "malformed_test", grammar="rule_b", action="update"
+        )
+        assert len(history) == 2
+        assert history[1]["action"] == "update"
+        assert history[1]["grammar"] == "rule_b"
+
+    def test_skipped_dedup_when_last_entry_missing_grammar(self, run_dir):
+        """Malformed last entry (missing 'grammar') must fall through to append.
+
+        The dedup gate checks `last.get("grammar", "")`. If the existing history's
+        last entry is missing the 'grammar' key, .get() returns "", which never
+        equals a real grammar string — so the revision appends rather than being
+        silently dropped. This characterizes defensive handling of corrupt/
+        incomplete entries in existing history files.
+        """
+        path = _history_path(run_dir, "malformed_test2")
+        # Pre-seed a malformed entry missing 'grammar'
+        malformed_history = [
+            {"id": "old", "created_at": "2024-01-01T00:00:00", "action": "initial"},
+        ]
+        path.write_text(json.dumps(malformed_history))
+
+        history = append_grammar_revision(
+            run_dir, "malformed_test2", grammar="rule_b", action="update"
+        )
+        assert len(history) == 2
+        assert history[1]["action"] == "update"
