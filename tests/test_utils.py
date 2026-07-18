@@ -101,6 +101,8 @@ class TestUtils:
         (temp_dir / "test_metadata.json").write_text("{}")
         (temp_dir / "test_0.raw.txt").write_text("raw")
         (temp_dir / "test_1_image.png").write_text("image")
+        # Glob-match but regex-rejected: non-numeric middle segment should not pass.
+        (temp_dir / "test_abc.txt").write_text("not a prompt")
 
         prompts = get_prompts_from_run(temp_dir)
         assert prompts == ["First prompt", "Second prompt", "Third prompt"]
