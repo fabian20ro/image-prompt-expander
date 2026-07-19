@@ -186,6 +186,18 @@ class TestConfig:
             settings = Settings.from_env()
             assert settings.server.worker_timeout == ServerConfig.worker_timeout
 
+    def test_negative_scale_env_var_raises_via_enhancement_config(self):
+        """Test that negative scale via env var raises ValueError through EnhancementConfig.
+
+        _get_env_int silently accepts negatives/zeros, but EnhancementConfig.__post_init__
+        validates the value. Unlike float keys (which fall back to defaults), int scale
+        values pass validation and then fail at dataclass construction — no graceful fallback.
+        """
+        from config import Settings
+        with patch.dict(os.environ, {"PROMPT_GEN_ENHANCE_SCALE": "-1"}):
+            with pytest.raises(ValueError, match="default_scale must be at least 1"):
+                Settings.from_env()
+
     def test_non_numeric_seed_falls_back(self):
         """Test that non-numeric seed values fall back to default 0."""
         from config import Settings
