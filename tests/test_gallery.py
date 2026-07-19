@@ -304,6 +304,51 @@ class TestGalleryInteractive:
 
         assert "No metadata file found" in str(exc_info.value)
 
+    def test_gallery_raw_response_link_rendered_without_grammar(self, temp_dir):
+        """When only raw_response_file is provided the header must still show its link."""
+        run_dir = temp_dir
+        metadata = {
+            "prefix": "test",
+            "count": 1,
+            "user_prompt": "test prompt",
+            "image_generation": {"images_per_prompt": 0},
+        }
+        create_run_files(run_dir, num_prompts=1, metadata=metadata)
+
+        # Remove grammar file so only raw_response_file is available.
+        (run_dir / "test_grammar.json").unlink(missing_ok=True)
+        (run_dir / "test_raw_response.txt").write_text("raw response body")
+
+        gallery_path = generate_gallery_for_directory(run_dir, interactive=False)
+        content = gallery_path.read_text()
+
+        assert 'class="header-links"' in content
+        assert 'View Raw LLM Response' in content
+        assert 'href="test_raw_response.txt"' in content
+        # No grammar section should be present.
+        assert "Tracery Grammar" not in content
+        assert "<pre>" not in content
+
+    def test_gallery_no_metadata_section_when_neither_grammar_nor_raw(self, temp_dir):
+        """When neither grammar nor raw_response_file is available no header section renders."""
+        run_dir = temp_dir
+        metadata = {
+            "prefix": "test",
+            "count": 1,
+            "user_prompt": "test prompt",
+            "image_generation": {"images_per_prompt": 0},
+        }
+        create_run_files(run_dir, num_prompts=1, metadata=metadata)
+
+        # Remove grammar and raw response files.
+        (run_dir / "test_grammar.json").unlink(missing_ok=True)
+        (run_dir / "test_raw_response.txt").unlink(missing_ok=True)
+
+        gallery_path = generate_gallery_for_directory(run_dir, interactive=False)
+        content = gallery_path.read_text()
+
+        assert 'class="header-links"' not in content
+
 
 class TestBuildCardHtml:
     """Tests for _build_card_html rendering branches."""
