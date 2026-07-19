@@ -190,6 +190,30 @@ def test_api_root_trailing_slash_only_no_v1():
     assert _api_root(url) == "http://localhost:1234"
 
 
+def test_api_root_with_fragment_identifier():
+    """A URL with a fragment after /v1 should not be stripped — only bare '/v1' at end triggers removal."""
+    url = "http://example.com/v1#section"
+    assert _api_root(url) == url
+
+
+def test_api_root_double_v1_suffix():
+    """When the configured base URL itself ends in '/v1/v1', only the trailing /v1 is stripped — leaving the inner /v1 intact."""
+    url = "http://localhost:1234/v1/v1"
+    assert _api_root(url) == "http://localhost:1234/v1"
+
+
+def test_api_root_preserves_query_params():
+    """Query parameters must survive — only the bare '/v1' segment at end is stripped."""
+    url = "http://example.com/api?timeout=30"
+    assert _api_root(url) == url
+
+
+def test_api_root_with_port_and_v1():
+    """A standard LM Studio URL with explicit port and /v1 should strip cleanly to the host:port root."""
+    url = "https://lmstudio.local:8080/v1"
+    assert _api_root(url) == "https://lmstudio.local:8080"
+
+
 def test_clean_grammar_output_markdown_without_json():
     """When code blocks exist but contain no valid JSON, the stripped text is returned unchanged."""
     raw = '```json\njust some prose here\n```'
