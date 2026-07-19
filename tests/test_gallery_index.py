@@ -378,3 +378,26 @@ class TestGalleryIndexInteractive:
         }
         html = _build_flat_archive_card_html(archive, interactive=False)
         assert '<span class="archive-badge">Backup</span>' in html
+
+    def test_extract_run_info_falls_back_to_nested_model(self, temp_dir):
+        """_extract_run_info should fall back to image_generation.model when top-level model is absent."""
+        from gallery_index import _extract_run_info
+        active_run = temp_dir / "prompts" / "20240101_120000_xyz789"
+        active_run.mkdir(parents=True)
+        (active_run / "test.metaprompt.json").write_text(json.dumps({
+            "prefix": "test",
+            "count": 1,
+            "user_prompt": "fallback test prompt",
+            "image_generation": {"model": "Flux-dev-v2"},
+        }))
+        (active_run / "test_gallery.html").write_text("<html></html>")
+
+        result = _extract_run_info(active_run, is_archive=False)
+        assert result is not None
+        assert result["model"] == "Flux-dev-v2"
+
+    def test_build_index_html_empty_flat_archives_section(self):
+        """_build_index_html should not render flat-archive section when there are none."""
+        from gallery_index import _build_index_html
+        html = _build_index_html(active_runs=[], archived_runs=[], flat_archives=[])
+        assert "Archived Images" not in html
