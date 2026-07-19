@@ -102,6 +102,20 @@ class TestGrammarTools(unittest.TestCase):
         expected = '{"origin":["#subject#"]}'
         self.assertEqual(clean_grammar_output(input_str), expected)
 
+    def test_clean_grammar_output_handles_plain_code_block_without_language(self):
+        # LM Studio may return a code block tagged with just ``` and no language,
+        # so clean_grammar_output must still extract the JSON payload.
+        input_str = '```\\n{"origin":["#subject#"]}\\n```'
+        expected = '{"origin":["#subject#"]}'
+        self.assertEqual(clean_grammar_output(input_str), expected)
+
+    def test_clean_grammar_output_handles_thinking_blocks_followed_by_raw_json(self):
+        # When LM Studio emits thinking blocks but no markdown wrapping, the
+        # function must still isolate and return the JSON payload.
+        input_str = '<think>some thought</think>{"origin":["#subject#"]}'
+        expected = '{"origin":["#subject#"]}'
+        self.assertEqual(clean_grammar_output(input_str), expected)
+
     def test_clean_grammar_output_handles_trailing_text_after_json(self):
         # After extracting the first valid JSON, trailing noise after closing ```
         # must not leak into the returned string.
