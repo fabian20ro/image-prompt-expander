@@ -79,7 +79,8 @@ class TestConfig:
             assert settings.image_generation.default_width == 864
 
     def test_invalid_server_timeouts(self):
-        """Test that invalid server timeouts raise ValueError."""
+        """Test that invalid server timeouts raise ValueError for numeric edge cases."""
+        # Numeric: zero and negative values hit __post_init__ validation
         with pytest.raises(ValueError, match="sse_timeout must be positive"):
             ServerConfig(sse_timeout=0)
         with pytest.raises(ValueError, match="sse_timeout must be positive"):
@@ -88,6 +89,26 @@ class TestConfig:
             ServerConfig(worker_timeout=0)
         with pytest.raises(ValueError, match="worker_timeout must be positive"):
             ServerConfig(worker_timeout=-1)
+
+    def test_non_numeric_env_float_falls_back_to_default(self):
+        """Test that non-numeric float env vars (e.g. 'abc') fall back to defaults via _get_env_float ValueError handler.
+
+        Distinct from the numeric edge cases above: this exercises the _get_env_float
+        ValueError → logger.warning → default return path, ensuring Settings.from_env()
+        never raises for malformed float strings on float-valued env keys.
+        """
+        from config import _get_env_float, logger, ServerConfig
+
+        with patch.dict(os.environ, {"PROMPT_GEN_SSE_TIMEOUT": "abc"}), \
+             patch.object(logger, "warning") as mock_warn:
+            result = _get_env_float("PROMPT_GEN_SSE_TIMEOUT", ServerConfig.sse_timeout)
+            assert result == ServerConfig.sse_timeout
+            mock_warn.assert_called_once()
+
+        # Through Settings.from_env(): non-numeric float env values fall back silently
+        with patch.dict(os.environ, {"PROMPT_GEN_WORKER_TIMEOUT": "not-a-number"}):
+            settings = Settings.from_env()
+            assert settings.server.worker_timeout == ServerConfig.worker_timeout
 
     def test_invalid_lm_studio_timeouts(self):
         """Test that invalid LM Studio timeouts raise ValueError."""
