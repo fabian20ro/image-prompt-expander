@@ -406,3 +406,29 @@ class TestBuildCardHtml:
         assert "<a href=" not in html
         assert "<img" not in html
         assert "prompt-only text" in html
+
+    def test_build_card_pending_renders_action_buttons_when_interactive(self):
+        """When interactive=True a pending card must include Generate and Enhance buttons."""
+        from gallery import _build_card_html
+
+        html = _build_card_html("pending.png", "my prompt", 1, 2, exists=False, interactive=True)
+
+        assert 'class="card-actions"' in html
+        assert "generateImage(this, 1, 2)" in html
+        assert "enhanceImage(this, 1, 2)" in html
+        assert '>Generate<' in html
+        assert '>Enhance<' in html
+
+    def test_build_card_exists_renders_action_buttons_when_interactive(self):
+        """When interactive=True an existing card must include Generate and Enhance buttons."""
+        from gallery import _build_card_html
+
+        raw_prompt = "<b>bold & italic</b>"
+        escaped = __import__("html").escape(raw_prompt)
+        html_out = _build_card_html("test_0_0.png", escaped, 0, 0, exists=True, interactive=True)
+
+        assert 'class="card-actions"' in html_out
+        assert "generateImage(this, 0, 0)" in html_out
+        assert "enhanceImage(this, 0, 0)" in html_out
+        assert '>Generate<' in html_out
+        assert '>Enhance<' in html_out
