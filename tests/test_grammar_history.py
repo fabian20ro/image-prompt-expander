@@ -304,3 +304,26 @@ class TestAppendGrammarMalformedHistory:
         )
         assert len(history) == 2
         assert history[1]["action"] == "update"
+
+    def test_non_list_json_history_falls_through_to_single_entry(self, run_dir):
+        """Non-list JSON on disk → load_grammar_history returns [] → dedup sees last=None.
+
+        The dedup gate at append_grammar_revision compares `last.get("grammar", "")` and
+        `last.get("action")` against the new values. When history is loaded from a file
+        containing non-list JSON (e.g., {"key": "value"}), load returns an empty list —
+        so last becomes None, .get() on None never matches, and append proceeds with
+        exactly one entry. This characterizes that corrupt-or-foreign-format files are
+        treated as "no usable history" rather than raising or overwriting the file.
+        """
+        path = _history_path(run_dir, "nonlist_test")
+        # Pre-seed a non-list JSON structure (dict instead of list)
+        foreign_data = {"origin": ["something"], "config": 42}
+        path.write_text(json.dumps(foreign_data))
+
+        history = append_grammar_revision(
+            run_dir, "nonlist_test", grammar="rule_a", action="initial"
+        )
+        assert len(history) == 1
+        assert history[0]["action"] == "initial"
+        assert history[0]["grammar"] == "rule_a"
+        # ID is timestamp-based when loaded from empty state (not synthetic "initial")
