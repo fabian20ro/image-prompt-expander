@@ -134,6 +134,17 @@ class TestNotifications:
             "The fade-in animation must be applied to the .toast class so it actually runs."
         )
 
+    def test_confirm_action_returns_false_when_dom_absent(self):
+        """confirmAction must short-circuit with Promise.resolve(false) when the
+        modal DOM is missing — otherwise callers crash on a page that hasn't
+        finished loading. The guard clause checks all four required elements and
+        returns early before any listener setup.
+        """
+        js = Notifications.js()
+        assert "return Promise.resolve(false)" in js, (
+            "confirmAction must return Promise.resolve(false) when DOM elements are absent."
+        )
+
 class TestSSEClient:
     """Tests for SSEClient component."""
 
