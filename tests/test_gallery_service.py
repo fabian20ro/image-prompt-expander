@@ -420,3 +420,59 @@ class TestGalleryService:
         result = service.validate_file_access(resolved_link, temp_dir)
 
         assert result is True
+
+
+class TestRunSummary:
+    """Tests for get_run_summary."""
+
+    def test_get_run_summary(self, temp_dir):
+        """Test getting a run summary with all fields populated."""
+        run_dir = temp_dir / "run"
+        run_dir.mkdir()
+        (run_dir / "test.metaprompt.json").write_text(json.dumps({"prefix": "test"}))
+        (run_dir / "test_0.txt").write_text("prompt 1")
+        (run_dir / "test_1.txt").write_text("prompt 2")
+        (run_dir / "test_0_0.png").write_bytes(b"fake")
+        (run_dir / "test_0_1.png").write_bytes(b"fake")
+
+        service = GalleryService(temp_dir, temp_dir)
+        summary = service.get_run_summary("run")
+
+        assert summary["prefix"] == "test"
+        assert summary["prompt_count"] == 2
+        assert summary["image_count"] == 2
+        assert summary["is_backup"] is False
+
+    def test_get_run_summary_missing_directory(self, temp_dir):
+        """Test get_run_summary raises GalleryNotFoundError for missing run."""
+        service = GalleryService(temp_dir, temp_dir)
+        with pytest.raises(GalleryNotFoundError):
+            service.get_run_summary("nonexistent")
+
+    def test_get_run_summary_default_prefix(self, temp_dir):
+        """Test get_run_summary uses default prefix when no metadata."""
+        run_dir = temp_dir / "run"
+        run_dir.mkdir()
+        (run_dir / "image_0.txt").write_text("prompt")
+        (run_dir / "image_0_0.png").write_bytes(b"fake")
+
+        service = GalleryService(temp_dir, temp_dir)
+        summary = service.get_run_summary("run")
+
+        assert summary["prefix"] == "image"
+        assert summary["prompt_count"] == 1
+        assert summary["image_count"] == 1
+
+    def test_get_run_summary_is_backup(self, temp_dir):
+        """Test get_run_summary reports backup status."""
+        run_dir = temp_dir / "run"
+        run_dir.mkdir()
+        (run_dir / "test.metaprompt.json").write_text(json.dumps({
+            "prefix": "test",
+            "backup_info": {"is_backup": True},
+        }))
+
+        service = GalleryService(temp_dir, temp_dir)
+        summary = service.get_run_summary("run")
+
+        assert summary["is_backup"] is True

@@ -212,3 +212,23 @@ class GalleryService:
             prefix = self.get_prefix(run_dir)
 
         return sorted(run_dir.glob(f"{prefix}_*_*.png"))
+
+    def get_run_summary(self, run_id: str) -> dict:
+        """Get a summary of a gallery run.
+
+        Args:
+            run_id: The run directory name
+
+        Returns:
+            Dictionary with prefix, image_count, prompt_count, and is_backup keys
+
+        Raises:
+            GalleryNotFoundError: If directory doesn't exist
+        """
+        run_dir = self.get_run_directory(run_id)
+        return {
+            "prefix": self.get_prefix(run_dir),
+            "image_count": self.count_images(run_dir),
+            "prompt_count": len(self.load_prompts(run_dir)),
+            "is_backup": self.is_backup_run(run_dir),
+        }
