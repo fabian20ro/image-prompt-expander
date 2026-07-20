@@ -144,11 +144,17 @@ class TestConfig:
                 assert settings.image_generation.default_width == 864
 
     def test_float_inf_env_var_falls_back_to_default(self):
-        """Test that _get_env_float rejects Infinity values for float env vars."""
+        """Test that _get_env_float rejects Infinity values for float env vars.
+
+        Covers all three explicit branches in production: positive inf, negative -inf,
+        and the capitalized "Infinity" string — each routed through Settings.from_env()
+        to exercise the full config-load path.
+        """
         from config import Settings, ServerConfig, _get_env_float
-        with patch.dict(os.environ, {"PROMPT_GEN_SSE_TIMEOUT": "inf"}):
-            settings = Settings.from_env()
-            assert settings.server.sse_timeout == ServerConfig.sse_timeout
+        for bad_value in ("inf", "-inf", "Infinity"):
+            with patch.dict(os.environ, {"PROMPT_GEN_SSE_TIMEOUT": bad_value}):
+                settings = Settings.from_env()
+                assert settings.server.sse_timeout == ServerConfig.sse_timeout
 
     def test_get_env_str_ignores_empty_string(self):
         """Test that _get_env_str returns default when env var is empty."""
