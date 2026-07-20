@@ -396,6 +396,17 @@ class TestGrammarStructureValidation(unittest.TestCase):
                 "subject": ["fox", "owl", "fox", "hare", "deer"],
             })
 
+    def test_rejects_non_list_rule_value(self):
+        # When LM Studio returns a rule value as a string instead of an array,
+        # validate_grammar_structure must reject it — otherwise malformed output
+        # would reach the cache or rendering pipeline. The error message
+        # "non-empty array" is the production contract for this validation branch.
+        with self.assertRaisesRegex(ValueError, "must be a non-empty array"):
+            validate_grammar_structure({
+                "origin": ["#subject#"],
+                "subject": "fox",
+            })
+
 
 if __name__ == "__main__":
     unittest.main()

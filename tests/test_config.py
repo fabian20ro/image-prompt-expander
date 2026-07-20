@@ -144,11 +144,17 @@ class TestConfig:
                 assert settings.image_generation.default_width == 864
 
     def test_float_inf_env_var_falls_back_to_default(self):
-        """Test that _get_env_float rejects Infinity values for float env vars."""
+        """Test that _get_env_float rejects Infinity values for float env vars.
+
+        Covers all three explicit branches in production: positive inf, negative -inf,
+        and the capitalized "Infinity" string — each routed through Settings.from_env()
+        to exercise the full config-load path.
+        """
         from config import Settings, ServerConfig, _get_env_float
-        with patch.dict(os.environ, {"PROMPT_GEN_SSE_TIMEOUT": "inf"}):
-            settings = Settings.from_env()
-            assert settings.server.sse_timeout == ServerConfig.sse_timeout
+        for bad_value in ("inf", "-inf", "Infinity"):
+            with patch.dict(os.environ, {"PROMPT_GEN_SSE_TIMEOUT": bad_value}):
+                settings = Settings.from_env()
+                assert settings.server.sse_timeout == ServerConfig.sse_timeout
 
     def test_get_env_str_ignores_empty_string(self):
         """Test that _get_env_str returns default when env var is empty."""
@@ -203,6 +209,28 @@ class TestConfig:
     def test_negative_float_timeout_env_var_falls_back(self):
         """Test that negative float timeout values via env var fall back to defaults."""
         from config import Settings, ServerConfig
+        with patch.dict(os.environ, {"PROMPT_GEN_WORKER_TIMEOUT": "-10"}):
+            settings = Settings.from_env()
+            assert settings.server.worker_timeout == ServerConfig.worker_timeout
+
+    def test_negative_float_env_var_logs_warning_when_not_allowed(self):
+        """Test that _get_env_float logs a warning and returns the default when negative_allowed=False.
+
+        Distinct from fallback-only tests: this asserts both the logging contract
+        (logger.warning called exactly once) AND the fallback value, making any
+        regression in the negative-validation branch of _get_env_float immediately
+        detectable — not just silent.
+        """
+        from config import Settings, ServerConfig, _get_env_float, logger
+
+        default = ServerConfig.sse_timeout  # 5.0
+
+        with patch.dict(os.environ, {"PROMPT_GEN_SSE_TIMEOUT": "-10"}), \
+             patch.object(logger, "warning") as mock_warn:
+            result = _get_env_float("PROMPT_GEN_SSE_TIMEOUT", default, negative_allowed=False)
+            assert result == default
+            assert mock_warn.call_count == 1
+
         with patch.dict(os.environ, {"PROMPT_GEN_WORKER_TIMEOUT": "-10"}):
             settings = Settings.from_env()
             assert settings.server.worker_timeout == ServerConfig.worker_timeout

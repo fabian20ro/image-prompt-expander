@@ -319,6 +319,22 @@ class TestCliEnhanceImages:
         assert "Make sure LM Studio is running at http://localhost:1234/v1" in result.output
 
     @patch("cli.generate_grammar")
+    def test_dry_run_keyboard_interrupt(self, mock_generate_grammar):
+        """Test --dry-run propagates Ctrl+C with exit 130 and 'Interrupted.' message."""
+
+        mock_generate_grammar.side_effect = KeyboardInterrupt()
+
+        runner = CliRunner()
+        result = runner.invoke(
+            main, ["-p", "a cat", "--dry-run"], catch_exceptions=False
+        )
+
+        assert result.exit_code == 130
+        assert "Interrupted." in result.output
+        # Should NOT show the LM Studio error message
+        assert "Make sure LM Studio is running" not in result.output
+
+    @patch("cli.generate_grammar")
     def test_dry_run_cached_grammar_message(self, mock_generate_grammar):
         """Test --dry-run prints 'Using cached grammar' when grammar was served from cache."""
         mock_generate_grammar.return_value = ('{"origin": ["cached_cat"]}', True, None)
