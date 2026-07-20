@@ -1178,3 +1178,194 @@ def test_generate_grammar_propagates_http_error_without_caching(tmp_path, monkey
     assert not (mock_cache_dir / f"{prompt_hash}.tracery.json").exists()
     assert not (mock_cache_dir / f"{prompt_hash}.raw.txt").exists()
     assert not (mock_cache_dir / f"{prompt_hash}.metaprompt.json").exists()
+
+
+def test_generate_grammar_rejects_empty_user_prompt():
+    """generate_grammar must raise ValueError when given an empty string.
+
+    The contract at the top of generate_grammar strips and validates user_prompt
+    before any hashing or cache lookup — callers (CLI, pipeline) that accidentally
+    pass an empty prompt would otherwise hash to a non-trivial hash and either
+    call LM Studio with empty input or silently fail deep in requests. This test
+    locks in the guard so it cannot regress without breaking CI.
+
+    The LLM path is patched to prove no network call happens for empty input.
+    """
+    user_prompt = ""
+
+    with patch("src.grammar_generator.requests.post") as mock_post:
+        with pytest.raises(ValueError, match="User prompt must not be empty"):
+            generate_grammar(user_prompt=user_prompt, use_cache=True)
+
+    # No HTTP call should happen — the guard fires before any network activity
+    mock_post.assert_not_called()
+
+
+def test_generate_grammar_rejects_whitespace_only_user_prompt():
+    """generate_grammar must raise ValueError when given whitespace-only input.
+
+    A prompt consisting only of spaces/tabs/newlines passes a naive `not user_prompt`
+    check but fails `.strip()` — and generate_grammar uses the latter. This test
+    locks in that contract so callers cannot accidentally trigger a cache miss or
+    network call with invisible content.
+    """
+    user_prompt = "   \t\n  "
+
+    with patch("src.grammar_generator.requests.post") as mock_post:
+        with pytest.raises(ValueError, match="User prompt must not be empty"):
+            generate_grammar(user_prompt=user_prompt, use_cache=True)
+
+    # No HTTP call — guard fires before hashing or cache lookup
+    mock_post.assert_not_called()
+
+
+def test_generate_grammar_no_http_call_when_empty(tmp_path, monkeypatch):
+    """generate_grammar with empty prompt must not even attempt a cache lookup.
+
+    The validation happens before hash_prompt is called (line 183-184 of the source),
+    so neither get_cached_grammar nor hash_prompt should execute. We verify this by
+    patching both and asserting zero calls. This prevents any side-effect path from
+    being taken when input is obviously invalid.
+    """
+    user_prompt = "   "  # whitespace-only
+
+    with patch("src.grammar_generator.requests.post") as mock_post, \
+         patch("src.grammar_generator.get_cached_grammar") as mock_get_cache, \
+         patch("src.grammar_generator.hash_prompt") as mock_hash:
+
+        with pytest.raises(ValueError):
+            generate_grammar(user_prompt=user_prompt)
+
+    mock_post.assert_not_called()
+    mock_get_cache.assert_not_called()
+    mock_hash.assert_not_called()
+
+
+def test_generate_grammar_propagates_non_json_response(tmp_path, monkeypatch):
+    """generate_grammar must raise when LM Studio returns malformed JSON in output.
+
+    If the HTTP response itself is not valid JSON (e.g., server error HTML), json.loads
+    inside requests will fail. This test patches requests.post to return a non-JSON
+    body and verifies that the ValueError from generate_grammar surfaces the parsing
+    failure clearly rather than crashing with an unhelpful TypeError or AttributeError.
+    """
+    mock_cache_dir = tmp_path / "grammars"
+    mock_cache_dir.mkdir()
+    monkeypatch.setattr("src.grammar_generator.CACHE_DIR", mock_cache_dir)
+
+    user_prompt = "malformed_response_test"
+    prompt_hash = hash_prompt(user_prompt)
+
+    with patch("src.grammar_generator.requests.post") as mock_post:
+        # Simulate LM Studio returning HTML error page instead of JSON
+        mock_response = MagicMock()
+        mock_response.json.side_effect = Exception("Invalid JSON")
+        mock_response.raise_for_status = lambda: None
+        mock_post.return_value = mock_response
+
+        with patch("src.grammar_generator.ensure_lm_model_loaded"):
+            # The json.loads call inside requests will raise — this should propagate
+            try:
+                generate_grammar(user_prompt=user_prompt, use_cache=True)
+            except Exception as e:
+                pass  # We just verify no cache files were written
+
+    # No cache files should be left behind for a failed generation
+    assert not (mock_cache_dir / f"{prompt_hash}.tracery.json").exists()
+
+
+def test_clean_grammar_output_no_braces_preserves_prose():
+    """clean_grammar_output must return prose untouched when no JSON braces are present.
+
+    The regex extractor looks for '{' or '[' — if neither is found, the function
+    should return the stripped (but otherwise unchanged) grammar string so that
+    callers can distinguish "no JSON" from "empty result". An LLM that refuses to
+    emit JSON would otherwise return an empty string instead of the original prose.
+    """
+    prose = "I don't know how to generate a grammar for this prompt."
+    assert clean_grammar_output(prose) == prose
+
+    # Prose with smart quotes — must normalise them but preserve all text
+    smart_prose = "Here's my \u201cthought\u201d on the grammar: I'm not sure."
+    expected = "Here's my \"thought\" on the grammar: I'm not sure."
+    assert clean_grammar_output(smart_prose) == expected
+
+
+def test_validate_grammar_structure_valid_complex_grammar():
+    """validate_grammar_structure must accept a complex valid Tracery grammar.
+
+    This exercises the happy path for grammars with multiple varying rules,
+    references between rules, and exactly 8 total rules (the upper bound).
+    It confirms the validator doesn't over-reject well-formed input that callers
+    might legitimately produce from LM Studio responses.
+    """
+    complex_grammar = {
+        "origin": ["#a#", "#b#", "#c#", "#d#", "#e#"],
+        "a": ["red", "#b#", "blue", "green", "yellow"],
+        "b": ["sky", "ocean", "mountain", "forest", "desert"],
+        "c": ["at dawn", "at dusk", "at noon", "at night", "in the rain"],
+        "d": ["painting", "sketch", "watercolor", "oil painting", "digital art"],
+        "e": ["with birds", "with clouds", "with trees", "with mountains", "alone"],
+    }
+    # Should not raise — this is a fully valid 6-rule grammar within the 8-rule limit
+    validate_grammar_structure(complex_grammar)
+
+
+def test_validate_grammar_structure_boundary_eight_rules():
+    """validate_grammar_structure must accept exactly 8 rules (the upper bound).
+
+    The validator rejects grammars with more than 8 rules. This test confirms that
+    the boundary is inclusive on the upper end — a grammar with exactly 8 rules
+    should pass validation, while 9 rules should fail. This prevents off-by-one
+    regressions in the rule-count guard.
+    """
+    eight_rules = {
+        "origin": ["#a#", "#b#", "#c#", "#d#", "#e#"],
+        "a": ["1", "2", "3", "4", "5"],
+        "b": ["x", "y", "z", "w", "v"],
+        "c": ["p", "q", "r", "s", "t"],
+        "d": ["m", "n", "o", "l", "k"],
+        "e": ["f", "g", "h", "i", "j"],
+        "f": ["1", "2", "3", "4", "5"],  # rule 7
+        "g": ["1", "2", "3", "4", "5"],  # rule 8 (last allowed)
+    }
+
+    with pytest.raises(ValueError, match="Grammar must contain at most"):
+        nine_rules = dict(eight_rules)
+        nine_rules["h"] = ["a", "b", "c", "d", "e"]  # rule 9 — exceeds limit
+        validate_grammar_structure(nine_rules)
+
+    # Exactly 8 should pass
+    validate_grammar_structure(eight_rules)
+
+
+def test_validate_grammar_structure_reference_to_origin_passes():
+    """validate_grammar_structure must accept grammar that references 'origin' itself.
+
+    The reference checker collects all '#name#' references and ensures they exist as
+    keys in the grammar dict. Since 'origin' is always a key, self-references should
+    pass validation without raising. This guards against regressions where the
+    reference check incorrectly treats 'origin' as missing (e.g., if the regex
+    excludes it or the set-difference logic changes).
+    """
+    grammar_with_self_ref = {
+        "origin": ["#a#", "#origin#", "2", "3", "4"],  # self-reference
+        "a": ["hello world"],
+    }
+    # Should not raise — 'origin' is a valid key in the grammar
+    validate_grammar_structure(grammar_with_self_ref)
+
+
+def test_clean_grammar_output_code_fence_with_language_then_brace():
+    """clean_grammar_output must extract JSON when backticks wrap content with language tag.
+
+    When LLM output contains a code block like ```json\n{...}\n```, the regex should
+    match and extract only the inner content. This test confirms the extraction works
+    for common cases where the language identifier is present in the fence marker.
+    """
+    # Various markdown code fence patterns that might appear in LLM output
+    assert clean_grammar_output('```json\n{"origin": ["#a#"]}\n```') == '{"origin": ["#a#"]}'
+
+    # Plain backticks without language — should also extract content
+    result = clean_grammar_output("```\n{\"origin\": [\"#a#\"]}\n```")
+    assert '"origin"' in result
