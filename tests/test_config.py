@@ -213,6 +213,28 @@ class TestConfig:
             settings = Settings.from_env()
             assert settings.server.worker_timeout == ServerConfig.worker_timeout
 
+    def test_negative_float_env_var_logs_warning_when_not_allowed(self):
+        """Test that _get_env_float logs a warning and returns the default when negative_allowed=False.
+
+        Distinct from fallback-only tests: this asserts both the logging contract
+        (logger.warning called exactly once) AND the fallback value, making any
+        regression in the negative-validation branch of _get_env_float immediately
+        detectable — not just silent.
+        """
+        from config import Settings, ServerConfig, _get_env_float, logger
+
+        default = ServerConfig.sse_timeout  # 5.0
+
+        with patch.dict(os.environ, {"PROMPT_GEN_SSE_TIMEOUT": "-10"}), \
+             patch.object(logger, "warning") as mock_warn:
+            result = _get_env_float("PROMPT_GEN_SSE_TIMEOUT", default, negative_allowed=False)
+            assert result == default
+            assert mock_warn.call_count == 1
+
+        with patch.dict(os.environ, {"PROMPT_GEN_WORKER_TIMEOUT": "-10"}):
+            settings = Settings.from_env()
+            assert settings.server.worker_timeout == ServerConfig.worker_timeout
+
     def test_negative_scale_env_var_raises_via_enhancement_config(self):
         """Test that negative scale via env var raises ValueError through EnhancementConfig.
 
