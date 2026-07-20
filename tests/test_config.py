@@ -319,3 +319,88 @@ class TestConfig:
             settings = Settings.from_env()
             assert settings.lm_studio.base_url == LMStudioConfig.base_url
             assert settings.server.sse_timeout == ServerConfig.sse_timeout
+
+
+class TestEnvVarDocs:
+    """Tests for ENV_VAR_DOCS documentation dictionary and format_env_docs helper.
+
+    These ensure operators can discover all available env vars without reading source code —
+    the core user-visible value of this feature. The completeness check catches any new env var
+    added to Settings.from_env() that hasn't been documented yet.
+    """
+
+    def test_all_env_vars_documented(self):
+        """Test that every env var used in Settings.from_env() has a doc entry."""
+        from config import ENV_VAR_DOCS, Settings
+        expected_keys = {
+            "PROMPT_GEN_LM_STUDIO_URL",
+            "PROMPT_GEN_LM_STUDIO_MODEL",
+            "PROMPT_GEN_LM_STUDIO_TIMEOUT",
+            "PROMPT_GEN_DEFAULT_WIDTH",
+            "PROMPT_GEN_DEFAULT_HEIGHT",
+            "PROMPT_GEN_IMAGE_SEED",
+            "PROMPT_GEN_ERNIE_MODEL_PATH",
+            "PROMPT_GEN_SSE_QUEUE_SIZE",
+            "PROMPT_GEN_SSE_TIMEOUT",
+            "PROMPT_GEN_WORKER_TIMEOUT",
+            "PROMPT_GEN_ENHANCE_SOFTNESS",
+            "PROMPT_GEN_ENHANCE_SCALE",
+        }
+        assert ENV_VAR_DOCS.keys() == expected_keys
+
+    def test_format_env_docs_returns_comment_block(self):
+        """Test that format_env_docs produces a comment-block string with all env vars."""
+        from config import format_env_docs, ENV_VAR_DOCS
+
+        output = format_env_docs()
+        # Starts with header and blank line
+        assert output.startswith("# Environment Variables\n\n")
+        # Each key has description and default lines
+        for key in ENV_VAR_DOCS:
+            assert f"# {key}  (" in output
+            assert "#   Description:" in output
+            assert "#   Default:" in output
+
+    def test_format_env_docs_sorted_keys(self):
+        """Test that format_env_docs outputs keys in sorted order."""
+        from config import format_env_docs, ENV_VAR_DOCS
+
+        output = format_env_docs()
+        # Extract key lines and verify sorted
+        key_lines = [line for line in output.split("\n") if line.startswith("# PROMPT_GEN_")]
+        assert key_lines == sorted(key_lines)
+
+    def test_format_env_docs_custom_dict(self):
+        """Test that format_env_docs accepts a custom dict."""
+        from config import format_env_docs, ENV_VAR_DOCS
+
+        partial = {k: v for k, v in ENV_VAR_DOCS.items() if "LM_STUDIO" in k}
+        output = format_env_docs(partial)
+        # Should only contain LM_STUDIO keys
+        assert "PROMPT_GEN_LM_STUDIO_URL" in output
+        assert "PROMPT_GEN_DEFAULT_WIDTH" not in output
+
+    def test_default_values_match_actual_defaults(self):
+        """Test that ENV_VAR_DOCS default values match actual config defaults."""
+        from config import ENV_VAR_DOCS, Settings, LMStudioConfig, ImageGenerationConfig, ServerConfig, EnhancementConfig
+        s = Settings()
+        assert ENV_VAR_DOCS["PROMPT_GEN_LM_STUDIO_URL"]["default"] == s.lm_studio.base_url
+        assert ENV_VAR_DOCS["PROMPT_GEN_LM_STUDIO_MODEL"]["default"] == s.lm_studio.model
+        assert ENV_VAR_DOCS["PROMPT_GEN_DEFAULT_WIDTH"]["default"] == str(s.image_generation.default_width)
+        assert ENV_VAR_DOCS["PROMPT_GEN_SSE_QUEUE_SIZE"]["default"] == str(s.server.sse_queue_size)
+        assert ENV_VAR_DOCS["PROMPT_GEN_ENHANCE_SCALE"]["default"] == str(s.enhancement.default_scale)
+
+    def test_format_env_docs_type_annotations(self):
+        """Test that type annotations are included for each env var."""
+        from config import format_env_docs, ENV_VAR_DOCS
+        output = format_env_docs()
+        # int types should show (int), float should show (float), str should show (str)
+        assert "(int)" in output
+        assert "(float)" in output
+        assert "(str)" in output
+
+    def test_format_env_docs_empty_dict(self):
+        """Test that format_env_docs handles an empty dict gracefully."""
+        from config import format_env_docs
+        output = format_env_docs({})
+        assert output.startswith("# Environment Variables\n\n")
