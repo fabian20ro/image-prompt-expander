@@ -513,9 +513,12 @@ def _run_dry_run(
         except KeyboardInterrupt:
             click.echo("\nInterrupted.", err=True)
             sys.exit(130)
-        except Exception as e:
+        except (ConnectionError, TimeoutError) as e:
             click.echo(f"Error generating grammar: {e}", err=True)
             click.echo("Make sure LM Studio is running at " + base_url, err=True)
+            sys.exit(1)
+        except Exception as e:
+            click.echo(f"Error generating grammar: {e}", err=True)
             sys.exit(1)
 
         if was_cached:
