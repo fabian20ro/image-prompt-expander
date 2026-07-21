@@ -394,6 +394,15 @@ class TestBuildCardHtml:
         html_out = _build_card_html("pending.png", escaped, 0, 0, exists=False)
 
         assert f'aria-label="Generating: {escaped}"' in html_out
+        assert 'aria-busy="true"' in html_out
+
+    def test_build_card_exists_does_not_set_aria_busy(self):
+        """Existing (completed) cards must not have aria-busy — they are no longer loading."""
+        from gallery import _build_card_html
+
+        html = _build_card_html("test.png", "done prompt", 0, 0, exists=True)
+
+        assert 'aria-busy="true"' not in html
 
     def test_build_card_prompt_only_renders_prompt_only_layout(self):
         """When no_image_expected is True the card renders a prompt-only layout."""
