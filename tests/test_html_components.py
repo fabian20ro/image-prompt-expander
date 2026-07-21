@@ -89,6 +89,20 @@ class TestQueueStatusBar:
         assert ".queue-status" in css
         assert ".progress-bar" in css
 
+    def test_css_all_selectors_defined(self):
+        """QueueStatusBar CSS must define every selector used in its HTML.
+
+        Losing any selector silently breaks the component layout (e.g. hiding
+        the progress bar or action buttons when their class is missing from
+        CSS but present in markup). Each selector below must appear as a
+        substring so regression cannot remove one without the test catching it.
+        """
+        css = QueueStatusBar.css()
+        assert ".queue-info" in css
+        assert ".progress-container" in css
+        assert ".progress-fill" in css
+        assert ".queue-actions" in css
+
 
 class TestProgressBar:
     """Tests for ProgressBar component."""
@@ -102,6 +116,22 @@ class TestProgressBar:
     def test_css_returns_string(self):
         css = ProgressBar.css()
         assert ".progress-bar" in css or "progress" in css
+
+    def test_css_all_selectors_defined(self):
+        """ProgressBar CSS must define every selector used in its HTML.
+
+        The component uses .progress-track and .progress-info alongside the
+        progress bar itself; losing either silently breaks layout on pages
+        that include this component. Each selector below is a hard requirement.
+        """
+        css = ProgressBar.css()
+        assert ".progress-track" in css
+        assert ".progress-info" in css
+
+    def test_html_progress_track_present(self):
+        """ProgressBar.html must include the track container used by .progress-fill."""
+        html = ProgressBar.html()
+        assert "progress-track" in html
 
 
 class TestNotifications:
