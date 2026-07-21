@@ -205,6 +205,47 @@ class TestSSEClient:
             "retry indefinitely with ever-growing intervals."
         )
 
+    def test_js_contains_retry_cap_constant(self):
+        """SSEClient.js() defines MAX_SSE_RETRIES as an observable constant.
+
+        The retry cap is exported verbatim in the produced JS string so callers
+        cannot accidentally drift from the intended ceiling without noticing.
+        Losing it would silently allow unbounded reconnection attempts during
+        extended outages, burning resources on a dead server.
+        """
+        js = SSEClient.js()
+        assert "MAX_SSE_RETRIES" in js, (
+            "Retry cap constant MAX_SSE_RETRIES must be defined as a named "
+            "constant in the produced JS."
+        )
+
+    def test_js_contains_connect_sse_function(self):
+        """SSEClient.js() exports connectSSE as a callable function.
+
+        The reconnection logic is entry-point for SSE setup; callers invoke it
+        without arguments to establish or refresh the event stream. Losing its
+        definition silently breaks real-time updates on all gallery pages that
+        include this component.
+        """
+        js = SSEClient.js()
+        assert "function connectSSE" in js, (
+            "connectSSE function must be defined as a standalone callable in "
+            "the produced JS."
+        )
+
+    def test_js_references_event_source_constructor(self):
+        """SSEClient.js() references the global EventSource constructor.
+
+        The component constructs a new EventSource to open the SSE stream;
+        losing this reference silently prevents real-time updates from
+        functioning, even if connectSSE remains defined.
+        """
+        js = SSEClient.js()
+        assert "EventSource" in js, (
+            "The global EventSource constructor must be referenced in the "
+            "produced JS to establish SSE connections."
+        )
+
 
 class TestButtons:
     """Tests for Buttons component."""
