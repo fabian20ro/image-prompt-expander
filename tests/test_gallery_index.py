@@ -208,9 +208,10 @@ class TestGalleryIndexInteractive:
             index_path = generate_master_index(temp_dir, interactive=True)
             content = index_path.read_text()
 
-            # The index should still be generated successfully
+            # The index should still be generated with sensible defaults
             assert index_path.exists()
-            assert "<html" in content.lower() or "index" in content.lower()
+            assert "Archived images" in content  # default user_prompt fallback
+            assert ">N/A<" in content or "N/A" in content  # default model fallback appears rendered
 
     def test_index_resolves_nested_image_generation_model_fallback(self, temp_dir):
         """_extract_run_info should fall back to image_generation.model when top-level model is absent."""
