@@ -144,6 +144,23 @@ def test_generate_image_uses_fixed_parameters(mock_unload, mock_get_model, temp_
 
 @patch("image_generator._get_model")
 @patch("image_generator.unload_all_models")
+def test_generate_image_propagates_explicit_seed(mock_unload, mock_get_model, temp_dir):
+    """An explicit seed must be forwarded as the seed kwarg to model.generate_image."""
+    generated = MagicMock()
+    model = MagicMock()
+    model.generate_image.return_value = generated
+    mock_get_model.return_value = model
+
+    output = temp_dir / "image.png"
+    generate_image("test", output, seed=9876)
+
+    assert (
+        model.generate_image.call_args.kwargs["seed"] == 9876
+    ), "explicit seed must be forwarded to the image generator call"
+
+
+@patch("image_generator._get_model")
+@patch("image_generator.unload_all_models")
 def test_generate_image_random_seed_and_tiling(mock_unload, mock_get_model, temp_dir):
     mock_get_model.return_value.generate_image.return_value = MagicMock()
     with patch("image_generator.random.randint", return_value=123) as randint:
@@ -158,6 +175,23 @@ def test_generate_image_random_seed_and_tiling(mock_unload, mock_get_model, temp
 def test_generate_image_rejects_invalid_dimensions(temp_dir, width, height):
     with pytest.raises(ValueError):
         generate_image("test", temp_dir / "image.png", width=width, height=height)
+
+
+@pytest.mark.parametrize("width,height", [(64, 64), (256, 256), (864, 1152)])
+@patch("image_generator._get_model")
+@patch("image_generator.unload_all_models")
+def test_generate_image_accepts_valid_dimensions(mock_unload, mock_get_model, temp_dir, width, height):
+    """Valid dimensions must reach model.generate_image without raising."""
+    generated = MagicMock()
+    model = MagicMock()
+    model.generate_image.return_value = generated
+    mock_get_model.return_value = model
+
+    output = temp_dir / "image.png"
+    result = generate_image("test", output, seed=1, width=width, height=height)
+
+    assert result == output
+    mock_unload.assert_called_once_with()
 
 
 @patch("image_generator._get_model")

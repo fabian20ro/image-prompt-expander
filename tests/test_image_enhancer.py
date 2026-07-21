@@ -509,6 +509,46 @@ def test_enhance_image_resolution_always_scale_factor_2():
         assert isinstance(call_kwargs["resolution"], MagicMock)
 
 
+class TestCollectImagesEdgeCases:
+    """Tests for edge cases in image collection."""
+
+    def test_collect_directory_with_uppercase_extensions(self, temp_dir):
+        """Test that uppercase file extensions are collected."""
+        Image.new("RGB", (10, 10)).save(temp_dir / "a.PNG")
+        Image.new("RGB", (10, 10)).save(temp_dir / "b.JPG")
+
+        result = collect_images(str(temp_dir))
+        names = [r.name for r in result]
+        assert "a.PNG" in names
+        assert "b.JPG" in names
+
+    def test_collect_directory_with_jpeg_extension(self, temp_dir):
+        """Test that .jpeg extension is collected."""
+        Image.new("RGB", (10, 10)).save(temp_dir / "photo.jpeg")
+
+        result = collect_images(str(temp_dir))
+        assert result[0].name == "photo.jpeg"
+
+    def test_collect_single_jpeg_file(self):
+        """Test collecting a single .jpeg file."""
+        import tempfile
+        from pathlib import Path as PPath
+        with tempfile.TemporaryDirectory() as tmpdir:
+            img = Image.new("RGB", (10, 10))
+            fpath = PPath(tmpdir) / "photo.jpeg"
+            img.save(fpath)
+            result = collect_images(str(fpath))
+            assert len(result) == 1
+
+    def test_collect_directory_with_webp_extension(self, temp_dir):
+        """Test that .webp extension is collected."""
+        Image.new("RGB", (10, 10)).save(temp_dir / "anim.webp")
+
+        result = collect_images(str(temp_dir))
+        names = [r.name for r in result]
+        assert "anim.webp" in names
+
+
 def test_enhance_image_scale_factor_passed_to_generate_image():
     """Test that ScaleFactor(2) is correctly forwarded to generate_image."""
     from image_enhancer import enhance_image
