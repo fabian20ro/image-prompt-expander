@@ -192,3 +192,82 @@ class Settings:
 
 # Global settings instance - use from_env() for environment-aware settings
 settings = Settings.from_env()
+
+ENV_VAR_DOCS: dict[str, dict[str, str]] = {
+    "PROMPT_GEN_LM_STUDIO_URL": {
+        "desc": "LM Studio server URL",
+        "default": LMStudioConfig.base_url,
+        "type": "str",
+    },
+    "PROMPT_GEN_LM_STUDIO_MODEL": {
+        "desc": "Model identifier for LM Studio",
+        "default": LMStudioConfig.model,
+        "type": "str",
+    },
+    "PROMPT_GEN_LM_STUDIO_TIMEOUT": {
+        "desc": "LM Studio request timeout in seconds",
+        "default": str(LMStudioConfig.timeout),
+        "type": "float",
+    },
+    "PROMPT_GEN_DEFAULT_WIDTH": {
+        "desc": "Default image width for generation (pixels)",
+        "default": str(ImageGenerationConfig.default_width),
+        "type": "int",
+    },
+    "PROMPT_GEN_DEFAULT_HEIGHT": {
+        "desc": "Default image height for generation (pixels)",
+        "default": str(ImageGenerationConfig.default_height),
+        "type": "int",
+    },
+    "PROMPT_GEN_IMAGE_SEED": {
+        "desc": "Random seed for deterministic image generation (0=random)",
+        "default": str(ImageGenerationConfig.seed),
+        "type": "int",
+    },
+    "PROMPT_GEN_ERNIE_MODEL_PATH": {
+        "desc": "Path to the Ernie image model (cross-platform auto-detected if unset)",
+        "default": str(_default_model_path()),
+        "type": "str",
+    },
+    "PROMPT_GEN_SSE_QUEUE_SIZE": {
+        "desc": "Maximum SSE event queue size per client",
+        "default": str(ServerConfig.sse_queue_size),
+        "type": "int",
+    },
+    "PROMPT_GEN_SSE_TIMEOUT": {
+        "desc": "SSE keepalive interval in seconds (must be positive)",
+        "default": str(ServerConfig.sse_timeout),
+        "type": "float",
+    },
+    "PROMPT_GEN_WORKER_TIMEOUT": {
+        "desc": "Worker task timeout in seconds (must be positive)",
+        "default": str(ServerConfig.worker_timeout),
+        "type": "float",
+    },
+    "PROMPT_GEN_ENHANCE_SOFTNESS": {
+        "desc": "Default enhancement softness factor [0.0, 1.0] (must be non-negative)",
+        "default": str(EnhancementConfig.default_softness),
+        "type": "float",
+    },
+    "PROMPT_GEN_ENHANCE_SCALE": {
+        "desc": "Default enhancement scale factor (must be >= 1)",
+        "default": str(EnhancementConfig.default_scale),
+        "type": "int",
+    },
+}
+
+
+def format_env_docs(env_vars: dict[str, dict[str, str]] | None = None) -> str:
+    """Format ENV_VAR_DOCS as a CLI-help-ready multi-line string."""
+    if env_vars is None:
+        env_vars = ENV_VAR_DOCS
+    lines = ["# Environment Variables", ""]
+    for key in sorted(env_vars):
+        info = env_vars[key]
+        lines.append(
+            f"# {key}  ({info['type']})"
+        )
+        lines.append(f"#   Description: {info['desc']}")
+        lines.append(f"#   Default: {info['default']}")
+        lines.append("")
+    return "\n".join(lines) + "\n\n"

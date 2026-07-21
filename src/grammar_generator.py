@@ -23,9 +23,15 @@ LM_LOAD_ATTEMPTS = 3
 
 
 def _api_root(base_url: str) -> str:
-    """Convert the OpenAI-compatible base URL to LM Studio's server root."""
+    """Convert the OpenAI-compatible base URL to LM Studio's server root.
+
+    Strips trailing slashes, ``/v1`` suffix, and any remaining trailing slash so
+    callers can safely append ``/api/v1/...`` paths without producing double-slashes
+    (e.g. input ``http://host//v1`` must not yield ``http://host/``).
+    """
     root = base_url.rstrip("/")
-    return root[:-3] if root.endswith("/v1") else root
+    root = root[:-3] if root.endswith("/v1") else root
+    return root.rstrip("/")
 
 
 def ensure_lm_model_loaded(base_url: str, timeout: float = 180.0) -> None:

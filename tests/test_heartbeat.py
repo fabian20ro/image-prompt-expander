@@ -112,6 +112,19 @@ async def test_heartbeat_creates_daemon_thread():
 
 
 @pytest.mark.asyncio
+async def test_heartbeat_stop_event_lifecycle():
+    """Test that the stop event transitions from unset to set exactly at __exit__."""
+
+    with patch('src.server.worker_subprocess.emit_progress'):
+        hb = Heartbeat(message="test", interval=1.0)
+        assert not hb._stop_event.is_set(), "_stop_event must start unset before context entry"
+        with hb:
+            assert not hb._stop_event.is_set(), "Stop event should remain unset while active"
+        # After __exit__, the stop event must be set, signalling thread join to proceed
+        assert hb._stop_event.is_set(), "_stop_event must be set after __exit__"
+
+
+@pytest.mark.asyncio
 async def test_heartbeat_thread_stops_when_emit_raises():
     """Test that the heartbeat loop exits cleanly when emit_progress raises inside the thread.
 
