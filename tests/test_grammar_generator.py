@@ -13,7 +13,7 @@ from grammar_generator import (
     hash_prompt,
     get_cached_grammar,
     cache_grammar,
-    get_cached_raw_response,
+    CACHE_DIR,
     generate_grammar,
     ensure_lm_model_loaded,
     validate_grammar_structure,
@@ -321,6 +321,166 @@ class TestApiRoot(unittest.TestCase):
             _api_root("http://localhost:1234/v1/"),
             "http://localhost:1234",
         )
+
+    def test_strips_double_slash_in_middle_of_url(self):
+        # A URL with // in the middle (e.g. http://host//v1) must still normalize to
+        # a single-slash host root; LM Studio rejects double slashes in paths.
+        self.assertEqual(
+            _api_root("http://localhost:1234//v1"),
+            "http://localhost:1234",
+        )
+
+    def test_leaves_https_url_without_v1_unchanged(self):
+        # An HTTPS URL without /v1 must be returned as-is; the function should not
+        # strip https or any other scheme prefix.
+        self.assertEqual(
+            _api_root("https://lmstudio.example.com"),
+            "https://lmstudio.example.com",
+        )
+
+
+class TestEmptyPromptGuardMessages(unittest.TestCase):
+    """Tests for exact error messages from empty/whitespace prompt rejection."""
+
+    @patch("grammar_generator.get_system_prompt", return_value="ERNIE instructions")
+    @patch("grammar_generator.requests.post")
+    @patch("grammar_generator.requests.get")
+    def test_generate_grammar_rejects_empty_string_with_exact_message(
+        self, mock_get, mock_post, _mock_prompt
+    ):
+        # The ValueError message "User prompt must not be empty" is the exact
+        # contract communicated to callers; downstream consumers rely on it.
+        with self.assertRaisesRegex(ValueError, r"^User prompt must not be empty$"):
+            generate_grammar("")
+
+    @patch("grammar_generator.get_system_prompt", return_value="ERNIE instructions")
+    @patch("grammar_generator.requests.post")
+    @patch("grammar_generator.requests.get")
+    def test_generate_grammar_rejects_whitespace_with_exact_message(
+        self, mock_get, mock_post, _mock_prompt
+    ):
+        with self.assertRaisesRegex(ValueError, r"^User prompt must not be empty$"):
+            generate_grammar("   \t\n  ")
+
+
+class TestCacheFileNaming(unittest.TestCase):
+    """Tests for cache file naming conventions in get_cached_grammar and cache_grammar."""
+
+    @patch("grammar_generator.CACHE_DIR")
+    def test_get_cached_grammar_constructs_correct_filename(self, mock_cache_dir):
+        # The filename must follow the {prompt_hash}.tracery.json convention; a wrong
+        # extension or naming would silently bypass cache lookups and cause redundant
+        # LLM calls on every retry.
+        prompt_hash = "abcdef123456"
+        get_cached_grammar(prompt_hash)
+
+        mock_cache_dir.__truediv__.assert_called_once_with(
+            f"{prompt_hash}.tracery.json"
+        )
+
+    def test_cache_grammar_creates_all_three_files(self):
+        """Verify cache_grammar writes grammar, raw response, and metadata files.
+
+        The production code calls:
+          - CACHE_DIR.mkdir(parents=True, exist_ok=True)
+          - (CACHE_DIR / f"{prompt_hash}.tracery.json").write_text(grammar)
+          - (CACHE_DIR / f"{prompt_hash}.raw.txt").write_text(raw_response)
+          - (CACHE_DIR / f"{prompt_hash}.metaprompt.json").write_text(metadata_json)
+
+        We verify the actual files are created with correct content.
+        """
+        import json
+        from tempfile import TemporaryDirectory
+
+        prompt_hash = "abcdef123456"
+        grammar = '{"origin": "#prompt#"}'
+        raw_response = '<think>...</think>{"origin": "#prompt#"}'
+        user_prompt = "a sunset"
+
+        with TemporaryDirectory() as tmpdir:
+            # Patch CACHE_DIR to use a temp directory for this test.
+            with patch("grammar_generator.CACHE_DIR", Path(tmpdir)) as patched_cache_dir:
+                # Patch datetime to control the timestamp
+                with patch("grammar_generator.datetime") as mock_datetime:
+                    mock_datetime.now.return_value.isoformat.return_value = "2023-01-01T12:00:00"
+
+                    result = cache_grammar(
+                        prompt_hash=prompt_hash,
+                        grammar=grammar,
+                        raw_response=raw_response,
+                        user_prompt=user_prompt,
+                    )
+
+                # Verify return values (still inside patch context)
+                self.assertEqual(result[0], grammar)
+                self.assertFalse(result[1])  # was_cached flag
+                self.assertEqual(result[2], raw_response)
+
+                # Verify all three files were created in the temp directory
+                patched_cache_dir.mkdir(parents=True, exist_ok=True)
+
+                grammar_file = patched_cache_dir / f"{prompt_hash}.tracery.json"
+                raw_file = patched_cache_dir / f"{prompt_hash}.raw.txt"
+                metadata_file = patched_cache_dir / f"{prompt_hash}.metaprompt.json"
+
+                self.assertTrue(grammar_file.exists())
+                self.assertTrue(raw_file.exists())
+                self.assertTrue(metadata_file.exists())
+
+                # Verify content
+                self.assertEqual(grammar_file.read_text(), grammar)
+                self.assertEqual(raw_file.read_text(), raw_response)
+
+                # Verify metadata includes hash and required fields
+                metadata = json.loads(metadata_file.read_text())
+                self.assertIn("hash", metadata)
+                self.assertEqual(metadata["hash"], prompt_hash)
+                self.assertIn("user_prompt", metadata)
+                self.assertIn("created_at", metadata)
+
+    def test_cache_grammar_metadata_includes_required_fields(self):
+        """Verify the metadata JSON contains all required fields for cache validation."""
+        import json
+        from tempfile import TemporaryDirectory
+
+        prompt_hash = "abcdef123456"
+        grammar = '{"origin": "#prompt#"}'
+        raw_response = 'raw response'
+        user_prompt = "a sunset"
+
+        with TemporaryDirectory() as tmpdir:
+            # Patch CACHE_DIR to use a temp directory for this test.
+            with patch("grammar_generator.CACHE_DIR", Path(tmpdir)) as patched_cache_dir:
+                with patch("grammar_generator.datetime") as mock_datetime:
+                    mock_datetime.now.return_value.isoformat.return_value = "2023-01-01T12:00:00"
+
+                    cache_grammar(
+                        prompt_hash=prompt_hash,
+                        grammar=grammar,
+                        raw_response=raw_response,
+                        user_prompt=user_prompt,
+                    )
+
+                # Verify metadata (still inside patch context)
+                CACHE_DIR.mkdir(parents=True, exist_ok=True)
+                metadata_file = patched_cache_dir / f"{prompt_hash}.metaprompt.json"
+                self.assertTrue(metadata_file.exists())
+
+                metadata = json.loads(metadata_file.read_text())
+
+                # Verify all required fields are present with correct types
+                self.assertEqual(type(metadata["hash"]), str)
+                self.assertEqual(metadata["hash"], prompt_hash)
+                self.assertEqual(type(metadata["user_prompt"]), str)
+                self.assertEqual(metadata["user_prompt"], user_prompt)
+                self.assertEqual(type(metadata["created_at"]), str)
+                self.assertIn("prompt_schema", metadata)
+                self.assertEqual(metadata["prompt_schema"], "ernie-v2")
+                self.assertIn("lm_model", metadata)
+
+
+if __name__ == "__main__":
+    unittest.main()
 
 
 class TestGrammarStructureValidation(unittest.TestCase):
