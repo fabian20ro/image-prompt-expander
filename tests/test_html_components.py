@@ -246,6 +246,24 @@ class TestSSEClient:
             "produced JS to establish SSE connections."
         )
 
+    def test_ping_handler_neutralizes_server_pings(self):
+        """Server-initiated 'ping' events must not trigger reconnection.
+
+        The server sends periodic ping events as heartbeats; without a dedicated
+        handler, each ping would fire onerror (since there is no listener for an
+        unknown event type), incrementing sseRetryCount and eventually exhausting
+        the retry budget even though the connection is healthy. Registering an
+        empty addEventListener('ping', () => {}) short-circuits pings before they
+        reach the error handler, preserving retry headroom for genuine outages.
+        """
+        js = SSEClient.js()
+        assert (
+            "addEventListener('ping'" in js or 'addEventListener("ping"' in js
+        ), (
+            "A ping event listener must be registered to prevent server heartbeats "
+            "from exhausting the retry budget during healthy connections."
+        )
+
 
 class TestButtons:
     """Tests for Buttons component."""
