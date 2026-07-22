@@ -15,6 +15,49 @@ from html_components import (
 )
 
 
+class TestButtons:
+    """Tests for Buttons component."""
+
+    def test_css_returns_string(self):
+        css = Buttons.css()
+        assert ".btn" in css
+
+    def test_all_button_variants_defined(self):
+        """Buttons.css() must define every button variant used by the UI.
+
+        The gallery relies on .btn-primary, .btn-secondary, and .btn-danger for all
+        interactive controls (generate, clear queue, kill job). Losing any one of them
+        silently breaks a user-facing action — buttons become invisible or unstyled.
+        Each selector must survive as a substring so regression cannot remove one
+        without the test catching it. The disabled-state rule is also required: users
+        need visual feedback when actions are unavailable (e.g. during generation).
+        """
+        css = Buttons.css()
+        assert ".btn-primary" in css, "Primary button style must be defined."
+        assert ".btn-secondary" in css, "Secondary button style must be defined."
+        assert ".btn-danger" in css, "Danger button style must be defined."
+        assert ".btn-small" in css, "Small button modifier must be defined."
+        assert ":disabled" in css or "disabled {" in css, (
+            "Disabled state styling must exist so users see unavailable actions.\""
+        )
+
+    def test_touch_target_minimum_height(self):
+        """Buttons.css() enforces a 44px minimum height on touch targets.
+
+        Mobile users need adequately-sized tap targets per accessibility guidelines.
+        Without this, gallery controls become hard to hit on phones — causing failed
+        submissions and frustrating UX. The (pointer: coarse) media query is the
+        observable mechanism that triggers the increased sizing for touch devices.
+        """
+        css = Buttons.css()
+        assert "44px" in css or "min-height: 44" in css, (
+            "Touch targets must have a 44px minimum height per accessibility standards."
+        )
+        assert "@media" in css and "(pointer:" in css, (
+            "Touch-specific sizing must be gated by the pointer media query feature."
+        )
+
+
 class TestLogPanel:
     """Tests for LogPanel component."""
 
