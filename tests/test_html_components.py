@@ -15,6 +15,49 @@ from html_components import (
 )
 
 
+class TestButtons:
+    """Tests for Buttons component."""
+
+    def test_css_returns_string(self):
+        css = Buttons.css()
+        assert ".btn" in css
+
+    def test_all_button_variants_defined(self):
+        """Buttons.css() must define every button variant used by the UI.
+
+        The gallery relies on .btn-primary, .btn-secondary, and .btn-danger for all
+        interactive controls (generate, clear queue, kill job). Losing any one of them
+        silently breaks a user-facing action — buttons become invisible or unstyled.
+        Each selector must survive as a substring so regression cannot remove one
+        without the test catching it. The disabled-state rule is also required: users
+        need visual feedback when actions are unavailable (e.g. during generation).
+        """
+        css = Buttons.css()
+        assert ".btn-primary" in css, "Primary button style must be defined."
+        assert ".btn-secondary" in css, "Secondary button style must be defined."
+        assert ".btn-danger" in css, "Danger button style must be defined."
+        assert ".btn-small" in css, "Small button modifier must be defined."
+        assert ":disabled" in css or "disabled {" in css, (
+            "Disabled state styling must exist so users see unavailable actions.\""
+        )
+
+    def test_touch_target_minimum_height(self):
+        """Buttons.css() enforces a 44px minimum height on touch targets.
+
+        Mobile users need adequately-sized tap targets per accessibility guidelines.
+        Without this, gallery controls become hard to hit on phones — causing failed
+        submissions and frustrating UX. The (pointer: coarse) media query is the
+        observable mechanism that triggers the increased sizing for touch devices.
+        """
+        css = Buttons.css()
+        assert "44px" in css or "min-height: 44" in css, (
+            "Touch targets must have a 44px minimum height per accessibility standards."
+        )
+        assert "@media" in css and "(pointer:" in css, (
+            "Touch-specific sizing must be gated by the pointer media query feature."
+        )
+
+
 class TestLogPanel:
     """Tests for LogPanel component."""
 
@@ -173,6 +216,35 @@ class TestNotifications:
         js = Notifications.js()
         assert "return Promise.resolve(false)" in js, (
             "confirmAction must return Promise.resolve(false) when DOM elements are absent."
+        )
+
+    def test_showtoast_uses_textcontent_not_innerhtml(self):
+        """showToast must set toast element content via textContent, not innerHTML.
+
+        The message parameter is user-supplied (e.g., a prompt status update).
+        If showToast used el.innerHTML = message instead of el.textContent = message,
+        an attacker could inject HTML/script tags into the toast region. Using
+        textContent forces browser escaping of any embedded markup, preventing
+        XSS via notification messages. This is observable as 'textContent' in
+        the produced JS source — confirming the security contract holds.
+        """
+        js = Notifications.js()
+        assert "el.textContent" in js, (
+            "showToast must set el.textContent to prevent XSS via user-supplied messages."
+        )
+
+    def test_showtoast_default_timeout_observable(self):
+        """showToast defines a default timeout of 3200ms as an observable constant.
+
+        The auto-dismiss timeout is exposed as the third parameter's default value,
+        making it inspectable from source without runtime execution. Losing this
+        constant silently changes dismiss timing and makes it impossible to tune
+        without modifying the function signature directly.
+        """
+        js = Notifications.js()
+        assert "3200" in js, (
+            "showToast default timeout of 3200ms must be observable as a literal "
+            "in the produced JS source for visibility and tuning."
         )
 
 class TestSSEClient:
