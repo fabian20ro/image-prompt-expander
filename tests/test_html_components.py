@@ -175,6 +175,35 @@ class TestNotifications:
             "confirmAction must return Promise.resolve(false) when DOM elements are absent."
         )
 
+    def test_showtoast_uses_textcontent_not_innerhtml(self):
+        """showToast must set toast element content via textContent, not innerHTML.
+
+        The message parameter is user-supplied (e.g., a prompt status update).
+        If showToast used el.innerHTML = message instead of el.textContent = message,
+        an attacker could inject HTML/script tags into the toast region. Using
+        textContent forces browser escaping of any embedded markup, preventing
+        XSS via notification messages. This is observable as 'textContent' in
+        the produced JS source — confirming the security contract holds.
+        """
+        js = Notifications.js()
+        assert "el.textContent" in js, (
+            "showToast must set el.textContent to prevent XSS via user-supplied messages."
+        )
+
+    def test_showtoast_default_timeout_observable(self):
+        """showToast defines a default timeout of 3200ms as an observable constant.
+
+        The auto-dismiss timeout is exposed as the third parameter's default value,
+        making it inspectable from source without runtime execution. Losing this
+        constant silently changes dismiss timing and makes it impossible to tune
+        without modifying the function signature directly.
+        """
+        js = Notifications.js()
+        assert "3200" in js, (
+            "showToast default timeout of 3200ms must be observable as a literal "
+            "in the produced JS source for visibility and tuning."
+        )
+
 class TestSSEClient:
     """Tests for SSEClient component."""
 
