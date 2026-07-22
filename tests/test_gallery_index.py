@@ -397,6 +397,21 @@ class TestGalleryIndexInteractive:
         assert result is not None
         assert result["model"] == "Flux-dev-v2"
 
+    def test_extract_run_info_unknown_prompt_fallback(self, temp_dir):
+        """_extract_run_info should return 'Unknown prompt' when neither display_title nor user_prompt is set."""
+        from gallery_index import _extract_run_info
+        active_run = temp_dir / "prompts" / "20240101_120000_unknown"
+        active_run.mkdir(parents=True)
+        (active_run / "test.metaprompt.json").write_text(json.dumps({
+            "prefix": "test",
+            "count": 1,
+        }))
+        (active_run / "test_gallery.html").write_text("<html></html>")
+
+        result = _extract_run_info(active_run, is_archive=False)
+        assert result is not None
+        assert result["user_prompt"] == "Unknown prompt"
+
     def test_build_index_html_empty_flat_archives_section(self):
         """_build_index_html should not render flat-archive section when there are none."""
         from gallery_index import _build_index_html
