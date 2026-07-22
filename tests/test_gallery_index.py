@@ -76,8 +76,13 @@ class TestGalleryIndexInteractive:
         assert "queue_cleared" in content
 
         # Guard against regressions to blocking browser dialogs.
-        assert "alert(" not in content
-        assert "confirm(" not in content
+        import re
+        assert re.search(r'\balert\s*\(', content) is None, (
+            "Generated index must not contain alert() calls"
+        )
+        assert re.search(r'\bconfirm\s*\(', content) is None, (
+            "Generated index must not contain confirm() calls"
+        )
 
     def test_index_with_archived_runs(self, temp_dir):
         """Test that index shows archived runs separately."""
