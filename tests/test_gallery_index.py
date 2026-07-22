@@ -248,8 +248,10 @@ class TestGalleryIndexInteractive:
     def test_build_log_panel_returns_collapsible_markup(self):
         from gallery_index import _build_log_panel
         html = _build_log_panel()
-        assert "log-panel" in html or "Log Panel" in html or "LogPanel" in html
-        assert "<details" in html or "<div" in html
+        # Requires both the specific element ID and collapsible structure — catches
+        # regressions where the component is replaced or its ID changes.
+        assert 'id="log-panel"' in html
+        assert "<details" in html
 
     def test_build_notifications_contains_toast_and_confirm(self):
         from gallery_index import _build_notifications
