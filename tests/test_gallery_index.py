@@ -419,3 +419,21 @@ class TestGalleryIndexInteractive:
         from gallery_index import _build_index_html
         html = _build_index_html(active_runs=[], archived_runs=[], flat_archives=[])
         assert "Archived Images" not in html
+
+    def test_extract_run_info_timestamp_from_archive_dirname(self, temp_dir):
+        """_extract_run_info should extract only the first two underscore segments as timestamp."""
+        from gallery_index import _extract_run_info
+        # Archive-style directory has 4+ underscore-separated components.
+        archive_run = temp_dir / "saved" / "20240101_100000_def456_20240101_130000"
+        archive_run.mkdir(parents=True)
+        (archive_run / "test.metaprompt.json").write_text(json.dumps({
+            "prefix": "test",
+            "count": 1,
+        }))
+        (archive_run / "test_gallery.html").write_text("<html></html>")
+
+        result = _extract_run_info(archive_run, is_archive=True)
+        assert result is not None
+        # The timestamp must be only the first two segments — a change to the split
+        # logic should not silently start consuming later path components.
+        assert result["timestamp"] == "20240101_100000"
