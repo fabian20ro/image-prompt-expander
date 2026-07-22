@@ -81,3 +81,29 @@ def append_grammar_revision(
         history = history[-max_revisions:]
     save_grammar_history(run_dir, prefix, history)
     return history
+
+
+def get_recent_revisions(
+    history: list[dict], n: int = 10, *, include_action: bool | None = False,
+) -> list[dict]:
+    """Return the last ``n`` entries from ``history``.
+
+    Args:
+        history: The full grammar-history list (not mutated).
+        n: Number of recent entries to return. Defaults to 10. Pass ``0`` or a
+            negative value to receive a shallow copy of the entire history.
+        include_action: When True, each returned entry is reduced to only its
+            ``action`` key; when False (default), full entries are returned.
+
+    Returns:
+        A new list containing at most ``n`` recent revisions (or all entries).
+    """
+    if n <= 0:
+        result = list(history)
+    else:
+        result = history[-n:]
+
+    if include_action and isinstance(result, list):
+        return [{"action": e.get("action")} for e in result]
+
+    return result
