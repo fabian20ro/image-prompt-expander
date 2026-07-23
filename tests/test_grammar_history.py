@@ -161,6 +161,23 @@ class TestAppendGrammarRevision:
 
 
 class TestLoadGrammarHistoryEdgeCases:
+    def test_valid_empty_list_returns_as_is_without_fallback(self, run_dir):
+        """Valid empty-list JSON must return the list directly — no fallback to current grammar.
+
+        Characterizes the `isinstance(data, list)` gate at line 18-19: when on-disk
+        data is a valid empty list (not corrupted, not dict), load_grammar_history
+        returns it as-is without consulting the current grammar file or creating an
+        "initial" entry. This locks in the boundary between "valid but empty" and
+        "corrupt/fallback-needed."
+        """
+        path = _history_path(run_dir, "empty_list_test")
+        path.write_text(json.dumps([]))
+
+        result = load_grammar_history(run_dir, "empty_list_test")
+        assert result == []
+        # Verify no grammar file was consulted or created on disk
+        assert not (run_dir / "empty_list_test_grammar.json").exists()
+
     def test_returns_empty_when_json_is_dict_instead_of_list(self, run_dir):
         path = _history_path(run_dir, "dict_instead_of_list")
         path.write_text(json.dumps({"not": "a list"}))
