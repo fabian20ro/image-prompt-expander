@@ -391,6 +391,25 @@ class TestGetRecentRevisions:
         result[0]["id"] = "MUTATED"
         assert history[-1]["id"] == "r4"
 
+    def test_include_action_with_full_copy_n_zero(self):
+        """include_action=True with n<=0 reduces every entry to {action: ...} across full history.
+
+        The slicing branch is bypassed when n<=0 (full copy path), but the action-only
+        reduction must still apply uniformly to every entry — not just a slice of them.
+        This test characterizes that cross-branch behavior so future refactors do not
+        accidentally gate the reduction on positive n only.
+        """
+        history = [
+            {"id": f"r{i}", "created_at": f"t{i}", "action": f"a_{i}", "grammar": f"g{i}"}
+            for i in range(4)
+        ]
+        result = get_recent_revisions(history, n=0, include_action=True)
+        assert len(result) == 4
+        for entry in result:
+            assert set(entry.keys()) == {"action"}
+        # Verify every entry is reduced — no leftover keys from source dicts
+        assert all(len(e) == 1 for e in result)
+
     def test_empty_history_returns_empty_list(self):
         """Empty input must yield empty output regardless of n."""
         result = get_recent_revisions([], n=5)
