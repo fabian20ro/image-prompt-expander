@@ -322,6 +322,26 @@ class TestMetadataManager:
         # Confirm the dict was replaced entirely — not merged with a string
         assert isinstance(saved["image_generation"], str)
 
+    def test_update_adds_missing_key(self, temp_dir):
+        """Test that update adds a key absent from existing metadata.
+
+        When the update supplies a value for a key not present in the
+        original JSON (e.g. 'regenerated_at' on first generation), the
+        merge branch is skipped and the new key is inserted — matching
+        line 268 in metadata_manager.py's isinstance guard logic.
+        """
+        initial = {"prefix": "test", "count": 5}
+        (temp_dir / "test.metaprompt.json").write_text(json.dumps(initial))
+
+        result = MetadataManager.update(temp_dir, source="pipeline")
+
+        assert result.source == "pipeline"
+        saved = json.loads((temp_dir / "test.metaprompt.json").read_text())
+        assert saved["source"] == "pipeline"
+        # Other fields must be preserved — not lost by the update path
+        assert saved["prefix"] == "test"
+        assert saved["count"] == 5
+
     def test_get_prefix(self, temp_dir):
         """Test getting prefix from metadata."""
         (temp_dir / "myprefix.metaprompt.json").write_text('{"prefix": "myprefix"}')
