@@ -161,6 +161,23 @@ class TestAppendGrammarRevision:
 
 
 class TestLoadGrammarHistoryEdgeCases:
+    def test_valid_empty_list_returns_as_is_without_fallback(self, run_dir):
+        """Valid empty-list JSON must return the list directly — no fallback to current grammar.
+
+        Characterizes the `isinstance(data, list)` gate at line 18-19: when on-disk
+        data is a valid empty list (not corrupted, not dict), load_grammar_history
+        returns it as-is without consulting the current grammar file or creating an
+        "initial" entry. This locks in the boundary between "valid but empty" and
+        "corrupt/fallback-needed."
+        """
+        path = _history_path(run_dir, "empty_list_test")
+        path.write_text(json.dumps([]))
+
+        result = load_grammar_history(run_dir, "empty_list_test")
+        assert result == []
+        # Verify no grammar file was consulted or created on disk
+        assert not (run_dir / "empty_list_test_grammar.json").exists()
+
     def test_returns_empty_when_json_is_dict_instead_of_list(self, run_dir):
         path = _history_path(run_dir, "dict_instead_of_list")
         path.write_text(json.dumps({"not": "a list"}))
@@ -390,6 +407,25 @@ class TestGetRecentRevisions:
         result = get_recent_revisions(history, n=2)
         result[0]["id"] = "MUTATED"
         assert history[-1]["id"] == "r4"
+
+    def test_include_action_with_full_copy_n_zero(self):
+        """include_action=True with n<=0 reduces every entry to {action: ...} across full history.
+
+        The slicing branch is bypassed when n<=0 (full copy path), but the action-only
+        reduction must still apply uniformly to every entry — not just a slice of them.
+        This test characterizes that cross-branch behavior so future refactors do not
+        accidentally gate the reduction on positive n only.
+        """
+        history = [
+            {"id": f"r{i}", "created_at": f"t{i}", "action": f"a_{i}", "grammar": f"g{i}"}
+            for i in range(4)
+        ]
+        result = get_recent_revisions(history, n=0, include_action=True)
+        assert len(result) == 4
+        for entry in result:
+            assert set(entry.keys()) == {"action"}
+        # Verify every entry is reduced — no leftover keys from source dicts
+        assert all(len(e) == 1 for e in result)
 
     def test_empty_history_returns_empty_list(self):
         """Empty input must yield empty output regardless of n."""
