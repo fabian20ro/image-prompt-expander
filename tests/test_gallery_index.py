@@ -76,8 +76,13 @@ class TestGalleryIndexInteractive:
         assert "queue_cleared" in content
 
         # Guard against regressions to blocking browser dialogs.
-        assert "alert(" not in content
-        assert "confirm(" not in content
+        import re
+        assert re.search(r'\balert\s*\(', content) is None, (
+            "Generated index must not contain alert() calls"
+        )
+        assert re.search(r'\bconfirm\s*\(', content) is None, (
+            "Generated index must not contain confirm() calls"
+        )
 
     def test_index_with_archived_runs(self, temp_dir):
         """Test that index shows archived runs separately."""
@@ -248,8 +253,10 @@ class TestGalleryIndexInteractive:
     def test_build_log_panel_returns_collapsible_markup(self):
         from gallery_index import _build_log_panel
         html = _build_log_panel()
-        assert "log-panel" in html or "Log Panel" in html or "LogPanel" in html
-        assert "<details" in html or "<div" in html
+        # Requires both the specific element ID and collapsible structure — catches
+        # regressions where the component is replaced or its ID changes.
+        assert 'id="log-panel"' in html
+        assert "<details" in html
 
     def test_build_notifications_contains_toast_and_confirm(self):
         from gallery_index import _build_notifications
@@ -397,8 +404,41 @@ class TestGalleryIndexInteractive:
         assert result is not None
         assert result["model"] == "Flux-dev-v2"
 
+    def test_extract_run_info_unknown_prompt_fallback(self, temp_dir):
+        """_extract_run_info should return 'Unknown prompt' when neither display_title nor user_prompt is set."""
+        from gallery_index import _extract_run_info
+        active_run = temp_dir / "prompts" / "20240101_120000_unknown"
+        active_run.mkdir(parents=True)
+        (active_run / "test.metaprompt.json").write_text(json.dumps({
+            "prefix": "test",
+            "count": 1,
+        }))
+        (active_run / "test_gallery.html").write_text("<html></html>")
+
+        result = _extract_run_info(active_run, is_archive=False)
+        assert result is not None
+        assert result["user_prompt"] == "Unknown prompt"
+
     def test_build_index_html_empty_flat_archives_section(self):
         """_build_index_html should not render flat-archive section when there are none."""
         from gallery_index import _build_index_html
         html = _build_index_html(active_runs=[], archived_runs=[], flat_archives=[])
         assert "Archived Images" not in html
+
+    def test_extract_run_info_timestamp_from_archive_dirname(self, temp_dir):
+        """_extract_run_info should extract only the first two underscore segments as timestamp."""
+        from gallery_index import _extract_run_info
+        # Archive-style directory has 4+ underscore-separated components.
+        archive_run = temp_dir / "saved" / "20240101_100000_def456_20240101_130000"
+        archive_run.mkdir(parents=True)
+        (archive_run / "test.metaprompt.json").write_text(json.dumps({
+            "prefix": "test",
+            "count": 1,
+        }))
+        (archive_run / "test_gallery.html").write_text("<html></html>")
+
+        result = _extract_run_info(archive_run, is_archive=True)
+        assert result is not None
+        # The timestamp must be only the first two segments — a change to the split
+        # logic should not silently start consuming later path components.
+        assert result["timestamp"] == "20240101_100000"
