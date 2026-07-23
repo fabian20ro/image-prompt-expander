@@ -212,6 +212,9 @@ class Notifications:
     const el = document.createElement('div');
     el.className = `toast ${type}`;
     el.textContent = message;
+    el.style.cursor = 'pointer';
+    el.title = 'Click to dismiss';
+    el.onclick = () => el.remove();
     region.appendChild(el);
     setTimeout(() => {
       el.remove();

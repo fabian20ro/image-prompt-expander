@@ -247,6 +247,20 @@ class TestNotifications:
             "in the produced JS source for visibility and tuning."
         )
 
+    def test_showtoast_click_to_dismiss_wired(self):
+        """showToast wires onclick to remove the toast element on click.
+
+        Users need an immediate way to dismiss notifications — waiting 3.2s is
+        wasteful when they've already read the message. The implementation must
+        attach an onclick handler that calls el.remove() so clicking a toast
+        dismisses it instantly, while the setTimeout timeout still runs for
+        non-interacted toasts. Observable as 'onclick' in the produced JS source.
+        """
+        js = Notifications.js()
+        assert "onclick" in js, (
+            "showToast must attach an onclick handler so users can click-to-dismiss toasts."
+        )
+
 class TestSSEClient:
     """Tests for SSEClient component."""
 
