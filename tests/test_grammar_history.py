@@ -14,6 +14,7 @@ if str(src_dir) not in sys_path:
 from grammar_history import (
     _history_path,
     append_grammar_revision,
+    get_recent_revisions,
     load_grammar_history,
     save_grammar_history,
 )
@@ -327,3 +328,70 @@ class TestAppendGrammarMalformedHistory:
         assert history[0]["action"] == "initial"
         assert history[0]["grammar"] == "rule_a"
         # ID is timestamp-based when loaded from empty state (not synthetic "initial")
+
+
+class TestGetRecentRevisions:
+    def test_returns_n_most_recent_entries(self, run_dir):
+        """Default slicing returns the last n entries in order."""
+        history = [
+            {"id": f"rev{i}", "created_at": f"2024-01-{i+1:02d}T00:00:00", "action": "update", "grammar": f"rule_{i}"}
+            for i in range(5)
+        ]
+        result = get_recent_revisions(history, n=3)
+        assert len(result) == 3
+        assert result[0]["id"] == "rev2"
+        assert result[-1]["id"] == "rev4"
+
+    def test_returns_full_copy_when_n_zero(self):
+        """n=0 must return a shallow copy of the entire history."""
+        history = [
+            {"id": f"r{i}", "action": "a", "grammar": f"g{i}"} for i in range(3)
+        ]
+        result = get_recent_revisions(history, n=0)
+        assert len(result) == 3
+        # Shallow copy — identity differs from original
+        assert result is not history
+
+    def test_returns_full_copy_when_n_negative(self):
+        """n<0 behaves like n<=0: full shallow copy of all entries."""
+        history = [{"id": "x", "action": "a", "grammar": "g"}]
+        result = get_recent_revisions(history, n=-5)
+        assert len(result) == 1
+        assert result is not history
+
+    def test_include_action_returns_dicts_with_only_action(self):
+        """include_action=True reduces each entry to {action: ...}.
+
+        Verifies the reduction contract: returned dicts contain exactly one key,
+        and that key holds whatever the source entry's 'action' value was.
+        """
+        history = [
+            {"id": f"r{i}", "created_at": f"t{i}", "action": f"a_{i}", "grammar": f"g{i}"}
+            for i in range(4)
+        ]
+        result = get_recent_revisions(history, n=3, include_action=True)
+        assert len(result) == 3
+        for entry in result:
+            assert set(entry.keys()) == {"action"}
+
+    def test_include_action_respects_n_limit(self):
+        """include_action combined with n must slice first, then reduce."""
+        history = [
+            {"id": f"r{i}", "created_at": f"t{i}", "action": f"a_{i}", "grammar": f"g{i}"}
+            for i in range(5)
+        ]
+        result = get_recent_revisions(history, n=2, include_action=True)
+        assert len(result) == 2
+        assert [e["action"] for e in result] == ["a_3", "a_4"]
+
+    def test_does_not_mutate_original(self):
+        """Returned list must not share references that allow mutation of source."""
+        history = [{"id": f"r{i}", "action": f"a_{i}"} for i in range(5)]
+        result = get_recent_revisions(history, n=2)
+        result[0]["id"] = "MUTATED"
+        assert history[-1]["id"] == "r4"
+
+    def test_empty_history_returns_empty_list(self):
+        """Empty input must yield empty output regardless of n."""
+        result = get_recent_revisions([], n=5)
+        assert result == []
