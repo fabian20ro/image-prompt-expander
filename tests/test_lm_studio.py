@@ -137,5 +137,18 @@ class TestUnloadAllModels:
         with patch("lm_studio.shutil.which", return_value="/usr/bin/lms"), \
              patch("lm_studio.subprocess.run", return_value=success_result) as run_mock:
             unload_all_models(timeout=45.0)
-            call_kwargs = run_mock.call_args.kwargs
+            call_args, call_kwargs = run_mock.call_args
+            assert call_args == (["/usr/bin/lms", "unload", "--all"],)
             assert call_kwargs["timeout"] == 45.0
+
+    def test_subprocess_run_receives_capture_output_and_text(self):
+        success_result = MagicMock()
+        success_result.returncode = 0
+
+        with patch("lm_studio.shutil.which", return_value="/usr/bin/lms"), \
+             patch("lm_studio.subprocess.run", return_value=success_result) as run_mock:
+            unload_all_models()
+            call_args, call_kwargs = run_mock.call_args
+            assert call_args == (["/usr/bin/lms", "unload", "--all"],)
+            assert call_kwargs["capture_output"] is True
+            assert call_kwargs["text"] is True
