@@ -214,6 +214,24 @@ def test_api_root_with_port_and_v1():
     assert _api_root(url) == "https://lmstudio.local:8080"
 
 
+def test_api_root_strips_double_slash_before_v1():
+    """A double-slash before /v1 must be collapsed — the docstring explicitly calls this out."""
+    url = "http://localhost:1234//v1"
+    assert _api_root(url) == "http://localhost:1234"
+
+
+def test_api_root_strips_multiple_trailing_slashes_after_v1():
+    """Multiple trailing slashes after /v1 must all be stripped to reach the host root."""
+    url = "http://localhost:1234/v1///"
+    assert _api_root(url) == "http://localhost:1234"
+
+
+def test_api_root_just_v1_suffix():
+    """A URL ending in only '/v1' with no further segments must be stripped."""
+    url = "http://example.com/v1"
+    assert _api_root(url) == "http://example.com"
+
+
 def test_clean_grammar_output_markdown_without_json():
     """When code blocks exist but contain no valid JSON, the stripped text is returned unchanged."""
     raw = '```json\njust some prose here\n```'
